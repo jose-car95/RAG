@@ -33,6 +33,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-13 | pytest como framework de tests | Lo sugiere el enunciado y es el estándar |
 | 2026-09-13 | flake8 y mypy excluyen `data/` y `docs/` | El corpus de vLLM contiene `.py` ajenos y el corrector lo tiene descomprimido |
 | 2026-09-13 | Cero atribución a la IA en commits y PRs; uso declarado en `docs/AI_USAGE.md` y README | Regla personal de Jose |
+| 2026-09-13 | Jose revisa en VS Code los cambios sin stage antes de cada `git add` | Ver los cambios resaltados antes de commitear |
+| 2026-09-13 | Una rama por slice; se borra (local y remota) tras el merge | No acumular ramas muertas |
+| 2026-09-13 | Comandos propios `/slice`, `/mide`, `/ensayo` | Aprobados por Jose; tareas repetidas con pasos fáciles de olvidar |
 
 ## Métricas
 
@@ -51,23 +54,27 @@ M3 antes de optimizar nada.
 - Ver los puntos **ABIERTO** de `docs/SPEC_NOTES.md` (tipos de fichero a
   indexar, `last_character_index` inclusivo o exclusivo, validación de
   rangos en `MinimalSource`, semántica de `k <= 0` y query vacía).
-- Comandos propios del proyecto propuestos en Fase B, pendientes de OK de Jose.
+- ¿Borrar las 10 etiquetas por defecto de GitHub? Pendiente de OK explícito.
 
 ## Notas de GitHub
 
 - **Tablero:** proyecto **#5** "RAG against the machine",
   https://github.com/users/jose-car95/projects/5, enlazado a `jose-car95/RAG`.
 - **Columnas (campo Status):** `Todo`, `In progress`, `In review`, `Done`.
-- **Se mueve solo:** NADA todavía. Verificado por API (2026-09-13): los
-  workflows `Item added to project`, `Pull request linked to issue`,
-  `Item closed` y `Pull request merged` están desactivados y GitHub no permite
-  activarlos por API. Jose los activa desde la web (Project → `...` →
-  Workflows); actualizar esta línea cuando estén activos.
-- **Vistas:** GitHub no permite crearlas por API; Jose crea "Board por Status"
-  y "Tabla por milestone" desde la web.
+- **Workflows verificados por API (2026-09-13, tras la configuración de
+  Jose):** activos `Auto-add to project`, `Auto-add sub-issues to project`,
+  `Auto-archive items`, `Item reopened`, `Code changes requested`,
+  `Code review approved`. SIGUEN DESACTIVADOS `Item added to project`,
+  `Pull request linked to issue`, `Item closed`, `Pull request merged`
+  (Jose vio algunos como bloqueados). Mientras sigan así, el agente mueve
+  las tarjetas a mano en todos los pasos.
+- **Vistas (2026-09-13):** solo existe `View 1` (tabla, sin agrupar). Faltan
+  "Board por Status" y "Tabla por milestone"; no se pueden crear por API.
 - **Mueve el agente:** la tarjeta a `In progress` al empezar cada slice, y a
   `In review` en `/cierra` si la automatización no lo hizo.
-- **Mueve Jose:** el merge de la PR (que dispara `Done`).
+- **Mueve Jose:** el merge de la PR.
+- **Ramas:** una por slice; tras el merge el agente borra la local y la remota
+  y actualiza `main` (ver `CLAUDE.md`, "Tras el merge").
 - **Etiquetas:** `feat`, `fix`, `docs`, `test`, `chore`, `blocked`,
   `spec-question`.
 - **Milestones:** M0-M7, idénticos a `docs/PLAN.md`.
