@@ -1,0 +1,22 @@
+[project]
+name = "rag-against-the-machine"
+version = "0.1.0"
+description = "RAG system that answers questions about the vLLM codebase."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "flake8>=7,<8",
+    "mypy>=1.11",
+    "pytest>=8",
+]
+
+[tool.mypy]
+# The vLLM corpus under data/raw/ contains Python files that are not ours.
+exclude = ["^data/", "^docs/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
