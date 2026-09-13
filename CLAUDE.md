@@ -55,6 +55,13 @@ añadir algo pesado al repo.
 lo pido con esas palabras. Te ayudo en cada fase y en cada línea; lo
 repetitivo (Makefile, pyproject.toml, configuración) es tuyo para ir rápido.
 
+**Precisión de Jose (2026-09-13), revisión local antes de commitear:** cuando
+el agente crea o edita ficheros, PARA antes de `git add` y avisa a Jose con
+`git status --short` y `git diff --stat`, para que revise los cambios
+resaltados en VS Code. Solo con su OK hace add, commits, push y PR. Una rama
+por slice; cuando Jose mergea la PR, el agente borra la rama (local y remota),
+actualiza `main` y comprueba el tablero.
+
 ### Cómo me ayudas a escribir el código (protocolo de desatasco)
 
 Antes de que yo escriba un slice, me das SIEMPRE, en este orden y sin
@@ -248,8 +255,25 @@ Mal:
 
 Cadena de trabajo, siempre la misma y la conduce el agente:
 
-    issue -> rama -> commits pequeños -> push -> PR con `Closes #N` ->
-    Jose revisa y mergea -> el tablero pasa a Done -> PROGRESS.md actualizado
+    issue -> rama -> cambios SIN stage -> Jose revisa en VS Code y da OK ->
+    commits pequeños -> push -> PR con `Closes #N` -> Jose revisa y mergea ->
+    el agente borra la rama y actualiza `main` -> el tablero pasa a Done
+
+`main` está protegida (ruleset `protect-main`: PR obligatoria y checks
+`lint (flake8)`, `types (mypy)`, `tests (pytest)` en verde), así que nada se
+sube directo a `main`, ni siquiera documentación. Consecuencia:
+`docs/PROGRESS.md` y `docs/AI_USAGE.md` se actualizan DENTRO de la PR del
+slice (en `/cierra`), no después del merge.
+
+Tras el merge de Jose (autorizado por Jose de forma permanente, 2026-09-13):
+1. Comprueba que la PR está mergeada (`gh pr view <N> --json state`); si no
+   lo está, no borres nada.
+2. `git switch main && git pull --ff-only`.
+3. Borra la rama local (`git branch -d <rama>`) y la remota si sigue
+   existiendo (`git push origin --delete <rama>`), diciendo cuál borras.
+4. Comprueba que el issue está cerrado y su tarjeta en `Done`; si no, muévela.
+5. `git fetch --prune` y confirma con `git branch -a` que no quedan ramas
+   muertas.
 
 Nombre de rama derivado del issue: `<tipo>/<numero>-<slug-corto>`, p. ej.
 `feat/1-cli-entry-point`. Nunca `git add -A` ni `git add .`: rutas concretas y
@@ -374,7 +398,10 @@ Slash commands del proyecto:
 
 - `/explica <concepto>` — explicación conceptual vía el subagent `tutor` (solo lectura).
 - `/decide <tema>` — 2-4 opciones con pros y contras, recomendación, y registro de la elección de Jose.
-- `/cierra` — gates, docs, commits, push, PR y tablero; para si algo está en rojo.
+- `/cierra` — gates, docs, pausa para la revisión de Jose en VS Code, commits, push, PR y tablero; para si algo está en rojo.
+- `/slice <issue>` — limpieza del slice anterior, aceptación, rama, tarjeta, concepto, diseño mínimo y test en rojo; para antes de la implementación.
+- `/mide [contexto]` — indexado y 200 preguntas cronometrados, recall@k de docs y code con la moulinette local sobre los públicos, y fila en la tabla de métricas (desde M3).
+- `/ensayo [alcance]` — simulacro de defensa: preguntas de comprensión y 3 recodes que Jose hace sin ayuda.
 
 Gates: `make lint`, `make test` (y en CI los jobs `lint (flake8)`,
 `types (mypy)`, `tests (pytest)`). Los gates de métrica (recall, tiempos)
