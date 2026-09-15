@@ -298,8 +298,8 @@ Nombre de rama derivado del issue: `<tipo>/<numero>-<slug-corto>`, p. ej.
 Arquitectura por capas, hexagonal pragmática (decisión de Jose, 2026-09-13).
 Una única dirección de dependencias, siempre hacia dentro:
 
-    interface (CLI)  ->  application  ->  domain
-    adapters         ->  domain (implementan lo que el dominio o la aplicación necesitan)
+    adapters de entrada (CLI)  ->  application  ->  domain
+    adapters de salida (JSON, SQLite, modelo)  ->  domain
 
 - **domain**: modelos pydantic, errores del dominio y lógica pura sin E/S
   (reglas de los chunks, cálculos). No importa nada de las otras capas ni de
@@ -307,10 +307,14 @@ Una única dirección de dependencias, siempre hacia dentro:
 - **application**: casos de uso (indexar, buscar, responder, evaluar).
   Orquesta el dominio y los adaptadores; no conoce detalles de disco,
   SQLite o el modelo.
-- **adapters**: todo lo que toca el mundo real: leer el corpus, leer y
-  escribir JSON, SQLite, el modelo Qwen.
-- **interface**: la CLI de Fire. Traduce argumentos, llama a la aplicación y
-  es la frontera donde ningún error sale como traceback.
+- **adapters**: todo lo que conecta el núcleo con el mundo real, en una sola
+  carpeta plana (decisión de Jose, 2026-09-15, opción B). Hay dos tipos:
+  - **de entrada** (*driving*): el exterior llama al programa. La CLI de Fire
+    (`adapters/cli.py`) traduce argumentos, llama a la aplicación y es la
+    frontera donde ningún error sale como traceback. La API HTTP del bonus
+    sería otro.
+  - **de salida** (*driven*): el programa llama al exterior. Leer el corpus,
+    leer y escribir JSON, SQLite, el modelo Qwen.
 
 Reglas:
 - Las carpetas NACEN cuando el código las justifica, no de forma especulativa.
@@ -326,9 +330,9 @@ Roadmap de carpetas (en qué milestone nace cada una y por qué):
 | Carpeta / fichero | Nace en | Por qué |
 |---|---|---|
 | `src/__init__.py`, `tests/` | Fase B | Andamiaje: paquete importable y gates ejecutables |
-| `src/__main__.py`, `src/interface/` | M0 | Punto de entrada oficial y frontera de errores |
+| `src/__main__.py`, `src/adapters/cli.py` | M0 | Punto de entrada oficial y frontera de errores (adaptador de entrada) |
 | `src/domain/` | M1 | Los 8 modelos pydantic |
-| `src/adapters/` | M1 | Lectura y escritura de datasets JSON |
+| `src/adapters/` (salida) | M1 | Lectura y escritura de datasets JSON |
 | `src/application/` | M1 | Primer caso de uso real (`search_dataset`) |
 | Chunking (dominio) y SQLite (adaptador) | M2 | Indexado |
 | BM25 y recall@k | M3 | Recuperación y evaluación |
