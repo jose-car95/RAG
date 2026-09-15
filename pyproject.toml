@@ -4,7 +4,9 @@ version = "0.1.0"
 description = "RAG system that answers questions about the vLLM codebase."
 readme = "README.md"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = [
+    "fire>=0.7.1",
+]
 
 [dependency-groups]
 dev = [
@@ -16,6 +18,11 @@ dev = [
 [tool.mypy]
 # The vLLM corpus under data/raw/ contains Python files that are not ours.
 exclude = ["^data/", "^docs/"]
+
+[[tool.mypy.overrides]]
+# Fire ships without type hints; without this, `make lint-strict` fails.
+module = ["fire", "fire.*"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

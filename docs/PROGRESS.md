@@ -4,17 +4,19 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M0 — Esqueleto ejecutable (sin empezar).
-- **Último paso completado:** Fase B, andamiaje. Repo, configuración, CI,
-  documentos vivos, comandos de `.claude/`, milestones M0-M7, issues #1-#5 y
-  tablero #5. Cero código de producción.
-- **Verificado (2026-09-13), con el corpus descomprimido en `data/raw/`:**
-  - `uv sync` → entorno creado, `uv.lock` generado.
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 2 source files`.
-  - `make test` → `1 passed` (smoke test del paquete `src`).
-  - `make lint-strict` → `Success: no issues found in 2 source files`.
-- **Siguiente paso propuesto:** explicar RAG y la arquitectura por capas, y
-  arrancar el slice #1 "Expose CLI entry point with required commands".
+- **Milestone:** M0 — Esqueleto ejecutable (en curso).
+- **Último slice completado:** #1 "Expose CLI entry point with required
+  commands". `uv run python -m src` es una CLI de Fire (`RagCli` en
+  `src/interface/cli.py`) con los seis comandos del enunciado como stubs que
+  imprimen `<comando>: not implemented yet`. Se borró `tests/test_scaffold.py`
+  (OK de Jose): `tests/test_cli.py` ya ejecuta el programa entero.
+- **Verificado (2026-09-15):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 5 source files`.
+  - `make test` → `7 passed` (`tests/test_cli.py`, CLI en subproceso).
+  - `uv run python -m src search "What is vLLM?" --k 10` → `search: not implemented yet`, exit 0.
+  - `grep -rnE "^[[:space:]]*(import|from)[[:space:]]+moulinette" src/ tests/` → sin resultados.
+- **Siguiente paso propuesto:** slice #2 "Stop unexpected errors at the CLI
+  boundary".
 
 ## Decisiones
 
@@ -36,6 +38,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-13 | Jose revisa en VS Code los cambios sin stage antes de cada `git add` | Ver los cambios resaltados antes de commitear |
 | 2026-09-13 | Una rama por slice; se borra (local y remota) tras el merge | No acumular ramas muertas |
 | 2026-09-13 | Comandos propios `/slice`, `/mide`, `/ensayo` | Aprobados por Jose; tareas repetidas con pasos fáciles de olvidar |
+| 2026-09-15 | Fire recibe una instancia (`RagCli()`), no la clase | Con la clase, `--help` no lista los comandos |
+| 2026-09-15 | Los tests de la CLI ejecutan `python -m src` en un subproceso | Fire escribe en stderr y termina el proceso; así se ve lo mismo que el corrector |
+| 2026-09-15 | Docstrings de `src/` escritos por la IA a petición de Jose | Apoyo con el inglés; declarado en `docs/AI_USAGE.md` |
 
 ## Métricas
 
@@ -54,20 +59,21 @@ M3 antes de optimizar nada.
 - Ver los puntos **ABIERTO** de `docs/SPEC_NOTES.md` (tipos de fichero a
   indexar, `last_character_index` inclusivo o exclusivo, validación de
   rangos en `MinimalSource`, semántica de `k <= 0` y query vacía).
-- ¿Borrar las 10 etiquetas por defecto de GitHub? Pendiente de OK explícito.
+- **Volver a explicar (paso 8 del slice #1, 2026-09-15):** el flujo completo
+  `uv run python -m src ...` → `src/__main__.py` → `main()` → `RagCli()` →
+  Fire → método. Jose explicó bien Fire y el invariante de nombres; el
+  recorrido completo queda para el primer `/ensayo`.
 
 ## Notas de GitHub
 
 - **Tablero:** proyecto **#5** "RAG against the machine",
   https://github.com/users/jose-car95/projects/5, enlazado a `jose-car95/RAG`.
 - **Columnas (campo Status):** `Todo`, `In progress`, `In review`, `Done`.
-- **Workflows verificados por API (2026-09-13, tras la configuración de
-  Jose):** activos `Auto-add to project`, `Auto-add sub-issues to project`,
-  `Auto-archive items`, `Item reopened`, `Code changes requested`,
-  `Code review approved`. SIGUEN DESACTIVADOS `Item added to project`,
-  `Pull request linked to issue`, `Item closed`, `Pull request merged`
-  (Jose vio algunos como bloqueados). Mientras sigan así, el agente mueve
-  las tarjetas a mano en todos los pasos.
+- **Workflows verificados por API (2026-09-14):** los 11 activos. Pero al
+  cerrarse #6 su tarjeta pasó de `In review` a `Todo` en vez de a `Done`:
+  probablemente `Item closed` o `Pull request merged` apuntan a `Todo`
+  (la API no deja leer su valor). Jose debe revisarlos. Hasta confirmarlo,
+  el agente comprueba la tarjeta tras cada merge y la corrige a mano.
 - **Vistas (2026-09-13):** solo existe `View 1` (tabla, sin agrupar). Faltan
   "Board por Status" y "Tabla por milestone"; no se pueden crear por API.
 - **Mueve el agente:** la tarjeta a `In progress` al empezar cada slice, y a
@@ -76,7 +82,8 @@ M3 antes de optimizar nada.
 - **Ramas:** una por slice; tras el merge el agente borra la local y la remota
   y actualiza `main` (ver `CLAUDE.md`, "Tras el merge").
 - **Etiquetas:** `feat`, `fix`, `docs`, `test`, `chore`, `blocked`,
-  `spec-question`.
+  `spec-question`. Las 10 por defecto de GitHub se borraron el 2026-09-13
+  con OK de Jose.
 - **Milestones:** M0-M7, idénticos a `docs/PLAN.md`.
 
 ## Checklist del repo de entrega (para M6)
