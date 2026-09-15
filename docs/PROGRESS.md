@@ -6,10 +6,12 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 - **Milestone:** M0 — Esqueleto ejecutable (en curso).
 - **Último slice completado:** #1 "Expose CLI entry point with required
-  commands". `uv run python -m src` es una CLI de Fire (`RagCli` en
-  `src/interface/cli.py`) con los seis comandos del enunciado como stubs que
-  imprimen `<comando>: not implemented yet`. Se borró `tests/test_scaffold.py`
+  commands". `uv run python -m src` es una CLI de Fire (`RagCli`) con los seis
+  comandos del enunciado como stubs que imprimen
+  `<comando>: not implemented yet`. Se borró `tests/test_scaffold.py`
   (OK de Jose): `tests/test_cli.py` ya ejecuta el programa entero.
+- **Slice en curso:** #9 "Move CLI into the adapters layer" (refactor sin
+  cambio de comportamiento): `src/interface/cli.py` → `src/adapters/cli.py`.
 - **Verificado (2026-09-15):**
   - `make lint` → flake8 sin salida; mypy `Success: no issues found in 5 source files`.
   - `make test` → `7 passed` (`tests/test_cli.py`, CLI en subproceso).
@@ -41,6 +43,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-15 | Fire recibe una instancia (`RagCli()`), no la clase | Con la clase, `--help` no lista los comandos |
 | 2026-09-15 | Los tests de la CLI ejecutan `python -m src` en un subproceso | Fire escribe en stderr y termina el proceso; así se ve lo mismo que el corrector |
 | 2026-09-15 | Docstrings de `src/` escritos por la IA a petición de Jose | Apoyo con el inglés; declarado en `docs/AI_USAGE.md` |
+| 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
 
 ## Métricas
 
@@ -74,6 +77,11 @@ M3 antes de optimizar nada.
   probablemente `Item closed` o `Pull request merged` apuntan a `Todo`
   (la API no deja leer su valor). Jose debe revisarlos. Hasta confirmarlo,
   el agente comprueba la tarjeta tras cada merge y la corrige a mano.
+  Más síntomas (2026-09-15): #1 volvió de `In progress` a `Todo` al abrir su
+  PR, otra vez a `Todo` estando en `In review`, y se quedó en `In review`
+  tras cerrarse. Sospechosos: `Pull request linked to issue`,
+  `Item added to project`, `Item closed`, `Pull request merged` y
+  `Auto-add to project`.
 - **Vistas (2026-09-13):** solo existe `View 1` (tabla, sin agrupar). Faltan
   "Board por Status" y "Tabla por milestone"; no se pueden crear por API.
 - **Mueve el agente:** la tarjeta a `In progress` al empezar cada slice, y a
