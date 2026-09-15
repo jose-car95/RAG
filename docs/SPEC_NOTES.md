@@ -28,6 +28,11 @@ justificar), **ABIERTO** (pendiente, con límite).
   las opciones "como mínimo" pero un comando sin ellas no debe romper.
 - **INTERPRETACIÓN** — Todas las rutas pueden ser absolutas y estar fuera del
   repo; el directorio de salida se crea si no existe.
+- **ABIERTO** — VI.6 exige que todas las rutas de entrada y salida sean
+  configurables, pero `index` (lee `data/raw/`, escribe `data/processed/`) y
+  `search`/`answer` (leen `data/processed/`) no tienen flag de ruta en el
+  enunciado. Propuesta: flags opcionales propios (`--raw_directory`,
+  `--index_path`) con esas rutas por defecto. Límite: `/decide` al empezar M2.
 
 ## Corpus
 
@@ -58,6 +63,14 @@ justificar), **ABIERTO** (pendiente, con límite).
 - **ABIERTO** — Semántica de `k <= 0` y de la query vacía: ¿resultado vacío
   válido o mensaje de error con código distinto de 0? Límite: M1 (dataset) y
   M3 (search).
+- **FACT (medido 2026-09-15)** — Fire traduce pero NO valida: adivina tipos
+  (`--k abc` llega como `'abc'`; `search 123` llega como el entero `123`) y
+  los type hints no se comprueban al ejecutar. La validación es nuestra.
+- **ABIERTO** — Dos comportamientos de Fire medidos el 2026-09-15:
+  (a) con un flag desconocido (`search "q" --kk 5`) EJECUTA el comando y
+  después falla con exit 2; (b) una palabra sobrante
+  (`search "q" extra_word`) se ignora y sale con exit 0. Ninguno da
+  traceback. Decidir si se tratan. Límite: slice #2.
 
 ## Recuperación y calidad
 
