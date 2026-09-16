@@ -93,3 +93,12 @@ def test_stub_reports_not_implemented(args: tuple[str, ...]) -> None:
     assert result.returncode == 0, result.stderr
     assert f"{args[0]}: not implemented yet" in result.stdout
     assert "Traceback" not in result.stderr
+
+
+def test_usage_error_names_the_program() -> None:
+    """Fire's usage messages name the program ``src``, not ``__main__.py``."""
+    result = run_cli("nonexistent_command")
+
+    assert result.returncode == 2
+    assert "Usage: src <command>" in result.stderr
+    assert "Traceback" not in result.stderr

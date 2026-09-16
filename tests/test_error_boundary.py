@@ -32,12 +32,12 @@ class FailingCommands:
 def test_error_becomes_one_line_message(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """An exception is reported as ``Error: <message>`` with exit code 1."""
+    """An exception is reported as ``ERROR: <message>`` with exit code 1."""
     exit_code = run(FailingCommands(), ["bad_input"])
 
     captured = capsys.readouterr()
     assert exit_code == 1
-    assert captured.err == "Error: bad input\n"
+    assert captured.err == "ERROR: bad input\n"
 
 
 def test_error_without_message_shows_its_type(
@@ -48,7 +48,7 @@ def test_error_without_message_shows_its_type(
 
     captured = capsys.readouterr()
     assert exit_code == 1
-    assert captured.err == "Error: RuntimeError\n"
+    assert captured.err == "ERROR: RuntimeError\n"
 
 
 def test_ctrl_c_is_reported_as_interrupted(

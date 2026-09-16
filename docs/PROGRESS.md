@@ -6,21 +6,19 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 - **Milestone:** M0 — Esqueleto ejecutable (último slice en revisión).
 - **Slices cerrados:** #1 CLI de Fire con los seis comandos como stubs; #9
-  refactor de la CLI a `src/adapters/cli.py`.
-- **Slice en revisión:** #2 "Stop unexpected errors at the CLI boundary".
-  `run(component, argv)` en `src/adapters/cli.py` es la frontera de errores:
-  cualquier `Exception` → `Error: <mensaje>` en stderr y exit 1 (si no hay
-  mensaje, el nombre del tipo); Ctrl+C → `Interrupted` y exit 130; los
-  errores de uso de Fire (`SystemExit`, exit 2) pasan sin capturar.
-  `__main__.py` hace `sys.exit(main())`.
+  refactor de la CLI a `src/adapters/cli.py`; #2 frontera de errores
+  `run(component, argv)` (`Exception` → exit 1, Ctrl+C → `Interrupted` y
+  exit 130, `SystemExit` de Fire sin capturar).
+- **Slice en revisión:** #12 "Align CLI error messages with Fire": la
+  frontera escribe `ERROR: <mensaje>` (antes `Error:`), igual que Fire, y
+  Fire muestra `Usage: src <command>` en vez de `__main__.py`.
 - **Verificado (2026-09-16):**
   - `make lint` → flake8 sin salida; mypy `Success: no issues found in 6 source files`.
-  - `make test` → `12 passed` (7 en `tests/test_cli.py`, 5 en `tests/test_error_boundary.py`).
-  - `uv run python -m src search "What is vLLM?" --k 10` → `search: not implemented yet`, exit 0.
-  - `uv run python -m src nonexistent_command` → exit 2, sin traceback.
+  - `make test` → `13 passed` (8 en `tests/test_cli.py`, 5 en `tests/test_error_boundary.py`).
+  - `uv run python -m src nonexistent_command` → `ERROR: Could not consume arg: nonexistent_command` / `Usage: src <command>`.
   - `grep -rnE "^[[:space:]]*(import|from)[[:space:]]+moulinette" src/ tests/` → sin resultados.
-- **Siguiente paso propuesto:** tras el merge, cerrar M0 y arrancar M1 con el
-  slice #3 "Define the pydantic data models".
+- **Siguiente paso propuesto:** tras el merge, cerrar el milestone M0 en
+  GitHub y arrancar M1 con el slice #3 "Define the pydantic data models".
 
 ## Decisiones
 
@@ -48,6 +46,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-15 | Se acepta y documenta el comportamiento de Fire con flags desconocidos y palabras sobrantes (opción 1) | Sin traceback y fuera del enunciado; detalle en `docs/SPEC_NOTES.md` |
 | 2026-09-16 | La frontera de errores es `run(component, argv) -> int` en `src/adapters/cli.py`; devuelve el código y solo `__main__.py` llama a `sys.exit` | Testeable con un doble de test sin subproceso: es la razón presente para recibir el componente |
 | 2026-09-16 | Códigos de salida como constantes `EXIT_SUCCESS` (0), `EXIT_ERROR` (1), `EXIT_INTERRUPTED` (130); el 2 de Fire no se captura | Convención Unix (130 = 128 + SIGINT); un solo sitio que tocar en un recode |
+| 2026-09-16 | La frontera deja pasar el `SystemExit` de Fire | Medido: `--help` es `SystemExit(0)` y los errores de uso `SystemExit(2)`; capturarlo rompería la ayuda y mezclaría «me llamaste mal» (2) con «fallé» (1) |
+| 2026-09-16 | Prefijo `ERROR:` en los mensajes de la frontera (antes `Error:`) | Decisión de Jose: mismo formato que Fire. Cambio de requisito del issue #2, registrado en el issue #12; los tests se actualizaron por eso, no para que pasaran |
+| 2026-09-16 | `fire.Fire(..., name="src")` | Los mensajes de uso mostraban `__main__.py` |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
 
 ## Métricas
@@ -90,7 +91,11 @@ M3 antes de optimizar nada.
   `Item added to project`, `Item closed`, `Pull request merged` y
   `Auto-add to project`.
   Jose corrigió los workflows el 2026-09-15 tras el merge de #9 (cuya
-  tarjeta hubo que mover a `Done` a mano). Verificar con la PR del slice #2.
+  tarjeta hubo que mover a `Done` a mano).
+  **Verificado 2026-09-16: funcionan.** La tarjeta #2 pasó sola a
+  `In review` al abrir la PR #11 y a `Done` 3 s después del merge. El agente
+  solo mueve a mano `In progress` al empezar un slice (no hay workflow para
+  eso) y comprueba el resto.
 - **Vistas (2026-09-13):** solo existe `View 1` (tabla, sin agrupar). Faltan
   "Board por Status" y "Tabla por milestone"; no se pueden crear por API.
 - **Mueve el agente:** la tarjeta a `In progress` al empezar cada slice, y a
