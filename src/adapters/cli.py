@@ -107,13 +107,13 @@ def run(component: object, argv: list[str] | None = None) -> int:
         raises an exception, or ``EXIT_INTERRUPTED`` on Ctrl+C.
     """
     try:
-        fire.Fire(component, command=argv)
+        fire.Fire(component, command=argv, name="src")
         return EXIT_SUCCESS
     except Exception as error:
         message: str = str(error)
         if not message:
             message = type(error).__name__
-        print(f"Error: {message}", file=sys.stderr)
+        print(f"ERROR: {message}", file=sys.stderr)
         return EXIT_ERROR
     except KeyboardInterrupt:
         print("Interrupted", file=sys.stderr)
