@@ -12,7 +12,7 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | Python 3.10+, uv, `pyproject.toml` + `uv.lock` en la raíz | `uv sync` limpio desde la raíz | `uv sync` en un clon limpio; job de CI `uv sync --locked` | IN_PROGRESS |
 | Makefile: install, run, debug, clean, lint | Cada regla ejecuta | `make <regla>` con salida pegada | IN_PROGRESS |
 | flake8 + mypy con los flags del enunciado | `make lint` sin errores | CI `lint` y `types` en verde | IN_PROGRESS |
-| Los 8 modelos pydantic | Modelos + validación de los datasets públicos | Tests del slice de modelos (M1) | NOT_STARTED |
+| Los 8 modelos pydantic | Modelos + validación de los datasets públicos | `src/domain/models.py` + `tests/test_models.py` (11 tests: datasets públicos, UUID, campos extra, rangos, JSON de salida), slice #3 | EVIDENCED |
 | CLI con Python Fire y los seis comandos | `uv run python -m src --help` lista los comandos | `tests/test_cli.py` (7 tests, slice #1) | EVIDENCED |
 | Excepciones gestionadas y recursos con context managers | Sin tracebacks; `with` en ficheros y SQLite | Frontera de errores en `run` (`tests/test_error_boundary.py`, 5 tests, slice #2); context managers en M1-M2 | IN_PROGRESS |
 | tqdm en operaciones largas | Barra visible en `index`, `search_dataset`, `answer_dataset` | Demo en terminal (M2, M3, M5) | NOT_STARTED |

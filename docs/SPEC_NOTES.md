@@ -51,10 +51,19 @@ justificar), **ABIERTO** (pendiente, con límite).
 
 - **FACT** — Los 8 modelos de VI.4 son obligatorios y se pueden ampliar con
   campos o modelos nuevos.
-- **ABIERTO** — ¿Validamos `first_character_index <= last_character_index` en
-  `MinimalSource`? El enunciado no lo pide; los datasets públicos lo cumplen
-  siempre (comprobado 2026-09-13). Límite: slice "Define the pydantic data
-  models".
+- **DECISIÓN (2026-09-16, Jose, opción B)** — `MinimalSource` exige índices
+  `>= 0` y `first_character_index <= last_character_index`. Motivo: en Python
+  un rango al revés da texto vacío y un índice negativo cuenta desde el final
+  del fichero, ambos sin error; validarlo detecta fallos del chunking (M2) en
+  el momento. Los datasets públicos lo cumplen (398 fuentes, 2026-09-13). El
+  límite de 2000 caracteres de ancho NO es regla del modelo (el modelo también
+  valida los datasets de referencia y `--max_chunk_size` es configurable):
+  pertenece al chunking (M2).
+- **FACT (medido 2026-09-16, pydantic 2.13.5)** — Con
+  `List[AnsweredQuestion | UnansweredQuestion]`, pydantic asigna
+  `AnsweredQuestion` a las preguntas con `sources` y `answer` y
+  `UnansweredQuestion` al resto; los campos extra de los datasets
+  (`difficulty`, `is_valid`) se ignoran; `"42"` se convierte a `42`.
 
 ## Entradas degeneradas
 
