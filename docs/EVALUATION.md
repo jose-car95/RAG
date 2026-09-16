@@ -14,7 +14,7 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | flake8 + mypy con los flags del enunciado | `make lint` sin errores | CI `lint` y `types` en verde | IN_PROGRESS |
 | Los 8 modelos pydantic | Modelos + validación de los datasets públicos | Tests del slice de modelos (M1) | NOT_STARTED |
 | CLI con Python Fire y los seis comandos | `uv run python -m src --help` lista los comandos | `tests/test_cli.py` (7 tests, slice #1) | EVIDENCED |
-| Excepciones gestionadas y recursos con context managers | Sin tracebacks; `with` en ficheros y SQLite | Revisión de código + tests de errores (M0, M1, M6) | NOT_STARTED |
+| Excepciones gestionadas y recursos con context managers | Sin tracebacks; `with` en ficheros y SQLite | Frontera de errores en `run` (`tests/test_error_boundary.py`, 5 tests, slice #2); context managers en M1-M2 | IN_PROGRESS |
 | tqdm en operaciones largas | Barra visible en `index`, `search_dataset`, `answer_dataset` | Demo en terminal (M2, M3, M5) | NOT_STARTED |
 | Salida `StudentSearchResults` válida | La moulinette dice `Student data is valid: True` | Comprobación local (M1) | NOT_STARTED |
 | Salida `StudentSearchResultsAndAnswer` válida | JSON validado por el modelo | Test + demo (M5) | NOT_STARTED |

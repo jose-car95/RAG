@@ -4,21 +4,23 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M0 — Esqueleto ejecutable (en curso).
-- **Último slice completado:** #1 "Expose CLI entry point with required
-  commands". `uv run python -m src` es una CLI de Fire (`RagCli`) con los seis
-  comandos del enunciado como stubs que imprimen
-  `<comando>: not implemented yet`. Se borró `tests/test_scaffold.py`
-  (OK de Jose): `tests/test_cli.py` ya ejecuta el programa entero.
-- **Slice en curso:** #9 "Move CLI into the adapters layer" (refactor sin
-  cambio de comportamiento): `src/interface/cli.py` → `src/adapters/cli.py`.
-- **Verificado (2026-09-15):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 5 source files`.
-  - `make test` → `7 passed` (`tests/test_cli.py`, CLI en subproceso).
+- **Milestone:** M0 — Esqueleto ejecutable (último slice en revisión).
+- **Slices cerrados:** #1 CLI de Fire con los seis comandos como stubs; #9
+  refactor de la CLI a `src/adapters/cli.py`.
+- **Slice en revisión:** #2 "Stop unexpected errors at the CLI boundary".
+  `run(component, argv)` en `src/adapters/cli.py` es la frontera de errores:
+  cualquier `Exception` → `Error: <mensaje>` en stderr y exit 1 (si no hay
+  mensaje, el nombre del tipo); Ctrl+C → `Interrupted` y exit 130; los
+  errores de uso de Fire (`SystemExit`, exit 2) pasan sin capturar.
+  `__main__.py` hace `sys.exit(main())`.
+- **Verificado (2026-09-16):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 6 source files`.
+  - `make test` → `12 passed` (7 en `tests/test_cli.py`, 5 en `tests/test_error_boundary.py`).
   - `uv run python -m src search "What is vLLM?" --k 10` → `search: not implemented yet`, exit 0.
+  - `uv run python -m src nonexistent_command` → exit 2, sin traceback.
   - `grep -rnE "^[[:space:]]*(import|from)[[:space:]]+moulinette" src/ tests/` → sin resultados.
-- **Siguiente paso propuesto:** slice #2 "Stop unexpected errors at the CLI
-  boundary".
+- **Siguiente paso propuesto:** tras el merge, cerrar M0 y arrancar M1 con el
+  slice #3 "Define the pydantic data models".
 
 ## Decisiones
 
@@ -43,6 +45,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-15 | Fire recibe una instancia (`RagCli()`), no la clase | Con la clase, `--help` no lista los comandos |
 | 2026-09-15 | Los tests de la CLI ejecutan `python -m src` en un subproceso | Fire escribe en stderr y termina el proceso; así se ve lo mismo que el corrector |
 | 2026-09-15 | Docstrings de `src/` escritos por la IA a petición de Jose | Apoyo con el inglés; declarado en `docs/AI_USAGE.md` |
+| 2026-09-15 | Se acepta y documenta el comportamiento de Fire con flags desconocidos y palabras sobrantes (opción 1) | Sin traceback y fuera del enunciado; detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-16 | La frontera de errores es `run(component, argv) -> int` en `src/adapters/cli.py`; devuelve el código y solo `__main__.py` llama a `sys.exit` | Testeable con un doble de test sin subproceso: es la razón presente para recibir el componente |
+| 2026-09-16 | Códigos de salida como constantes `EXIT_SUCCESS` (0), `EXIT_ERROR` (1), `EXIT_INTERRUPTED` (130); el 2 de Fire no se captura | Convención Unix (130 = 128 + SIGINT); un solo sitio que tocar en un recode |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
 
 ## Métricas
@@ -62,10 +67,12 @@ M3 antes de optimizar nada.
 - Ver los puntos **ABIERTO** de `docs/SPEC_NOTES.md` (tipos de fichero a
   indexar, `last_character_index` inclusivo o exclusivo, validación de
   rangos en `MinimalSource`, semántica de `k <= 0` y query vacía).
-- **Volver a explicar (paso 8 del slice #1, 2026-09-15):** el flujo completo
-  `uv run python -m src ...` → `src/__main__.py` → `main()` → `RagCli()` →
-  Fire → método. Jose explicó bien Fire y el invariante de nombres; el
-  recorrido completo queda para el primer `/ensayo`.
+- **Ensayar en el primer `/ensayo`:** el recorrido completo
+  `python -m src` → `__main__.py` → `main()` → `run(RagCli())` → Fire →
+  método, y el viaje del código de salida (`run` decide el número, `main` y
+  `__main__.py` lo pasan, `sys.exit` lo entrega). Pendiente desde el paso 8
+  del slice #1; se volvió a explicar en el slice #2 (2026-09-16) y Jose
+  confirma haberlo entendido.
 
 ## Notas de GitHub
 
@@ -82,6 +89,8 @@ M3 antes de optimizar nada.
   tras cerrarse. Sospechosos: `Pull request linked to issue`,
   `Item added to project`, `Item closed`, `Pull request merged` y
   `Auto-add to project`.
+  Jose corrigió los workflows el 2026-09-15 tras el merge de #9 (cuya
+  tarjeta hubo que mover a `Done` a mano). Verificar con la PR del slice #2.
 - **Vistas (2026-09-13):** solo existe `View 1` (tabla, sin agrupar). Faltan
   "Board por Status" y "Tabla por milestone"; no se pueden crear por API.
 - **Mueve el agente:** la tarjeta a `In progress` al empezar cada slice, y a
