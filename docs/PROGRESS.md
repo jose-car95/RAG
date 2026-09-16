@@ -4,21 +4,20 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M0 — Esqueleto ejecutable (último slice en revisión).
-- **Slices cerrados:** #1 CLI de Fire con los seis comandos como stubs; #9
-  refactor de la CLI a `src/adapters/cli.py`; #2 frontera de errores
-  `run(component, argv)` (`Exception` → exit 1, Ctrl+C → `Interrupted` y
-  exit 130, `SystemExit` de Fire sin capturar).
-- **Slice en revisión:** #12 "Align CLI error messages with Fire": la
-  frontera escribe `ERROR: <mensaje>` (antes `Error:`), igual que Fire, y
-  Fire muestra `Usage: src <command>` en vez de `__main__.py`.
+- **Milestone:** M1 — Modelos de datos y E/S de datasets (en curso). M0
+  cerrado en GitHub el 2026-09-16 (#1, #2, #6, #9, #12).
+- **Slice en revisión:** #3 "Define the pydantic data models". Los 8 modelos
+  de VI.4 en `src/domain/models.py` (nace la capa `domain/`). Decisión B:
+  `MinimalSource` exige índices `>= 0` (`Field(ge=0)`) y
+  `first_character_index <= last_character_index` (`validate_range`).
 - **Verificado (2026-09-16):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 6 source files`.
-  - `make test` → `13 passed` (8 en `tests/test_cli.py`, 5 en `tests/test_error_boundary.py`).
-  - `uv run python -m src nonexistent_command` → `ERROR: Could not consume arg: nonexistent_command` / `Usage: src <command>`.
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 9 source files`.
+  - `make test` → `24 passed` (8 CLI, 5 frontera de errores, 11 modelos).
+  - Los dos datasets públicos validan como `RagDataset` (100 `AnsweredQuestion` / 99 `UnansweredQuestion`) en `tests/test_models.py`.
+  - `grep -nE "^(from|import) src\." src/domain/*.py` → sin resultados (el dominio no importa otras capas).
   - `grep -rnE "^[[:space:]]*(import|from)[[:space:]]+moulinette" src/ tests/` → sin resultados.
-- **Siguiente paso propuesto:** tras el merge, cerrar el milestone M0 en
-  GitHub y arrancar M1 con el slice #3 "Define the pydantic data models".
+- **Siguiente paso propuesto:** slice #4 "Load question datasets from JSON
+  files" (primer adaptador de salida y primer context manager).
 
 ## Decisiones
 
@@ -49,6 +48,11 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-16 | La frontera deja pasar el `SystemExit` de Fire | Medido: `--help` es `SystemExit(0)` y los errores de uso `SystemExit(2)`; capturarlo rompería la ayuda y mezclaría «me llamaste mal» (2) con «fallé» (1) |
 | 2026-09-16 | Prefijo `ERROR:` en los mensajes de la frontera (antes `Error:`) | Decisión de Jose: mismo formato que Fire. Cambio de requisito del issue #2, registrado en el issue #12; los tests se actualizaron por eso, no para que pasaran |
 | 2026-09-16 | `fire.Fire(..., name="src")` | Los mensajes de uso mostraban `__main__.py` |
+| 2026-09-16 | Rangos de `MinimalSource`: índices `>= 0` y `first <= last` (opción B); el ancho de 2000 no es regla del modelo | Detectar fallos del chunking en el momento; detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-16 | Modelos en `src/domain/models.py` con `list[...]` (no `List` del enunciado) | Sintaxis estándar desde Python 3.9; mismo significado |
+| 2026-09-16 | Mensaje del `ValueError` y docstrings de `models.py` escritos por la IA a petición de Jose | Apoyo con el inglés; declarado en `docs/AI_USAGE.md` |
+| 2026-09-17 | Se mantiene `.flake8` en vez de pasar las exclusiones al `Makefile` | El enunciado da el comando literal `flake8 .`; el fichero aplica a quien ejecute flake8 (corrector, VS Code, CI). Sin él: 49.694 errores ajenos (40.788 de `.venv`, 8.906 de `data/`) |
+| 2026-09-17 | Se desarrolla con Python 3.12 (`.python-version`); en la escuela (Python 3.10) `uv sync` descargará 3.12 automáticamente | Misma versión en casa, CI y escuela. Plan B si la descarga falla: `.python-version` = `3.10` (el código pasa `mypy --python-version 3.10`) |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
 
 ## Métricas
@@ -96,6 +100,8 @@ M3 antes de optimizar nada.
   `In review` al abrir la PR #11 y a `Done` 3 s después del merge. El agente
   solo mueve a mano `In progress` al empezar un slice (no hay workflow para
   eso) y comprueba el resto.
+  Excepción (2026-09-16): la tarjeta #12 no pasó sola a `Done` tras el merge
+  de la PR #13 y se movió a mano. Causa desconocida; seguir comprobando.
 - **Vistas (2026-09-13):** solo existe `View 1` (tabla, sin agrupar). Faltan
   "Board por Status" y "Tabla por milestone"; no se pueden crear por API.
 - **Mueve el agente:** la tarjeta a `In progress` al empezar cada slice, y a
@@ -115,3 +121,7 @@ M3 antes de optimizar nada.
 - [ ] `pyproject.toml`, `uv.lock`, `.python-version`, `Makefile`, `README.md`, `src/`.
 - [ ] Primera línea del README en cursiva con el login.
 - [ ] `uv sync` y `make lint` en un clon limpio en la máquina de la escuela.
+- [ ] En la escuela (solo Python 3.10): comprobar que `uv sync` descarga
+  Python 3.12 (red), dónde lo guarda (`uv python dir`) y cuánto ocupa; si
+  falta cuota, usar `UV_PYTHON_INSTALL_DIR`. Plan B: `.python-version` =
+  `3.10`.
