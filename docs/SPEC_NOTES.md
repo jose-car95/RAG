@@ -66,11 +66,17 @@ justificar), **ABIERTO** (pendiente, con límite).
 - **FACT (medido 2026-09-15)** — Fire traduce pero NO valida: adivina tipos
   (`--k abc` llega como `'abc'`; `search 123` llega como el entero `123`) y
   los type hints no se comprueban al ejecutar. La validación es nuestra.
-- **ABIERTO** — Dos comportamientos de Fire medidos el 2026-09-15:
-  (a) con un flag desconocido (`search "q" --kk 5`) EJECUTA el comando y
-  después falla con exit 2; (b) una palabra sobrante
-  (`search "q" extra_word`) se ignora y sale con exit 0. Ninguno da
-  traceback. Decidir si se tratan. Límite: slice #2.
+- **DECISIÓN (2026-09-15, Jose, opción 1)** — Se acepta y documenta el
+  comportamiento de Fire medido ese día: (a) con un flag desconocido
+  (`search "q" --kk 5`) EJECUTA el comando y después falla con exit 2;
+  (b) una palabra sobrante (`search "q" extra_word`) se ignora y sale con
+  exit 0. Ninguno da traceback y el enunciado no los menciona; evitarlos
+  exigiría validar los argumentos contra la firma antes de llamar a Fire.
+  Revisar en M2 si (a) hace que `index` trabaje minutos antes de fallar.
+- **FACT (medido 2026-09-15)** — Los errores de uso de Fire son `FireExit`,
+  subclase de `SystemExit` (no de `Exception`), y `KeyboardInterrupt` tampoco
+  es `Exception`. Sin frontera, una excepción en un comando sale con
+  traceback y exit 1, y Ctrl+C con traceback y exit 130.
 
 ## Recuperación y calidad
 

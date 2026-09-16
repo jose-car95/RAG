@@ -4,7 +4,16 @@ Each public method of ``RagCli`` becomes a command, and each parameter
 becomes a flag with the same name (``k`` becomes ``--k``).
 """
 
+import sys
+
 import fire
+
+
+# Exit codes follow Unix conventions: 130 is 128 + SIGINT (signal 2), the
+# code a program ends with when the user presses Ctrl+C.
+EXIT_SUCCESS = 0
+EXIT_ERROR = 1
+EXIT_INTERRUPTED = 130
 
 
 class RagCli:
@@ -82,6 +91,39 @@ class RagCli:
         print("evaluate: not implemented yet")
 
 
-def main() -> None:
-    """Run the command-line interface."""
-    fire.Fire(RagCli())
+def run(component: object, argv: list[str] | None = None) -> int:
+    """Run a Fire CLI and turn any failure into a clean exit code.
+
+    This is the error boundary: no exception reaches the user as a
+    traceback. Fire's own usage errors (``SystemExit``) are not caught, so
+    Fire still prints its usage message and exits with code 2.
+
+    Args:
+        component: Object whose public methods are exposed as commands.
+        argv: Command-line words; ``None`` reads the real terminal.
+
+    Returns:
+        ``EXIT_SUCCESS`` when the command finishes, ``EXIT_ERROR`` when it
+        raises an exception, or ``EXIT_INTERRUPTED`` on Ctrl+C.
+    """
+    try:
+        fire.Fire(component, command=argv)
+        return EXIT_SUCCESS
+    except Exception as error:
+        message: str = str(error)
+        if not message:
+            message = type(error).__name__
+        print(f"Error: {message}", file=sys.stderr)
+        return EXIT_ERROR
+    except KeyboardInterrupt:
+        print("Interrupted", file=sys.stderr)
+        return EXIT_INTERRUPTED
+
+
+def main() -> int:
+    """Run the RAG command-line interface.
+
+    Returns:
+        The exit code, to be passed to ``sys.exit``.
+    """
+    return run(RagCli())
