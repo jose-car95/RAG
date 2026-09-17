@@ -70,8 +70,8 @@ justificar), **ABIERTO** (pendiente, con límite).
 - **FACT** — Query vacía, query sin sentido, `k=0`, ficheros inexistentes y
   JSON malformado no pueden producir un traceback (VI.6).
 - **ABIERTO** — Semántica de `k <= 0` y de la query vacía: ¿resultado vacío
-  válido o mensaje de error con código distinto de 0? Límite: M1 (dataset) y
-  M3 (search).
+  válido o mensaje de error con código distinto de 0? Límite: slice #5
+  (`search_dataset`, primer uso de `k`) y M3 (search).
 - **FACT (medido 2026-09-15)** — Fire traduce pero NO valida: adivina tipos
   (`--k abc` llega como `'abc'`; `search 123` llega como el entero `123`) y
   los type hints no se comprueban al ejecutar. La validación es nuestra.
