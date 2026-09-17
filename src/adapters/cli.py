@@ -8,7 +8,7 @@ import sys
 
 import fire
 
-from src.adapters.json_dataset import load_dataset
+from src.application.search_dataset import run_search_dataset
 
 
 # Exit codes follow Unix conventions: 130 is 128 + SIGINT (signal 2), the
@@ -55,12 +55,8 @@ class RagCli:
             k: Number of sources to return per question.
             save_directory: Directory where the results file is written.
         """
-        dataset = load_dataset(dataset_path)
-        question_count: int = len(dataset.rag_questions)
-        print(
-            f"search_dataset: loaded {question_count} questions "
-            "(search not implemented yet)"
-        )
+        output_path = run_search_dataset(dataset_path, k, save_directory)
+        print(f"Saved student_search_results to {output_path}")
 
     def answer(self, query: str, k: int = 10) -> None:
         """Answer a single question using the retrieved sources.
