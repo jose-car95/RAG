@@ -91,6 +91,8 @@ Salida: `answer "How to configure OpenAI server?" --k 10` produce en CPU una res
 23. Ensayo de recode y de las preguntas de comprensión.
 24. Prueba en la máquina de la escuela (disco, cachés, CPU) y checklist del
     repo de entrega.
+25. Pulir mensajes de error con detalle en una línea: línea y columna del
+    JSON roto y campo que falla en pydantic (decisión de Jose, 2026-09-17).
 
 Salida: los tres flujos de examen en verde en local, README completo y ensayo de recode superado.
 
