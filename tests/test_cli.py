@@ -111,17 +111,55 @@ def test_search_dataset_reports_missing_dataset() -> None:
     )
 
 
-def test_search_dataset_loads_the_dataset() -> None:
-    """A valid dataset is loaded and its size is reported."""
+def test_search_dataset_writes_results_file(tmp_path: Path) -> None:
+    """The results file is written and its path is reported."""
     result = run_cli(
         "search_dataset",
         "--dataset_path",
         "data/datasets/UnansweredQuestions/dataset_docs_public.json",
         "--k",
         "10",
+        "--save_directory",
+        str(tmp_path),
+    )
+
+    output_path = tmp_path / "dataset_docs_public.json"
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (
+        f"Saved student_search_results to {output_path}\n"
+    )
+    assert output_path.is_file()
+
+
+def test_search_dataset_uses_default_save_directory() -> None:
+    """Without ``--save_directory`` the file goes to the default folder."""
+    output_path = (
+        REPO_ROOT / "data/output/search_results/dataset_code_public.json"
+    )
+    output_path.unlink(missing_ok=True)
+
+    result = run_cli(
+        "search_dataset",
+        "--dataset_path",
+        "data/datasets/UnansweredQuestions/dataset_code_public.json",
+        "--k",
+        "10",
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout == (
-        "search_dataset: loaded 100 questions (search not implemented yet)\n"
+    assert output_path.is_file()
+    output_path.unlink()
+
+
+def test_search_dataset_rejects_invalid_k() -> None:
+    """A ``k`` that is not a positive integer is a usage error."""
+    result = run_cli(
+        "search_dataset",
+        "--dataset_path",
+        "data/datasets/UnansweredQuestions/dataset_docs_public.json",
+        "--k",
+        "0",
     )
+
+    assert result.returncode == 1
+    assert result.stderr == "ERROR: k must be a positive integer\n"

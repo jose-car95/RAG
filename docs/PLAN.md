@@ -88,6 +88,10 @@ Salida: `answer "How to configure OpenAI server?" --k 10` produce en CPU una res
 21. Entradas degeneradas: query vacía, query sin sentido, `k=0`, ficheros
     inexistentes, JSON malformado.
 22. README completo con todas las secciones del enunciado (capítulo VIII).
+    En "Example usage", los comandos completos del pipeline paso a paso
+    (index, search_dataset, moulinette, answer_dataset) listos para copiar en
+    la defensa; si cambian las rutas, se ajustan a mano (decisión de Jose,
+    2026-09-17).
 23. Ensayo de recode y de las preguntas de comprensión.
 24. Prueba en la máquina de la escuela (disco, cachés, CPU) y checklist del
     repo de entrega.
