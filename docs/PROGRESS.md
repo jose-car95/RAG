@@ -4,26 +4,28 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M1 — Modelos de datos y E/S de datasets (en curso). M0
-  cerrado el 2026-09-16.
-- **Slices cerrados en M1:** #3 los 8 modelos pydantic en
-  `src/domain/models.py` (rangos validados, decisión B).
-- **Slice en revisión:** #4 "Load question datasets from JSON files".
-  `load_dataset(path)` en `src/adapters/json_dataset.py` (primer adaptador de
-  salida) abre el fichero con `with` y UTF-8, lo lee con `json.load` y lo
-  valida con `RagDataset.model_validate`. Traduce cada fallo a un
-  `ValueError` de una línea con `raise ... from error`: no existe / no se
-  puede leer / no es JSON / no tiene forma de dataset. `search_dataset`
-  lo usa e imprime cuántas preguntas cargó.
+- **Milestone:** M1 — Modelos de datos y E/S de datasets (último slice en
+  revisión). M0 cerrado el 2026-09-16.
+- **Slices cerrados en M1:** #3 modelos pydantic; #4 `load_dataset` con
+  errores traducidos.
+- **Slice en revisión:** #5 "Write empty search results from search_dataset".
+  Nace `src/application/` con el caso de uso `run_search_dataset`: valida
+  `k` (entero `>= 1`), carga el dataset, crea un `MinimalSearchResults` con
+  `retrieved_sources=[]` por pregunta y escribe un `StudentSearchResults` en
+  `<save_directory>/<nombre del dataset>` con el adaptador nuevo
+  `write_search_results` (`src/adapters/json_results.py`). La CLI solo llama
+  al caso de uso e imprime `Saved student_search_results to <ruta>`.
 - **Verificado (2026-09-17):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 11 source files`.
-  - `make test` → `33 passed` (9 CLI, 5 frontera, 8 cargador, 11 modelos).
-  - `uv run python -m src search_dataset --dataset_path /nonexistent/dataset.json --k 10` → `ERROR: dataset not found: /nonexistent/dataset.json`, exit 1.
-  - `uv run python -m src search_dataset --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json --k 10` → `search_dataset: loaded 100 questions (search not implemented yet)`, exit 0.
-  - `grep` de imports de la moulinette y de otras capas en `src/domain/` → sin resultados.
-- **Siguiente paso propuesto:** slice #5 "Write empty search results from
-  search_dataset": nace `src/application/` (primer caso de uso) y se decide
-  la semántica de `k <= 0`.
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 15 source files`.
+  - `make test` → `42 passed` (11 CLI, 5 frontera, 8 cargador, 11 modelos, 7 caso de uso).
+  - `uv run python -m src search_dataset --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json --k 10 --save_directory data/output/search_results/UnansweredQuestions` → `Saved student_search_results to data/output/search_results/UnansweredQuestions/dataset_docs_public.json`, exit 0.
+  - **Salida de M1:** `./moulinette-ubuntu evaluate_student_search_results data/output/search_results/UnansweredQuestions/dataset_docs_public.json data/datasets/AnsweredQuestions/dataset_docs_public.json --k 10 --max_context_length 2000` → `Student data is valid: True`, 100 preguntas, Recall@5 0.000.
+  - `... --k 0` → `ERROR: k must be a positive integer`, exit 1.
+  - `make run ARGS="search_dataset --dataset_path ... --k 2 --save_directory ..."` → funciona (los argumentos del programa van dentro de `ARGS`, no sueltos tras `make run`).
+- **Siguiente paso propuesto:** tras el merge, cerrar M1 y planificar M2
+  (indexado): crear los issues de M2 y M3 y resolver con `/decide` los
+  ABIERTOS de M2 (tipos de fichero a indexar, `last_character_index`
+  inclusivo o exclusivo, flags de ruta de `index`).
 
 ## Decisiones
 
@@ -60,6 +62,12 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | `load_dataset` traduce los errores de `open`, `json` y pydantic a `ValueError` de una línea con `raise ... from error`; el prefijo `ERROR:` solo lo pone la frontera `run` | Los originales no nombran el fichero (JSON), usan jerga (`[Errno 2]`) o ocupan 4 líneas (pydantic); el error original queda como `__cause__`. Fire no se solapa: valida la llamada, no el contenido de los datos |
 | 2026-09-17 | Los mensajes con detalle (línea y columna del JSON, campo que falla en pydantic) se dejan para M6 | Decisión de Jose: pulir mensajes al final |
 | 2026-09-17 | Provisional: `RagCli.search_dataset` llama directamente al adaptador `load_dataset` | La capa `application/` nace en el slice #5 con el primer caso de uso real; crearla para una línea sería especulativo |
+| 2026-09-17 | `k` debe ser un entero `>= 1` (opción A); si no, `k must be a positive integer` y no se escribe nada | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-17 | Nace `src/application/` con `run_search_dataset`; la CLI llama al caso de uso y ya no al adaptador | Primer caso que coordina varias piezas (validar, cargar, construir, escribir) |
+| 2026-09-17 | Adaptador nuevo `src/adapters/json_results.py` para escribir resultados (no dentro de `json_dataset.py`) | Son otros datos; en M5 `answer_dataset` leerá estos ficheros desde el mismo módulo |
+| 2026-09-17 | El caso de uso importa los adaptadores directamente, sin puertos | Solo hay una implementación de cada uno; un puerto sería una abstracción por si acaso |
+| 2026-09-17 | La moulinette queda descomprimida en `./moulinette-ubuntu` (10,3 MB, ignorada por git) para comprobaciones locales y `/mide` | Nunca se usa desde `src/` ni `tests/` |
+| 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-17 | Se mantiene `.flake8` en vez de pasar las exclusiones al `Makefile` | El enunciado da el comando literal `flake8 .`; el fichero aplica a quien ejecute flake8 (corrector, VS Code, CI). Sin él: 49.694 errores ajenos (40.788 de `.venv`, 8.906 de `data/`) |
 | 2026-09-17 | Se desarrolla con Python 3.12 (`.python-version`); en la escuela (Python 3.10) `uv sync` descargará 3.12 automáticamente | Misma versión en casa, CI y escuela. Plan B si la descarga falla: `.python-version` = `3.10` (el código pasa `mypy --python-version 3.10`) |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
@@ -87,6 +95,14 @@ M3 antes de optimizar nada.
   `__main__.py` lo pasan, `sys.exit` lo entrega). Pendiente desde el paso 8
   del slice #1; se volvió a explicar en el slice #2 (2026-09-16) y Jose
   confirma haberlo entendido.
+- **Ensayar en el primer `/ensayo` (paso 8 del slice #5, 2026-09-17):** por
+  qué `run_search_dataset` vive en `application/` y no en la CLI; por qué se
+  valida `k` antes de cargar; por qué pydantic rechazaba
+  `StudentSearchResults(search_results, k)` (argumentos por posición) y qué
+  fallaba en `search_results: list = [MinimalSearchResults]` (tipo frente a
+  valor). Jose confirma haberlo entendido y pidió seguir.
+- **Pulido M6:** rechazar un `--save_directory` que parezca un fichero
+  (p. ej. termina en `.json`); hoy crea una carpeta con ese nombre.
 
 ## Notas de GitHub
 

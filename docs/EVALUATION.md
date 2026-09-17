@@ -16,7 +16,7 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | CLI con Python Fire y los seis comandos | `uv run python -m src --help` lista los comandos | `tests/test_cli.py` (7 tests, slice #1) | EVIDENCED |
 | Excepciones gestionadas y recursos con context managers | Sin tracebacks; `with` en ficheros y SQLite | Frontera de errores en `run` (`tests/test_error_boundary.py`, slice #2); `with open(...)` y errores de fichero traducidos en `load_dataset` (`tests/test_json_dataset.py`, slice #4); SQLite en M2 | IN_PROGRESS |
 | tqdm en operaciones largas | Barra visible en `index`, `search_dataset`, `answer_dataset` | Demo en terminal (M2, M3, M5) | NOT_STARTED |
-| Salida `StudentSearchResults` válida | La moulinette dice `Student data is valid: True` | Comprobación local (M1) | NOT_STARTED |
+| Salida `StudentSearchResults` válida | La moulinette dice `Student data is valid: True` | `search_dataset` sobre `dataset_docs_public.json` → moulinette local `Student data is valid: True` (2026-09-17, slice #5); tests en `tests/test_search_dataset.py` | EVIDENCED |
 | Salida `StudentSearchResultsAndAnswer` válida | JSON validado por el modelo | Test + demo (M5) | NOT_STARTED |
 | Dos estrategias de chunking | Código de Python y de Markdown/texto, explicable | Tests del invariante de chunks (M2) | NOT_STARTED |
 | `--max_chunk_size` con default 2000 | Ningún chunk > 2000 | Test del invariante (M2) | NOT_STARTED |
