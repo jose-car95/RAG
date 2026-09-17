@@ -5,19 +5,25 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 ## Estado actual
 
 - **Milestone:** M1 — Modelos de datos y E/S de datasets (en curso). M0
-  cerrado en GitHub el 2026-09-16 (#1, #2, #6, #9, #12).
-- **Slice en revisión:** #3 "Define the pydantic data models". Los 8 modelos
-  de VI.4 en `src/domain/models.py` (nace la capa `domain/`). Decisión B:
-  `MinimalSource` exige índices `>= 0` (`Field(ge=0)`) y
-  `first_character_index <= last_character_index` (`validate_range`).
-- **Verificado (2026-09-16):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 9 source files`.
-  - `make test` → `24 passed` (8 CLI, 5 frontera de errores, 11 modelos).
-  - Los dos datasets públicos validan como `RagDataset` (100 `AnsweredQuestion` / 99 `UnansweredQuestion`) en `tests/test_models.py`.
-  - `grep -nE "^(from|import) src\." src/domain/*.py` → sin resultados (el dominio no importa otras capas).
-  - `grep -rnE "^[[:space:]]*(import|from)[[:space:]]+moulinette" src/ tests/` → sin resultados.
-- **Siguiente paso propuesto:** slice #4 "Load question datasets from JSON
-  files" (primer adaptador de salida y primer context manager).
+  cerrado el 2026-09-16.
+- **Slices cerrados en M1:** #3 los 8 modelos pydantic en
+  `src/domain/models.py` (rangos validados, decisión B).
+- **Slice en revisión:** #4 "Load question datasets from JSON files".
+  `load_dataset(path)` en `src/adapters/json_dataset.py` (primer adaptador de
+  salida) abre el fichero con `with` y UTF-8, lo lee con `json.load` y lo
+  valida con `RagDataset.model_validate`. Traduce cada fallo a un
+  `ValueError` de una línea con `raise ... from error`: no existe / no se
+  puede leer / no es JSON / no tiene forma de dataset. `search_dataset`
+  lo usa e imprime cuántas preguntas cargó.
+- **Verificado (2026-09-17):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 11 source files`.
+  - `make test` → `33 passed` (9 CLI, 5 frontera, 8 cargador, 11 modelos).
+  - `uv run python -m src search_dataset --dataset_path /nonexistent/dataset.json --k 10` → `ERROR: dataset not found: /nonexistent/dataset.json`, exit 1.
+  - `uv run python -m src search_dataset --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json --k 10` → `search_dataset: loaded 100 questions (search not implemented yet)`, exit 0.
+  - `grep` de imports de la moulinette y de otras capas en `src/domain/` → sin resultados.
+- **Siguiente paso propuesto:** slice #5 "Write empty search results from
+  search_dataset": nace `src/application/` (primer caso de uso) y se decide
+  la semántica de `k <= 0`.
 
 ## Decisiones
 
@@ -51,6 +57,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-16 | Rangos de `MinimalSource`: índices `>= 0` y `first <= last` (opción B); el ancho de 2000 no es regla del modelo | Detectar fallos del chunking en el momento; detalle en `docs/SPEC_NOTES.md` |
 | 2026-09-16 | Modelos en `src/domain/models.py` con `list[...]` (no `List` del enunciado) | Sintaxis estándar desde Python 3.9; mismo significado |
 | 2026-09-16 | Mensaje del `ValueError` y docstrings de `models.py` escritos por la IA a petición de Jose | Apoyo con el inglés; declarado en `docs/AI_USAGE.md` |
+| 2026-09-17 | `load_dataset` traduce los errores de `open`, `json` y pydantic a `ValueError` de una línea con `raise ... from error`; el prefijo `ERROR:` solo lo pone la frontera `run` | Los originales no nombran el fichero (JSON), usan jerga (`[Errno 2]`) o ocupan 4 líneas (pydantic); el error original queda como `__cause__`. Fire no se solapa: valida la llamada, no el contenido de los datos |
+| 2026-09-17 | Los mensajes con detalle (línea y columna del JSON, campo que falla en pydantic) se dejan para M6 | Decisión de Jose: pulir mensajes al final |
+| 2026-09-17 | Provisional: `RagCli.search_dataset` llama directamente al adaptador `load_dataset` | La capa `application/` nace en el slice #5 con el primer caso de uso real; crearla para una línea sería especulativo |
 | 2026-09-17 | Se mantiene `.flake8` en vez de pasar las exclusiones al `Makefile` | El enunciado da el comando literal `flake8 .`; el fichero aplica a quien ejecute flake8 (corrector, VS Code, CI). Sin él: 49.694 errores ajenos (40.788 de `.venv`, 8.906 de `data/`) |
 | 2026-09-17 | Se desarrolla con Python 3.12 (`.python-version`); en la escuela (Python 3.10) `uv sync` descargará 3.12 automáticamente | Misma versión en casa, CI y escuela. Plan B si la descarga falla: `.python-version` = `3.10` (el código pasa `mypy --python-version 3.10`) |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
