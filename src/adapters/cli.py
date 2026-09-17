@@ -8,6 +8,8 @@ import sys
 
 import fire
 
+from src.adapters.json_dataset import load_dataset
+
 
 # Exit codes follow Unix conventions: 130 is 128 + SIGINT (signal 2), the
 # code a program ends with when the user presses Ctrl+C.
@@ -53,7 +55,12 @@ class RagCli:
             k: Number of sources to return per question.
             save_directory: Directory where the results file is written.
         """
-        print("search_dataset: not implemented yet")
+        dataset = load_dataset(dataset_path)
+        question_count: int = len(dataset.rag_questions)
+        print(
+            f"search_dataset: loaded {question_count} questions "
+            "(search not implemented yet)"
+        )
 
     def answer(self, query: str, k: int = 10) -> None:
         """Answer a single question using the retrieved sources.
