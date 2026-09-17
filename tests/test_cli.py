@@ -59,15 +59,6 @@ def test_help_lists_required_commands() -> None:
     [
         ("index", "--max_chunk_size", "2000"),
         ("search", "What is vLLM?", "--k", "10"),
-        (
-            "search_dataset",
-            "--dataset_path",
-            "data/datasets/UnansweredQuestions/dataset_docs_public.json",
-            "--k",
-            "10",
-            "--save_directory",
-            "data/output/search_results/UnansweredQuestions",
-        ),
         ("answer", "What is vLLM?", "--k", "10"),
         (
             "answer_dataset",
@@ -102,3 +93,35 @@ def test_usage_error_names_the_program() -> None:
     assert result.returncode == 2
     assert "Usage: src <command>" in result.stderr
     assert "Traceback" not in result.stderr
+
+
+def test_search_dataset_reports_missing_dataset() -> None:
+    """A missing dataset ends in a one-line error and exit code 1."""
+    result = run_cli(
+        "search_dataset",
+        "--dataset_path",
+        "/nonexistent/dataset.json",
+        "--k",
+        "10",
+    )
+
+    assert result.returncode == 1
+    assert result.stderr == (
+        "ERROR: dataset not found: /nonexistent/dataset.json\n"
+    )
+
+
+def test_search_dataset_loads_the_dataset() -> None:
+    """A valid dataset is loaded and its size is reported."""
+    result = run_cli(
+        "search_dataset",
+        "--dataset_path",
+        "data/datasets/UnansweredQuestions/dataset_docs_public.json",
+        "--k",
+        "10",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (
+        "search_dataset: loaded 100 questions (search not implemented yet)\n"
+    )
