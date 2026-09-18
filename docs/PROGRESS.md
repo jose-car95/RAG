@@ -4,28 +4,23 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M1 — Modelos de datos y E/S de datasets (último slice en
-  revisión). M0 cerrado el 2026-09-16.
-- **Slices cerrados en M1:** #3 modelos pydantic; #4 `load_dataset` con
-  errores traducidos.
-- **Slice en revisión:** #5 "Write empty search results from search_dataset".
-  Nace `src/application/` con el caso de uso `run_search_dataset`: valida
-  `k` (entero `>= 1`), carga el dataset, crea un `MinimalSearchResults` con
-  `retrieved_sources=[]` por pregunta y escribe un `StudentSearchResults` en
-  `<save_directory>/<nombre del dataset>` con el adaptador nuevo
-  `write_search_results` (`src/adapters/json_results.py`). La CLI solo llama
-  al caso de uso e imprime `Saved student_search_results to <ruta>`.
-- **Verificado (2026-09-17):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 15 source files`.
-  - `make test` → `42 passed` (11 CLI, 5 frontera, 8 cargador, 11 modelos, 7 caso de uso).
-  - `uv run python -m src search_dataset --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json --k 10 --save_directory data/output/search_results/UnansweredQuestions` → `Saved student_search_results to data/output/search_results/UnansweredQuestions/dataset_docs_public.json`, exit 0.
-  - **Salida de M1:** `./moulinette-ubuntu evaluate_student_search_results data/output/search_results/UnansweredQuestions/dataset_docs_public.json data/datasets/AnsweredQuestions/dataset_docs_public.json --k 10 --max_context_length 2000` → `Student data is valid: True`, 100 preguntas, Recall@5 0.000.
-  - `... --k 0` → `ERROR: k must be a positive integer`, exit 1.
-  - `make run ARGS="search_dataset --dataset_path ... --k 2 --save_directory ..."` → funciona (los argumentos del programa van dentro de `ARGS`, no sueltos tras `make run`).
-- **Siguiente paso propuesto:** tras el merge, cerrar M1 y planificar M2
-  (indexado): crear los issues de M2 y M3 y resolver con `/decide` los
-  ABIERTOS de M2 (tipos de fichero a indexar, `last_character_index`
-  inclusivo o exclusivo, flags de ruta de `index`).
+- **Milestone:** M2 — Indexado: ingesta, chunking y persistencia en SQLite
+  (en curso). M0 cerrado el 2026-09-16; M1 cerrado el 2026-09-18 (salida
+  verificada: la moulinette local acepta la salida de `search_dataset`).
+- **Slice en revisión:** #17 "Discover indexable corpus files".
+  `find_corpus_files(raw_directory)` en `src/adapters/corpus.py` recorre la
+  carpeta con `rglob("*")`, se queda con los ficheros `.py`, `.md` y `.txt`,
+  conserva el prefijo tal como se pasa y devuelve la lista ordenada; falla
+  con mensaje claro si la carpeta no existe o no tiene nada indexable.
+  `index` gana el flag `--raw_directory` (por defecto `data/raw`).
+- **Verificado (2026-09-18):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 17 source files`.
+  - `make test` → `49 passed` (12 CLI, 6 corpus, 5 frontera, 8 cargador, 11 modelos, 7 caso de uso).
+  - `uv run python -m src index` → `index: found 1969 indexable files in data/raw (not indexed yet)` (corpus real).
+  - `uv run python -m src index --raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, exit 1.
+  - Carpeta vacía → `ERROR: no indexable files in <ruta>`, exit 1.
+- **Siguiente paso propuesto:** slice #18 "Chunk Markdown and text files"
+  (primera estrategia de chunking, lógica pura en `src/domain/`).
 
 ## Decisiones
 
@@ -68,6 +63,10 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | El caso de uso importa los adaptadores directamente, sin puertos | Solo hay una implementación de cada uno; un puerto sería una abstracción por si acaso |
 | 2026-09-17 | La moulinette queda descomprimida en `./moulinette-ubuntu` (10,3 MB, ignorada por git) para comprobaciones locales y `/mide` | Nunca se usa desde `src/` ni `tests/` |
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
+| 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
+| 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-18 | Provisional: `RagCli.index` llama directamente al adaptador `find_corpus_files` | El caso de uso de indexado nacerá en el slice #20, cuando coordine descubrir, trocear y guardar; hoy solo reenviaría la llamada |
+| 2026-09-18 | Corrección: los datasets públicos tienen 199 fuentes, no 398 | Error de conteo del 2026-09-13; corregido en `docs/SPEC_NOTES.md` |
 | 2026-09-17 | Se mantiene `.flake8` en vez de pasar las exclusiones al `Makefile` | El enunciado da el comando literal `flake8 .`; el fichero aplica a quien ejecute flake8 (corrector, VS Code, CI). Sin él: 49.694 errores ajenos (40.788 de `.venv`, 8.906 de `data/`) |
 | 2026-09-17 | Se desarrolla con Python 3.12 (`.python-version`); en la escuela (Python 3.10) `uv sync` descargará 3.12 automáticamente | Misma versión en casa, CI y escuela. Plan B si la descarga falla: `.python-version` = `3.10` (el código pasa `mypy --python-version 3.10`) |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
@@ -101,6 +100,11 @@ M3 antes de optimizar nada.
   `StudentSearchResults(search_results, k)` (argumentos por posición) y qué
   fallaba en `search_results: list = [MinimalSearchResults]` (tipo frente a
   valor). Jose confirma haberlo entendido y pidió seguir.
+- **Ensayar en el primer `/ensayo` (paso 8 del slice #17, 2026-09-18):** el
+  motivo principal para no usar rutas absolutas es que la moulinette compara
+  `file_path` letra a letra con `data/raw/vllm-0.10.1/...` y nunca
+  coincidirían (recall 0 aunque la búsqueda fuera perfecta); Jose dio como
+  motivo que cambian entre máquinas, que es secundario.
 - **Pulido M6:** rechazar un `--save_directory` que parezca un fichero
   (p. ej. termina en `.json`); hoy crea una carpeta con ese nombre.
 

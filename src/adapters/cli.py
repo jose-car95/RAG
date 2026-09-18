@@ -8,6 +8,7 @@ import sys
 
 import fire
 
+from src.adapters.corpus import find_corpus_files
 from src.application.search_dataset import run_search_dataset
 
 
@@ -24,14 +25,24 @@ class RagCli:
     For now every command is a placeholder that only reports it is not
     implemented yet.
     """
+    def index(
+        self,
+        max_chunk_size: int = 2000,
+        raw_directory: str = "data/raw"
+    ) -> None:
+        """Build the search index from the corpus.
 
-    def index(self, max_chunk_size: int = 2000) -> None:
-        """Build the search index from the corpus in ``data/raw/``.
+        For now it only finds the files that will be indexed.
 
         Args:
             max_chunk_size: Maximum number of characters per chunk.
+            raw_directory: Folder of the corpus to index.
         """
-        print("index: not implemented yet")
+        corpus_files = find_corpus_files(raw_directory)
+        print(
+            f"index: found {len(corpus_files)} "
+            f"indexable files in {raw_directory} (not indexed yet)"
+        )
 
     def search(self, query: str, k: int = 10) -> None:
         """Return the top-k sources for a single question.

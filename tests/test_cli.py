@@ -57,7 +57,6 @@ def test_help_lists_required_commands() -> None:
 @pytest.mark.parametrize(
     "args",
     [
-        ("index", "--max_chunk_size", "2000"),
         ("search", "What is vLLM?", "--k", "10"),
         ("answer", "What is vLLM?", "--k", "10"),
         (
@@ -163,3 +162,26 @@ def test_search_dataset_rejects_invalid_k() -> None:
 
     assert result.returncode == 1
     assert result.stderr == "ERROR: k must be a positive integer\n"
+
+
+def test_index_reports_missing_corpus_folder() -> None:
+    """A missing corpus folder ends in a one-line error and exit code 1."""
+    result = run_cli("index", "--raw_directory", "/nonexistent")
+
+    assert result.returncode == 1
+    assert result.stderr == "ERROR: corpus folder not found: /nonexistent\n"
+
+
+def test_index_counts_indexable_files(tmp_path: Path) -> None:
+    """``index`` reports how many files it would index."""
+    for name in ("a.py", "b.md", "docs/c.txt", "d.json"):
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("content", encoding="utf-8")
+
+    result = run_cli("index", "--raw_directory", str(tmp_path))
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (
+        f"index: found 3 indexable files in {tmp_path} (not indexed yet)\n"
+    )
