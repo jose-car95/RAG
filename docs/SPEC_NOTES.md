@@ -13,7 +13,7 @@ justificar), **ABIERTO** (pendiente, con límite).
 ## Rutas y salidas
 
 - **FACT** — `file_path` se compara literalmente: `data/raw/vllm-0.10.1/...`,
-  relativo a la raíz del proyecto (VI.2, VI.5). Verificado 2026-09-13: las 398
+  relativo a la raíz del proyecto (VI.2, VI.5). Verificado 2026-09-13: las 199
   fuentes de los datasets públicos apuntan a ficheros existentes con ese
   prefijo.
 - **FACT** — Ninguna fuente devuelta puede superar 2000 caracteres; una sola
@@ -28,11 +28,17 @@ justificar), **ABIERTO** (pendiente, con límite).
   las opciones "como mínimo" pero un comando sin ellas no debe romper.
 - **INTERPRETACIÓN** — Todas las rutas pueden ser absolutas y estar fuera del
   repo; el directorio de salida se crea si no existe.
-- **ABIERTO** — VI.6 exige que todas las rutas de entrada y salida sean
-  configurables, pero `index` (lee `data/raw/`, escribe `data/processed/`) y
-  `search`/`answer` (leen `data/processed/`) no tienen flag de ruta en el
-  enunciado. Propuesta: flags opcionales propios (`--raw_directory`,
-  `--index_path`) con esas rutas por defecto. Límite: `/decide` al empezar M2.
+- **DECISIÓN (2026-09-18, Jose, opción 3A)** — VI.6 exige que todas las
+  rutas de entrada y salida sean configurables, pero no da flags para el
+  corpus ni para el índice. Añadimos flags opcionales propios con valor por
+  defecto: `index --raw_directory` (`data/raw`) e `--index_path`
+  (`data/processed/index.db`, un único fichero SQLite), también en `search`,
+  `search_dataset` y `answer`. Con los valores por defecto, los comandos del
+  enunciado funcionan sin cambios.
+- **INTERPRETACIÓN** — Las rutas de los ficheros del corpus conservan el
+  prefijo tal como se pasa `--raw_directory` (por defecto `data/raw/...`),
+  porque la moulinette compara `file_path` literalmente con
+  `data/raw/vllm-0.10.1/...`.
 
 ## Corpus
 
@@ -40,12 +46,17 @@ justificar), **ABIERTO** (pendiente, con límite).
   con un mensaje claro y código de salida distinto de 0, sin traceback. El
   README no explica de dónde descargar el corpus (decisión de Jose,
   2026-09-13).
-- **ABIERTO** — Qué ficheros se indexan: ¿solo `.py` y `.md`, o también
-  `.rst`, `.txt`, `.yaml`...? El enunciado dice "the files you judge useful"
-  (VI.1). Límite: antes de empezar M2.
-- **ABIERTO** — ¿`last_character_index` es exclusivo (como el slicing de
-  Python, `text[first:last]`) o inclusivo? Hay que comprobarlo contra los
-  datasets públicos. Límite: antes de empezar M2.
+- **DECISIÓN (2026-09-18, Jose, opción 1A)** — Se indexan `.py`, `.md` y
+  `.txt` (1.969 ficheros: 1.763 + 178 + 28). Coincide con las dos estrategias
+  de chunking que exige VI.1 (Python y Markdown/texto) y cubre el 100% de las
+  199 fuentes públicas (99 `.py`, 97 `.md`, 3 `.txt`). El resto (~900
+  ficheros `.json`, `.cu`, `.yaml`, `.png`...) sería ruido y tiempo de
+  indexado. Riesgo aceptado: una pregunta privada que apunte a otro tipo.
+- **FACT (medido 2026-09-18)** — `last_character_index` es EXCLUSIVO, como
+  el slicing de Python `text[first:last]`: 6 de las 199 fuentes públicas
+  terminan en `len(fichero)` (imposible si fuera inclusivo) y en 99 el
+  carácter en `last` es el salto de línea que queda fuera. Consecuencia: la
+  anchura de un chunk es `last - first` y debe ser `<= max_chunk_size`.
 
 ## Modelos de datos
 
@@ -55,7 +66,7 @@ justificar), **ABIERTO** (pendiente, con límite).
   `>= 0` y `first_character_index <= last_character_index`. Motivo: en Python
   un rango al revés da texto vacío y un índice negativo cuenta desde el final
   del fichero, ambos sin error; validarlo detecta fallos del chunking (M2) en
-  el momento. Los datasets públicos lo cumplen (398 fuentes, 2026-09-13). El
+  el momento. Los datasets públicos lo cumplen (199 fuentes, 2026-09-13). El
   límite de 2000 caracteres de ancho NO es regla del modelo (el modelo también
   valida los datasets de referencia y `--max_chunk_size` es configurable):
   pertenece al chunking (M2).
