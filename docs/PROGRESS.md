@@ -5,22 +5,21 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 ## Estado actual
 
 - **Milestone:** M2 — Indexado: ingesta, chunking y persistencia en SQLite
-  (en curso). M0 cerrado el 2026-09-16; M1 cerrado el 2026-09-18 (salida
-  verificada: la moulinette local acepta la salida de `search_dataset`).
-- **Slice en revisión:** #17 "Discover indexable corpus files".
-  `find_corpus_files(raw_directory)` en `src/adapters/corpus.py` recorre la
-  carpeta con `rglob("*")`, se queda con los ficheros `.py`, `.md` y `.txt`,
-  conserva el prefijo tal como se pasa y devuelve la lista ordenada; falla
-  con mensaje claro si la carpeta no existe o no tiene nada indexable.
-  `index` gana el flag `--raw_directory` (por defecto `data/raw`).
-- **Verificado (2026-09-18):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 17 source files`.
-  - `make test` → `49 passed` (12 CLI, 6 corpus, 5 frontera, 8 cargador, 11 modelos, 7 caso de uso).
-  - `uv run python -m src index` → `index: found 1969 indexable files in data/raw (not indexed yet)` (corpus real).
-  - `uv run python -m src index --raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, exit 1.
-  - Carpeta vacía → `ERROR: no indexable files in <ruta>`, exit 1.
-- **Siguiente paso propuesto:** slice #18 "Chunk Markdown and text files"
-  (primera estrategia de chunking, lógica pura en `src/domain/`).
+  (en curso). M0 cerrado el 2026-09-16; M1 el 2026-09-18.
+- **Slices cerrados en M2:** #17 descubrir los ficheros indexables
+  (1.969: `.py`, `.md`, `.txt`).
+- **Slice en revisión:** #18 "Chunk Markdown and text files".
+  `src/domain/chunking.py` (lógica pura, sin E/S) trocea en cascada:
+  `heading_starts` y `paragraph_starts` localizan los cortes, `split_range`
+  parte un rango en esos cortes, `pack` junta piezas seguidas mientras caben
+  (voraz) y `hard_split` corta a lo bruto como último recurso; `chunk_text`
+  orquesta la cascada.
+- **Verificado (2026-09-21):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 19 source files`.
+  - `make test` → `71 passed` (22 de chunking, incluido el invariante con límites 2000, 60, 25 y 1).
+  - **Corpus real:** los 206 ficheros `.md`/`.txt` producen 1.759 chunks en 0,18 s, con 0 violaciones del invariante, 0 chunks por encima de 2000, mediana 399 y máximo 2000.
+- **Siguiente paso propuesto:** slice #19 "Chunk Python files by code
+  structure" (segunda estrategia, con `ast`).
 
 ## Decisiones
 
@@ -65,6 +64,8 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
 | 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-21 | Chunking de Markdown/texto en cascada (títulos → párrafos → corte a lo bruto), con `pack` voraz que solo mira el último chunk | Opción B del slice #18; medido en el corpus: 1.759 chunks, 0 violaciones, mediana 399 |
+| 2026-09-21 | Los `#` dentro de bloques de código cuentan como título (limitación conocida, comentario `ponytail:`) | Solo añade un corte extra y no rompe el invariante; detectar bloques de código sería más lógica para un caso raro |
 | 2026-09-18 | Provisional: `RagCli.index` llama directamente al adaptador `find_corpus_files` | El caso de uso de indexado nacerá en el slice #20, cuando coordine descubrir, trocear y guardar; hoy solo reenviaría la llamada |
 | 2026-09-18 | Corrección: los datasets públicos tienen 199 fuentes, no 398 | Error de conteo del 2026-09-13; corregido en `docs/SPEC_NOTES.md` |
 | 2026-09-17 | Se mantiene `.flake8` en vez de pasar las exclusiones al `Makefile` | El enunciado da el comando literal `flake8 .`; el fichero aplica a quien ejecute flake8 (corrector, VS Code, CI). Sin él: 49.694 errores ajenos (40.788 de `.venv`, 8.906 de `data/`) |
