@@ -58,6 +58,17 @@ justificar), **ABIERTO** (pendiente, con límite).
   carácter en `last` es el salto de línea que queda fuera. Consecuencia: la
   anchura de un chunk es `last - first` y debe ser `<= max_chunk_size`.
 
+## Chunking
+
+- **DECISIÓN (2026-09-18, Jose, opción B)** — Markdown y texto se trocean
+  en cascada: primero por títulos (`#` al inicio de línea), después
+  juntando párrafos seguidos (separados por línea en blanco) hasta llenar
+  `max_chunk_size`, y solo como último recurso con corte a lo bruto. Motivo,
+  medido en el corpus (206 `.md`/`.txt`, 2026-09-18, sin mirar las
+  respuestas de los datasets): el 61% de los ficheros supera 2000
+  caracteres, pero el 93% de las secciones y el 99,7% de los párrafos caben.
+  Juntar secciones pequeñas (opción C) es un experimento de M4.
+
 ## Modelos de datos
 
 - **FACT** — Los 8 modelos de VI.4 son obligatorios y se pueden ampliar con
