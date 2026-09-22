@@ -167,6 +167,10 @@ uno en uno, cuando llega su slice, nunca todos de golpe:
   `docs/*.pdf`, `docs/README.md`, `docs/eval/`, `docs/contexto_ia_new_proyect.txt`
   y el corpus `data/raw/vllm-0.10.1/`.
 - **Interpretaciones de zonas grises:** `docs/SPEC_NOTES.md`.
+- **Material de estudio de Jose:** `docs/conceptos/` (páginas HTML autocontenidas,
+  en español y con diagramas, para los conceptos nuevos de cada milestone; hoy:
+  `bases-de-datos.html` para M2). Mantenerlas al día cuando una decisión las
+  contradiga, y anclar los ejemplos a datos reales del proyecto.
 
 ## Reglas de producto no negociables
 
