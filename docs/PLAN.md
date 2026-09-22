@@ -65,7 +65,8 @@ Salida: primer Recall@1/3/5/10 real sobre los datasets públicos y tiempos, regi
 Cada experimento es un slice con número antes/después en la tabla de métricas.
 Candidatos (no decididos): partir identificadores (`snake_case`, `CamelCase`),
 fronteras y solapamiento de chunks, juntar secciones Markdown pequeñas hasta
-llenar el chunk (opción C del slice #18), peso de la ruta del fichero y de
+llenar el chunk (opción C del slice #18), cortar las clases grandes por sus
+métodos con `ast` (opción B del slice #19), peso de la ruta del fichero y de
 los títulos, tratamiento de docs frente a código. Regla: ningún parámetro se
 elige por búsqueda ciega contra los datasets públicos (ver
 `docs/SPEC_NOTES.md`).
