@@ -6,20 +6,20 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 - **Milestone:** M2 — Indexado: ingesta, chunking y persistencia en SQLite
   (en curso). M0 cerrado el 2026-09-16; M1 el 2026-09-18.
-- **Slices cerrados en M2:** #17 descubrir los ficheros indexables
-  (1.969: `.py`, `.md`, `.txt`).
-- **Slice en revisión:** #18 "Chunk Markdown and text files".
-  `src/domain/chunking.py` (lógica pura, sin E/S) trocea en cascada:
-  `heading_starts` y `paragraph_starts` localizan los cortes, `split_range`
-  parte un rango en esos cortes, `pack` junta piezas seguidas mientras caben
-  (voraz) y `hard_split` corta a lo bruto como último recurso; `chunk_text`
-  orquesta la cascada.
-- **Verificado (2026-09-21):**
+- **Slices cerrados en M2:** #17 descubrir los 1.969 ficheros indexables;
+  #18 chunking de Markdown y texto en cascada.
+- **Slice en revisión:** #19 "Chunk Python files by code structure".
+  `chunk_python` corta por las definiciones de primer nivel halladas con
+  `ast` (`_definition_starts`, decoradores incluidos) y reutiliza la cascada
+  del #18. Refactor: el cuerpo común vive en `_chunk_with_cuts` y solo
+  cambian los cortes; la maquinaria interna del módulo pasa a llamarse con
+  `_` delante y la API pública son `chunk_text` y `chunk_python`.
+- **Verificado (2026-09-22):**
   - `make lint` → flake8 sin salida; mypy `Success: no issues found in 19 source files`.
-  - `make test` → `71 passed` (22 de chunking, incluido el invariante con límites 2000, 60, 25 y 1).
-  - **Corpus real:** los 206 ficheros `.md`/`.txt` producen 1.759 chunks en 0,18 s, con 0 violaciones del invariante, 0 chunks por encima de 2000, mediana 399 y máximo 2000.
-- **Siguiente paso propuesto:** slice #19 "Chunk Python files by code
-  structure" (segunda estrategia, con `ast`).
+  - `make test` → `86 passed` (37 de chunking).
+  - **Corpus real:** 1.763 ficheros `.py` → 17.183 chunks en 3,70 s, 0 violaciones del invariante, 0 por encima de 2000, mediana 1.124. Con los 1.759 chunks de `.md`/`.txt`, el índice tendrá unos 18.900 chunks y el troceado completo tarda menos de 4 s de los 300 permitidos.
+- **Siguiente paso propuesto:** slice #20 "Persist the chunk index in SQLite"
+  (nace el caso de uso de indexado, tqdm y la base de datos).
 
 ## Decisiones
 
@@ -64,6 +64,8 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
 | 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-22 | Python se trocea con `ast` por definiciones de primer nivel (opción A) y reutiliza la cascada de texto; si el fichero no parsea, se trocea como texto | Medido: 0 errores de sintaxis en 1.763 ficheros, pero el 23,7% de las definiciones pasa de 2000, así que el último recurso es inevitable. Bajar a métodos (opción B) es experimento de M4 |
+| 2026-09-22 | El cuerpo común de las dos estrategias vive en `_chunk_with_cuts`; la maquinaria interna del módulo lleva `_` delante y la API pública son `chunk_text` y `chunk_python` | Reutilizar en vez de duplicar (ponytail peldaño 2) y dejar claro qué se puede llamar desde fuera; los 71 tests previos probaron que el refactor no cambió el comportamiento |
 | 2026-09-21 | Chunking de Markdown/texto en cascada (títulos → párrafos → corte a lo bruto), con `pack` voraz que solo mira el último chunk | Opción B del slice #18; medido en el corpus: 1.759 chunks, 0 violaciones, mediana 399 |
 | 2026-09-21 | Los `#` dentro de bloques de código cuentan como título (limitación conocida, comentario `ponytail:`) | Solo añade un corte extra y no rompe el invariante; detectar bloques de código sería más lógica para un caso raro |
 | 2026-09-18 | Provisional: `RagCli.index` llama directamente al adaptador `find_corpus_files` | El caso de uso de indexado nacerá en el slice #20, cuando coordine descubrir, trocear y guardar; hoy solo reenviaría la llamada |

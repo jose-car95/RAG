@@ -18,7 +18,7 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | tqdm en operaciones largas | Barra visible en `index`, `search_dataset`, `answer_dataset` | Demo en terminal (M2, M3, M5) | NOT_STARTED |
 | Salida `StudentSearchResults` válida | La moulinette dice `Student data is valid: True` | `search_dataset` sobre `dataset_docs_public.json` → moulinette local `Student data is valid: True` (2026-09-17, slice #5); tests en `tests/test_search_dataset.py` | EVIDENCED |
 | Salida `StudentSearchResultsAndAnswer` válida | JSON validado por el modelo | Test + demo (M5) | NOT_STARTED |
-| Dos estrategias de chunking | Código de Python y de Markdown/texto, explicable | Markdown/texto: `src/domain/chunking.py` + `tests/test_chunking.py` (22 tests, invariante incluido) y 206 ficheros reales sin violaciones (slice #18). Python con `ast`: slice #19 | IN_PROGRESS |
+| Dos estrategias de chunking | Código de Python y de Markdown/texto, explicable | `src/domain/chunking.py` (`chunk_text` por títulos, `chunk_python` por definiciones con `ast`) + `tests/test_chunking.py` (37 tests, invariante incluido); corpus real: 206 `.md`/`.txt` → 1.759 chunks y 1.763 `.py` → 17.183 chunks, 0 violaciones (slices #18 y #19) | EVIDENCED |
 | `--max_chunk_size` con default 2000 | Ningún chunk > 2000 | Invariante testeado en `tests/test_chunking.py` y medido en el corpus (máximo 2000); validación del flag en el slice #21 | IN_PROGRESS |
 | `--max_chunk_size` con default 2000 | Ningún chunk > 2000 | Test del invariante (M2) | NOT_STARTED |
 | TF-IDF o BM25 | Implementación propia explicable | Tests + demo `search` (M3) | NOT_STARTED |

@@ -1,11 +1,14 @@
-"""Split Markdown and plain text into chunk ranges.
+"""Split Markdown, plain text and Python source into chunk ranges.
 
 A chunk is a ``(first, last)`` range with an exclusive end, so its text is
-``text[first:last]`` and its width is ``last - first``.
+``text[first:last]`` and its width is ``last - first``. The public entry
+points are ``chunk_text`` and ``chunk_python``; the rest is internal.
 """
 
+import ast
 
-def hard_split(
+
+def _hard_split(
     start: int,
     end: int,
     max_chunk_size: int
@@ -29,7 +32,7 @@ def hard_split(
     return pieces
 
 
-def split_range(
+def _split_range(
     start: int,
     end: int,
     cuts: list[int]
@@ -57,7 +60,7 @@ def split_range(
     return ranges
 
 
-def heading_starts(text: str) -> list[int]:
+def _heading_starts(text: str) -> list[int]:
     """Find the position where each Markdown heading line starts.
 
     A heading is a line starting with one to six ``#`` followed by a space,
@@ -84,7 +87,7 @@ def heading_starts(text: str) -> list[int]:
     return positions
 
 
-def paragraph_starts(text: str) -> list[int]:
+def _paragraph_starts(text: str) -> list[int]:
     """Find the position where each paragraph starts, after a blank line.
 
     The blank line stays with the paragraph before it, so that chunks built
@@ -105,7 +108,7 @@ def paragraph_starts(text: str) -> list[int]:
     return positions
 
 
-def pack(
+def _pack(
     pieces: list[tuple[int, int]],
     max_chunk_size: int
 ) -> list[tuple[int, int]]:
@@ -124,7 +127,7 @@ def pack(
     chunks: list[tuple[int, int]] = []
     for first, last in pieces:
         if last - first > max_chunk_size:
-            chunks.extend(hard_split(first, last, max_chunk_size))
+            chunks.extend(_hard_split(first, last, max_chunk_size))
             continue
         if (
             chunks
@@ -137,14 +140,17 @@ def pack(
     return chunks
 
 
-def chunk_text(text: str, max_chunk_size: int) -> list[tuple[int, int]]:
-    """Split a text into chunks of at most ``max_chunk_size`` characters.
+def _chunk_with_cuts(
+    text: str, cuts: list[int], max_chunk_size: int
+) -> list[tuple[int, int]]:
+    """Split a text at the given cuts, keeping every chunk within the limit.
 
-    Cascade: Markdown headings first, then the blank lines between
-    paragraphs, and a hard cut only as a last resort.
+    Shared by both strategies: only the cuts change. A section that does not
+    fit is split between paragraphs and, as a last resort, hard split.
 
     Args:
         text: Text to split.
+        cuts: Positions where a new chunk should start.
         max_chunk_size: Maximum width of a chunk.
 
     Returns:
@@ -152,13 +158,85 @@ def chunk_text(text: str, max_chunk_size: int) -> list[tuple[int, int]]:
         ``text[first:last]`` gives the original text back.
     """
     chunks: list[tuple[int, int]] = []
-    paragraph_cuts = paragraph_starts(text)
+    paragraph_cuts = _paragraph_starts(text)
 
-    for first, last in split_range(0, len(text), heading_starts(text)):
+    for first, last in _split_range(0, len(text), cuts):
         if last - first <= max_chunk_size:
             chunks.append((first, last))
         else:
             chunks.extend(
-                pack(split_range(first, last, paragraph_cuts), max_chunk_size)
+                _pack(
+                    _split_range(first, last, paragraph_cuts), max_chunk_size
+                )
             )
     return chunks
+
+
+def _definition_starts(source: str) -> list[int]:
+    """Find where each top-level definition of a Python source starts.
+
+    Uses the abstract syntax tree, so ``async def``, ``class`` and decorated
+    definitions are handled, and a ``def`` written inside a string is not
+    mistaken for one. A decorator belongs to the definition it decorates, so
+    the position is the first line of the two.
+
+    Args:
+        source: Python source code.
+
+    Returns:
+        The positions, in the order they appear.
+
+    Raises:
+        SyntaxError: If the source is not valid Python.
+    """
+    tree = ast.parse(source)
+    line_starts: list[int] = [0]
+    positions: list[int] = []
+
+    for line in source.splitlines(keepends=True):
+        line_starts.append(line_starts[-1] + len(line))
+
+    for node in tree.body:
+        if isinstance(
+            node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+        ):
+            first_line = min(
+                [node.lineno]
+                + [decorator.lineno for decorator in node.decorator_list]
+            )
+            positions.append(line_starts[first_line - 1])
+
+    return positions
+
+
+def chunk_text(text: str, max_chunk_size: int) -> list[tuple[int, int]]:
+    """Split Markdown or plain text into chunks, cutting at headings.
+
+    Args:
+        text: Text to split.
+        max_chunk_size: Maximum width of a chunk.
+
+    Returns:
+        The chunks in order, with no gaps and no overlap.
+    """
+    return _chunk_with_cuts(text, _heading_starts(text), max_chunk_size)
+
+
+def chunk_python(source: str, max_chunk_size: int) -> list[tuple[int, int]]:
+    """Split Python source into chunks, cutting at top-level definitions.
+
+    Source that does not parse is chunked as plain text instead of failing,
+    because the corpus may hold templates or Python 2 files.
+
+    Args:
+        source: Python source code.
+        max_chunk_size: Maximum width of a chunk.
+
+    Returns:
+        The chunks in order, with no gaps and no overlap.
+    """
+    try:
+        cuts = _definition_starts(source)
+    except SyntaxError:
+        return chunk_text(source, max_chunk_size)
+    return _chunk_with_cuts(source, cuts, max_chunk_size)

@@ -68,6 +68,17 @@ justificar), **ABIERTO** (pendiente, con límite).
   respuestas de los datasets): el 61% de los ficheros supera 2000
   caracteres, pero el 93% de las secciones y el 99,7% de los párrafos caben.
   Juntar secciones pequeñas (opción C) es un experimento de M4.
+- **DECISIÓN (2026-09-22, Jose, opción A)** — Python se trocea con `ast` por
+  las definiciones de primer nivel (`def`, `async def`, `class`, con sus
+  decoradores) y lo que no cabe pasa por la misma cascada de texto (líneas en
+  blanco → corte a lo bruto). Medido en el corpus (1.763 `.py`, 2026-09-22):
+  0 errores de sintaxis, pero el 23,7% de las definiciones de primer nivel
+  pasa de 2000 caracteres (1.302 clases) y el 12,4% de los métodos de esas
+  clases también, así que el último recurso es inevitable. Bajar a los
+  métodos con `ast` (opción B) es un experimento de M4; PEP 8 deja una línea
+  en blanco entre métodos, así que el fallback ya corta de hecho entre ellos.
+- **FACT (medido 2026-09-22)** — Un fichero que no es Python válido lanza
+  `SyntaxError` al parsearlo; en ese caso se trocea como texto.
 
 ## Modelos de datos
 
