@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.domain.chunking import chunk_text
+from src.domain.chunking import chunk_python, chunk_text
 
 MARKDOWN_SAMPLE = (
     "Intro line before any heading.\n\n"
@@ -17,6 +17,24 @@ MARKDOWN_SAMPLE = (
     "# Another title\n"
     "Last words.\n"
 )
+
+
+PYTHON_SAMPLE = (
+    "import os\n"
+    "\n"
+    "VALUE = 1\n"
+    "\n"
+    "\n"
+    "def first() -> int:\n"
+    "    return 1\n"
+    "\n"
+    "\n"
+    "@staticmethod\n"
+    "def second() -> int:\n"
+    "    return 2\n"
+)
+
+BROKEN_PYTHON = "def broken(:\n\n# Title\nsome text\n"
 
 
 def assert_valid_chunks(
@@ -95,3 +113,63 @@ def test_chunks_always_rebuild_the_text(
 ) -> None:
     """The invariant holds for any text and any limit."""
     assert_valid_chunks(text, chunk_text(text, max_chunk_size), max_chunk_size)
+
+
+def test_top_level_definitions_start_new_chunks() -> None:
+    """The header and each top-level definition become their own chunk."""
+    assert chunk_python(PYTHON_SAMPLE, 2000) == [(0, 23), (23, 58), (58, 106)]
+
+
+def test_decorator_stays_with_its_function() -> None:
+    """A decorator belongs to the chunk of the function it decorates."""
+    chunks = chunk_python(PYTHON_SAMPLE, 2000)
+
+    first, last = chunks[-1]
+    assert PYTHON_SAMPLE[first:last].startswith("@staticmethod\n")
+
+
+def test_long_function_is_cut_after_blank_lines() -> None:
+    """A function that does not fit is split between its blank lines."""
+    source = "def big() -> None:\n" + "    value = 1\n\n" * 400
+
+    chunks = chunk_python(source, 2000)
+
+    assert len(chunks) > 1
+    assert_valid_chunks(source, chunks, 2000)
+    for first, _ in chunks[1:]:
+        assert source[first - 2:first] == "\n\n"
+
+
+def test_long_function_without_blank_lines_is_hard_cut() -> None:
+    """Without blank lines the only way out is a hard cut."""
+    source = "def big() -> None:\n" + "    value = 1\n" * 400
+
+    chunks = chunk_python(source, 2000)
+
+    assert_valid_chunks(source, chunks, 2000)
+    assert max(last - first for first, last in chunks) == 2000
+
+
+def test_invalid_python_falls_back_to_text_chunking() -> None:
+    """Source that does not parse is chunked as plain text."""
+    assert chunk_python(BROKEN_PYTHON, 2000) == chunk_text(BROKEN_PYTHON, 2000)
+
+
+def test_empty_source_has_no_chunks() -> None:
+    """There is nothing to chunk in an empty source file."""
+    assert chunk_python("", 2000) == []
+
+
+@pytest.mark.parametrize("max_chunk_size", [2000, 60, 1])
+@pytest.mark.parametrize(
+    "source",
+    [PYTHON_SAMPLE, BROKEN_PYTHON, "x = 1\n"],
+    ids=["sample", "broken", "one_line"],
+)
+def test_python_chunks_always_rebuild_the_source(
+    source: str, max_chunk_size: int
+) -> None:
+    """The invariant holds for Python sources too."""
+    assert_valid_chunks(
+        source, chunk_python(source, max_chunk_size), max_chunk_size
+    )
