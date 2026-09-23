@@ -1,13 +1,14 @@
 """Read question datasets from JSON files on disk."""
 
 import json
+from pathlib import Path
 
 from pydantic import ValidationError
 
 from src.domain.models import RagDataset
 
 
-def load_dataset(path: str) -> RagDataset:
+def load_dataset(path: Path) -> RagDataset:
     """Read a JSON file and validate it as a ``RagDataset``.
 
     Every failure is turned into a ``ValueError`` with a one-line message

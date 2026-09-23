@@ -31,7 +31,7 @@ def run_search_dataset(dataset_path: str, k: int, save_directory: str) -> Path:
     if not isinstance(k, int) or k <= 0:
         raise ValueError("k must be a positive integer")
 
-    dataset: RagDataset = load_dataset(dataset_path)
+    dataset: RagDataset = load_dataset(Path(dataset_path))
 
     search_results: list[MinimalSearchResults] = []
     for question in dataset.rag_questions:
