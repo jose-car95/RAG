@@ -7,7 +7,9 @@ import pytest
 
 from src.adapters.json_dataset import load_dataset
 
-PUBLIC_DATASET = "data/datasets/UnansweredQuestions/dataset_docs_public.json"
+PUBLIC_DATASET = Path(
+    "data/datasets/UnansweredQuestions/dataset_docs_public.json"
+)
 
 
 def expect_error(
@@ -23,7 +25,7 @@ def expect_error(
         Information about the raised error, for further checks.
     """
     with pytest.raises(ValueError, match=f"^{re.escape(message)}$") as info:
-        load_dataset(str(path))
+        load_dataset(Path(path))
     return info
 
 

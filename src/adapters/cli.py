@@ -5,10 +5,11 @@ becomes a flag with the same name (``k`` becomes ``--k``).
 """
 
 import sys
+from pathlib import Path
 
 import fire
 
-from src.adapters.corpus import find_corpus_files
+from src.application.index_corpus import run_index
 from src.application.search_dataset import run_search_dataset
 
 
@@ -28,20 +29,20 @@ class RagCli:
     def index(
         self,
         max_chunk_size: int = 2000,
-        raw_directory: str = "data/raw"
+        raw_directory: str = "data/raw",
+        index_path: str = "data/processed/index.db"
     ) -> None:
-        """Build the search index from the corpus.
-
-        For now it only finds the files that will be indexed.
+        """Chunk the corpus and store the chunks in the index.
 
         Args:
             max_chunk_size: Maximum number of characters per chunk.
             raw_directory: Folder of the corpus to index.
+            index_path: Where the SQLite index is written.
         """
-        corpus_files = find_corpus_files(raw_directory)
+        run_index(raw_directory, max_chunk_size, index_path)
         print(
-            f"index: found {len(corpus_files)} "
-            f"indexable files in {raw_directory} (not indexed yet)"
+            f"Ingestion complete! Indices saved under "
+            f"{Path(index_path).parent}/"
         )
 
     def search(self, query: str, k: int = 10) -> None:

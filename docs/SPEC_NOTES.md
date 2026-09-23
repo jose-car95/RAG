@@ -80,6 +80,22 @@ justificar), **ABIERTO** (pendiente, con límite).
 - **FACT (medido 2026-09-22)** — Un fichero que no es Python válido lanza
   `SyntaxError` al parsearlo; en ese caso se trocea como texto.
 
+## Índice en SQLite
+
+- **DECISIÓN (2026-09-23, Jose, opciones 1A y 2A)** — Una sola tabla plana
+  `chunks(id, file_path, first_character_index, last_character_index, text)`,
+  sin tabla `files` ni clave ajena: repetir la ruta cuesta ~1 MB de los ~25 MB
+  del índice y evita un `JOIN` en la consulta más frecuente (M3). Se guarda
+  el **texto** del chunk: así `search` puede mostrarlo y M5 construye el
+  prompt sin releer disco.
+- **FACT (medido 2026-09-23)** — Los 1.969 ficheros indexables son UTF-8
+  válido y contienen 20,1 millones de caracteres, así que el texto se lee en
+  UTF-8 estricto.
+- **INTERPRETACIÓN** — El mensaje final de `index` es el literal del
+  enunciado (VI.7.2), `Ingestion complete! Indices saved under
+  data/processed/`, construido con la carpeta real de `--index_path` para que
+  siga siendo cierto si se cambia la ruta.
+
 ## Modelos de datos
 
 - **FACT** — Los 8 modelos de VI.4 son obligatorios y se pueden ampliar con
