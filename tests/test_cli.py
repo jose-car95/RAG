@@ -172,16 +172,24 @@ def test_index_reports_missing_corpus_folder() -> None:
     assert result.stderr == "ERROR: corpus folder not found: /nonexistent\n"
 
 
-def test_index_counts_indexable_files(tmp_path: Path) -> None:
-    """``index`` reports how many files it would index."""
-    for name in ("a.py", "b.md", "docs/c.txt", "d.json"):
-        path = tmp_path / name
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("content", encoding="utf-8")
+def test_index_writes_the_index_file(tmp_path: Path) -> None:
+    """``index`` chunks the corpus and reports where the index was saved."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    source = "def first() -> int:\n    return 1\n"
+    (corpus / "a.py").write_text(source, encoding="utf-8")
+    index_path = tmp_path / "processed" / "index.db"
 
-    result = run_cli("index", "--raw_directory", str(tmp_path))
+    result = run_cli(
+        "index",
+        "--raw_directory",
+        str(corpus),
+        "--index_path",
+        str(index_path),
+    )
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == (
-        f"index: found 3 indexable files in {tmp_path} (not indexed yet)\n"
+        f"Ingestion complete! Indices saved under {index_path.parent}/\n"
     )
+    assert index_path.is_file()
