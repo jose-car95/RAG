@@ -7,19 +7,22 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 - **Milestone:** M2 — Indexado: ingesta, chunking y persistencia en SQLite
   (en curso). M0 cerrado el 2026-09-16; M1 el 2026-09-18.
 - **Slices cerrados en M2:** #17 descubrir los 1.969 ficheros indexables;
-  #18 chunking de Markdown y texto en cascada.
-- **Slice en revisión:** #19 "Chunk Python files by code structure".
-  `chunk_python` corta por las definiciones de primer nivel halladas con
-  `ast` (`_definition_starts`, decoradores incluidos) y reutiliza la cascada
-  del #18. Refactor: el cuerpo común vive en `_chunk_with_cuts` y solo
-  cambian los cortes; la maquinaria interna del módulo pasa a llamarse con
-  `_` delante y la API pública son `chunk_text` y `chunk_python`.
-- **Verificado (2026-09-22):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 19 source files`.
-  - `make test` → `86 passed` (37 de chunking).
-  - **Corpus real:** 1.763 ficheros `.py` → 17.183 chunks en 3,70 s, 0 violaciones del invariante, 0 por encima de 2000, mediana 1.124. Con los 1.759 chunks de `.md`/`.txt`, el índice tendrá unos 18.900 chunks y el troceado completo tarda menos de 4 s de los 300 permitidos.
-- **Siguiente paso propuesto:** slice #20 "Persist the chunk index in SQLite"
-  (nace el caso de uso de indexado, tqdm y la base de datos).
+  #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
+  `ast`.
+- **Slice en revisión:** #20 "Persist the chunk index in SQLite". Nace el
+  caso de uso `src/application/index_corpus.py` (`run_index`: descubre,
+  trocea con la estrategia de cada extensión y guarda, con barra de tqdm) y
+  el adaptador `src/adapters/sqlite_index.py` (`save_chunks`: una tabla
+  plana `chunks` con el texto, en una sola transacción). El mapa
+  `CHUNKERS` de `chunking.py` cierra el patrón Strategy.
+- **Verificado (2026-09-23):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 22 source files`.
+  - `make test` → `93 passed` (7 de indexado).
+  - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
+  - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
+  - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **Siguiente paso propuesto:** slice #21 "Validate max_chunk_size" (entero
+  entre 1 y 2000), último slice de M2.
 
 ## Decisiones
 
@@ -64,6 +67,11 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
 | 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-23 | El índice es una sola tabla plana `chunks` (opción 1A) y guarda el texto del chunk (opción 2A) | Una tabla se explica en una frase y una sola consulta devuelve todo lo que `search` necesita; el texto ocupa 25 MB y evita reabrir 1.847 ficheros por búsqueda |
+| 2026-09-23 | `save_chunks` reconstruye el índice borrando el fichero (`unlink(missing_ok=True)`) en vez de vaciar la tabla con `DELETE FROM` (opción A) | SQLite marca las páginas borradas como libres pero nunca las devuelve al sistema: con `DELETE` el fichero heredaba su tamaño máximo (medido: 55 MB tras un `--max_chunk_size 50`, sin bajar nunca). Trade-off aceptado: si el indexado falla, no queda índice viejo; reconstruirlo cuesta 3,65 s |
+| 2026-09-23 | `CREATE TABLE` sin `IF NOT EXISTS` | Con el fichero recién borrado la tabla no puede existir, así que la cláusula no protegía de nada (ponytail). Efecto medido: si alguien quita el `unlink`, dos tests se ponen rojos en vez de duplicar filas en silencio |
+| 2026-09-23 | `CHUNKERS` solo lista las extensiones con estrategia propia (`.py`); el resto cae en `chunk_text` con `.get(suffix, chunk_text)`. `Chunker` es un alias `Callable`, no un puerto | El patrón Strategy con funciones basta: añadir una estrategia es una línea en el mapa. Un puerto exigiría dos implementaciones reales o un doble de test, y no hay ninguno |
+| 2026-09-23 | `load_dataset` recibe `Path` en vez de `str`; la conversión ocurre en la CLI | La frontera traduce lo que llega del exterior (cadenas) al tipo del dominio una sola vez |
 | 2026-09-22 | Python se trocea con `ast` por definiciones de primer nivel (opción A) y reutiliza la cascada de texto; si el fichero no parsea, se trocea como texto | Medido: 0 errores de sintaxis en 1.763 ficheros, pero el 23,7% de las definiciones pasa de 2000, así que el último recurso es inevitable. Bajar a métodos (opción B) es experimento de M4 |
 | 2026-09-22 | El cuerpo común de las dos estrategias vive en `_chunk_with_cuts`; la maquinaria interna del módulo lleva `_` delante y la API pública son `chunk_text` y `chunk_python` | Reutilizar en vez de duplicar (ponytail peldaño 2) y dejar claro qué se puede llamar desde fuera; los 71 tests previos probaron que el refactor no cambió el comportamiento |
 | 2026-09-21 | Chunking de Markdown/texto en cascada (títulos → párrafos → corte a lo bruto), con `pack` voraz que solo mira el último chunk | Opción B del slice #18; medido en el corpus: 1.759 chunks, 0 violaciones, mediana 399 |
@@ -81,7 +89,8 @@ M3 antes de optimizar nada.
 
 | Fecha | Métrica | Valor | Umbral | Comando que lo reproduce |
 |---|---|---|---|---|
-| — | Tiempo de indexado | — | ≤ 300 s | pendiente (M2) |
+| 2026-09-23 | Tiempo de indexado | **3,65 s** (1.969 ficheros, 18.942 chunks) | ≤ 300 s | `uv run python -m src index` |
+| 2026-09-23 | Tamaño del índice | 25 MB (26.075.136 bytes), 0 páginas libres | — | `uv run python -m src index` + `ls -l data/processed/index.db` |
 | — | 200 preguntas (docs + code) | — | ≤ 90 s | pendiente (M3) |
 | — | Recall@5 docs (públicos) | — | ≥ 0.80 | pendiente (M3) |
 | — | Recall@5 code (públicos) | — | ≥ 0.50 | pendiente (M3) |
@@ -108,6 +117,14 @@ M3 antes de optimizar nada.
   `file_path` letra a letra con `data/raw/vllm-0.10.1/...` y nunca
   coincidirían (recall 0 aunque la búsqueda fuera perfecta); Jose dio como
   motivo que cambian entre máquinas, que es secundario.
+- **Ensayar en el primer `/ensayo` (paso 8 del slice #20, 2026-09-23):
+  SIN RESPONDER.** Jose pidió cerrar el slice sin contestar. Las tres
+  preguntas: (1) qué hace cada uno de los dos gestores de contexto de
+  `with closing(sqlite3.connect(...)) as connection, connection:` y qué se
+  rompe al quitar cada uno por separado; (2) por qué dos `index` seguidos no
+  duplican los chunks, en qué línea está la garantía, y por qué antes el
+  fichero se quedaba grande aunque las filas fueran pocas; (3) cuántos
+  sitios hay que tocar para trocear `.json` con una estrategia propia.
 - **Pulido M6:** rechazar un `--save_directory` que parezca un fichero
   (p. ej. termina en `.json`); hoy crea una carpeta con ese nombre.
 
