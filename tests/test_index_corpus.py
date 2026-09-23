@@ -1,0 +1,161 @@
+"""Tests for the index use case: chunk the corpus and store it in SQLite."""
+
+import sqlite3
+from contextlib import closing
+from pathlib import Path
+
+import pytest
+
+from src.adapters.sqlite_index import save_chunks
+from src.application.index_corpus import run_index
+
+PY_FILE = (
+    "import os\n"
+    "\n"
+    "\n"
+    "def first() -> int:\n"
+    "    return 1\n"
+    "\n"
+    "\n"
+    "def second() -> int:\n"
+    "    return 2\n"
+)
+MD_FILE = "# A\nuno\n\n# B\ndos\n"
+
+
+def make_corpus(root: Path) -> None:
+    """Create a small corpus: one Python file, one Markdown file and noise.
+
+    Args:
+        root: Folder where the corpus is created.
+    """
+    (root / "pkg").mkdir(parents=True, exist_ok=True)
+    (root / "pkg" / "a.py").write_text(PY_FILE, encoding="utf-8")
+    (root / "b.md").write_text(MD_FILE, encoding="utf-8")
+    (root / "c.json").write_text("{}", encoding="utf-8")
+
+
+def read_rows(index_path: Path) -> list[tuple[str, int, int, str]]:
+    """Read every stored chunk, ordered by file and position.
+
+    Args:
+        index_path: Path of the SQLite index.
+
+    Returns:
+        One tuple per chunk: path, first index, last index and text.
+    """
+    query = (
+        "SELECT file_path, first_character_index, last_character_index, text"
+        " FROM chunks ORDER BY file_path, first_character_index"
+    )
+    with closing(sqlite3.connect(index_path)) as connection:
+        return list(connection.execute(query))
+
+
+def test_chunks_are_stored_with_their_text(tmp_path: Path) -> None:
+    """Every row keeps the corpus path and the exact text of its range."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+
+    chunk_count = run_index(str(corpus), 2000, str(index_path))
+
+    rows = read_rows(index_path)
+    assert chunk_count == len(rows)
+    for file_path, first, last, text in rows:
+        source = Path(file_path).read_text(encoding="utf-8")
+        assert text == source[first:last]
+    assert {Path(row[0]).name for row in rows} == {"a.py", "b.md"}
+
+
+def test_each_file_uses_the_strategy_of_its_extension(tmp_path: Path) -> None:
+    """Python is cut at definitions and Markdown at headings."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+
+    run_index(str(corpus), 2000, str(index_path))
+
+    rows = read_rows(index_path)
+    python_rows = [row for row in rows if row[0].endswith("a.py")]
+    markdown_rows = [row for row in rows if row[0].endswith("b.md")]
+    assert [(row[1], row[2]) for row in python_rows] == [
+        (0, 12), (12, 47), (47, 81)
+    ]
+    assert [(row[1], row[2]) for row in markdown_rows] == [(0, 9), (9, 17)]
+
+
+def test_reindexing_does_not_duplicate_chunks(tmp_path: Path) -> None:
+    """Running the index twice rebuilds it instead of appending."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+
+    first_count = run_index(str(corpus), 2000, str(index_path))
+    second_count = run_index(str(corpus), 2000, str(index_path))
+
+    assert first_count == second_count == len(read_rows(index_path))
+
+
+def test_missing_index_folders_are_created(tmp_path: Path) -> None:
+    """Folders of the index path that do not exist yet are created."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "new" / "nested" / "index.db"
+
+    run_index(str(corpus), 2000, str(index_path))
+
+    assert index_path.is_file()
+
+
+def test_missing_corpus_leaves_no_index(tmp_path: Path) -> None:
+    """A missing corpus fails before creating any database."""
+    index_path = tmp_path / "index.db"
+
+    with pytest.raises(ValueError, match="^corpus folder not found: "):
+        run_index(str(tmp_path / "nope"), 2000, str(index_path))
+
+    assert not index_path.exists()
+
+
+def test_unwritable_index_path_is_reported(tmp_path: Path) -> None:
+    """An index path that cannot be written ends in a clear error."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    blocking_file = tmp_path / "a_file.txt"
+    blocking_file.write_text("not a folder", encoding="utf-8")
+    index_path = blocking_file / "index.db"
+
+    with pytest.raises(
+        ValueError, match=f"^cannot write index: {index_path}$"
+    ):
+        run_index(str(corpus), 2000, str(index_path))
+
+
+def test_index_file_matches_its_current_content(tmp_path: Path) -> None:
+    """A rebuilt index does not keep the size of a bigger, older one.
+
+    SQLite never returns space to the file system, so an index that once
+    held many chunks would stay big forever unless it is rebuilt from
+    scratch.
+    """
+    index_path = tmp_path / "index.db"
+    many = [
+        (f"data/raw/file_{number}.py", 0, 1000, "x" * 1000)
+        for number in range(2000)
+    ]
+    few = [("data/raw/file_0.py", 0, 10, "x" * 10)]
+
+    save_chunks(many, str(index_path))
+    big_size = index_path.stat().st_size
+    save_chunks(few, str(index_path))
+
+    assert index_path.stat().st_size < big_size
+    with closing(sqlite3.connect(index_path)) as connection:
+        free_pages = connection.execute("PRAGMA freelist_count").fetchone()[0]
+    assert free_pages == 0
