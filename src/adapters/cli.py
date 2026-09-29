@@ -9,7 +9,7 @@ from pathlib import Path
 
 import fire
 
-from src.application.index_corpus import run_index
+from src.application.index_corpus import run_index, MAX_CHUNK_SIZE
 from src.application.search_dataset import run_search_dataset
 
 
@@ -28,14 +28,15 @@ class RagCli:
     """
     def index(
         self,
-        max_chunk_size: int = 2000,
+        max_chunk_size: int = MAX_CHUNK_SIZE,
         raw_directory: str = "data/raw",
         index_path: str = "data/processed/index.db"
     ) -> None:
         """Chunk the corpus and store the chunks in the index.
 
         Args:
-            max_chunk_size: Maximum number of characters per chunk.
+            max_chunk_size: Maximum characters per chunk, from 1 to
+                ``MAX_CHUNK_SIZE``.
             raw_directory: Folder of the corpus to index.
             index_path: Where the SQLite index is written.
         """

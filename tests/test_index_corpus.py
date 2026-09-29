@@ -3,6 +3,7 @@
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -21,6 +22,9 @@ PY_FILE = (
     "    return 2\n"
 )
 MD_FILE = "# A\nuno\n\n# B\ndos\n"
+INVALID_SIZE_MESSAGE = (
+    "^max_chunk_size must be an integer between 1 and 2000$"
+)
 
 
 def make_corpus(root: Path) -> None:
@@ -159,3 +163,68 @@ def test_index_file_matches_its_current_content(tmp_path: Path) -> None:
     with closing(sqlite3.connect(index_path)) as connection:
         free_pages = connection.execute("PRAGMA freelist_count").fetchone()[0]
     assert free_pages == 0
+
+
+@pytest.mark.parametrize(
+    "max_chunk_size",
+    [0, -5, "abc", 2.5, True, 2001],
+    ids=["zero", "negative", "text", "float", "bool", "above-limit"],
+)
+def test_invalid_max_chunk_size_is_rejected(
+    tmp_path: Path, max_chunk_size: object
+) -> None:
+    """Only an integer between 1 and 2000 is accepted, and nothing is written.
+
+    Args:
+        tmp_path: Temporary folder provided by pytest.
+        max_chunk_size: Rejected value, as Fire would pass it.
+    """
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+
+    with pytest.raises(ValueError, match=INVALID_SIZE_MESSAGE):
+        # Fire can pass text, a float or a bool; mypy cannot see that.
+        run_index(str(corpus), cast(int, max_chunk_size), str(index_path))
+
+    assert not index_path.exists()
+
+
+def test_a_rejected_size_keeps_the_previous_index(tmp_path: Path) -> None:
+    """The stored index survives a call with an invalid chunk width.
+
+    The index file is deleted before being rebuilt, so validating late would
+    destroy a good index because of a mistyped number.
+
+    Args:
+        tmp_path: Temporary folder provided by pytest.
+    """
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+    run_index(str(corpus), 2000, str(index_path))
+    stored = read_rows(index_path)
+
+    with pytest.raises(ValueError, match=INVALID_SIZE_MESSAGE):
+        run_index(str(corpus), 0, str(index_path))
+
+    assert read_rows(index_path) == stored
+
+
+def test_chunks_respect_a_smaller_size(tmp_path: Path) -> None:
+    """A valid size below the default is honoured by every stored chunk.
+
+    Args:
+        tmp_path: Temporary folder provided by pytest.
+    """
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+
+    run_index(str(corpus), 20, str(index_path))
+
+    widths = [last - first for _, first, last, _ in read_rows(index_path)]
+    assert widths and max(widths) <= 20

@@ -96,6 +96,27 @@ justificar), **ABIERTO** (pendiente, con límite).
   data/processed/`, construido con la carpeta real de `--index_path` para que
   siga siendo cierto si se cambia la ruta.
 
+## Validación de `max_chunk_size`
+
+- **FACT (medido 2026-09-24)** — Fire ignora la anotación `int` y adivina el
+  tipo: `abc` llega como `str`, `2.5` como `float`, `True` como `bool`. Y
+  `bool` hereda de `int`, así que `isinstance(True, int)` es `True`.
+- **FACT (medido 2026-09-24)** — `max_chunk_size` es el paso de `range` en
+  `src/domain/chunking.py:30`. Con paso 0 lanza
+  `range() arg 3 must not be zero`; con paso negativo el `range` queda vacío,
+  así que no se produce ningún chunk y el programa imprimía
+  `Ingestion complete!` con salida `0` y un índice vacío.
+- **DECISIÓN (2026-09-25, Jose, opción A)** — La validación vive en
+  `run_index`, en las primeras líneas y antes de leer el corpus, no en la
+  CLI: la regla 1..2000 viene del enunciado y debe valer para cualquier
+  adaptador de entrada. Además `save_chunks` borra el fichero para
+  reconstruirlo, así que validar tarde destruiría un índice bueno.
+- **DECISIÓN (2026-09-25, Jose, opción B1)** — Se rechaza el `bool` de forma
+  explícita, aquí y en la validación de `k` de `run_search_dataset`.
+- **INTERPRETACIÓN** — El mensaje es único para los seis casos inválidos:
+  `max_chunk_size must be an integer between 1 and 2000`, construido con la
+  constante `MAX_CHUNK_SIZE` para que nunca contradiga al límite real.
+
 ## Modelos de datos
 
 - **FACT** — Los 8 modelos de VI.4 son obligatorios y se pueden ampliar con

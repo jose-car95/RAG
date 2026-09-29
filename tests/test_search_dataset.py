@@ -50,7 +50,11 @@ def test_missing_save_directories_are_created(tmp_path: Path) -> None:
     assert output_path.is_file()
 
 
-@pytest.mark.parametrize("k", [0, -3, "abc"], ids=["zero", "negative", "text"])
+@pytest.mark.parametrize(
+    "k",
+    [0, -3, "abc", True],
+    ids=["zero", "negative", "text", "bool"],
+)
 def test_invalid_k_is_rejected_before_writing(
     tmp_path: Path, k: object
 ) -> None:

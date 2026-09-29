@@ -8,21 +8,27 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   (en curso). M0 cerrado el 2026-09-16; M1 el 2026-09-18.
 - **Slices cerrados en M2:** #17 descubrir los 1.969 ficheros indexables;
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
-  `ast`.
-- **Slice en revisión:** #20 "Persist the chunk index in SQLite". Nace el
-  caso de uso `src/application/index_corpus.py` (`run_index`: descubre,
-  trocea con la estrategia de cada extensión y guarda, con barra de tqdm) y
-  el adaptador `src/adapters/sqlite_index.py` (`save_chunks`: una tabla
-  plana `chunks` con el texto, en una sola transacción). El mapa
-  `CHUNKERS` de `chunking.py` cierra el patrón Strategy.
-- **Verificado (2026-09-23):**
+  `ast`; #20 índice en SQLite.
+- **Slice en revisión:** #21 "Validate max_chunk_size". Cláusula de guarda
+  en las primeras líneas de `run_index` (antes de leer el corpus, porque
+  `save_chunks` borra el índice para reconstruirlo): rechaza `bool`, lo que
+  no es `int` y lo que está fuera de 1..`MAX_CHUNK_SIZE`. La constante
+  `MAX_CHUNK_SIZE` alimenta la guarda, el mensaje de error (f-string) y el
+  valor por defecto de la CLI. La misma trampa del `bool` queda arreglada en
+  la validación de `k` de `run_search_dataset`.
+- **Verificado (2026-09-29):**
   - `make lint` → flake8 sin salida; mypy `Success: no issues found in 22 source files`.
+  - `make test` → `103 passed` (10 de indexado).
+  - **Los seis valores inválidos por la CLI** (`0`, `-5`, `abc`, `2.5`, `2001`, `True`) dan `ERROR: max_chunk_size must be an integer between 1 and 2000` y salida `1`; `500` indexa con salida `0`. Un índice ya guardado sobrevive intacto a una llamada rechazada (mismas filas y mismos bytes).
+  - **Antes de este slice** (medido el 2026-09-24): `0` daba `ERROR: range() arg 3 must not be zero` (jerga interna) y `-5` decía `Ingestion complete!` con salida `0` y **cero chunks**, borrando el índice bueno. Causa: `max_chunk_size` es el paso de `range` en `src/domain/chunking.py:30`.
+  - **Recode probado:** poniendo `MAX_CHUNK_SIZE = 1000`, el mensaje pasa solo a `between 1 and 1000` y `--max_chunk_size 1500` se rechaza, sin tocar nada más.
+- **Verificado (2026-09-23, slice #20):**
   - `make test` → `93 passed` (7 de indexado).
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** slice #21 "Validate max_chunk_size" (entero
-  entre 1 y 2000), último slice de M2.
+- **Siguiente paso propuesto:** con el merge de #21 se cierra **M2**. Toca
+  M3: tokenización, índice invertido, BM25 y recall@k (issues #22-#27).
 
 ## Decisiones
 
@@ -67,6 +73,10 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
 | 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-25 | `max_chunk_size` se valida en `run_index`, no en la CLI (opción A) | La regla 1..2000 es del enunciado, no de la terminal: así vale para cualquier adaptador de entrada (la API HTTP del bonus entraría por el mismo caso de uso). En la CLI solo irían las reglas propias del terminal, como rechazar un `--save_directory` que parezca un fichero |
+| 2026-09-25 | Se rechaza el `bool` explícitamente, aquí y en la validación de `k` (opción B1) | `bool` hereda de `int` en Python, así que `isinstance(True, int)` es `True` y `--max_chunk_size True` colaba como 1 (20 M de chunks de un carácter). Se arregla la causa en los dos sitios, no el síntoma en uno |
+| 2026-09-25 | Constante `MAX_CHUNK_SIZE` en `src/application/index_corpus.py`, leída por la guarda, por el mensaje (f-string) y por el valor por defecto de la CLI | El 2000 estaba en tres sitios. No añade dependencias: la CLI ya importaba de ese módulo. Probado: cambiarla a 1000 actualiza mensaje y límite sin tocar nada más |
+| 2026-09-25 | No se extrae un ayudante de validación compartido | Solo hay dos sitios, con límites y mensajes distintos (ponytail peldaño 2). El disparador para extraerlo será el tercero, `search --k` en M3 |
 | 2026-09-23 | El índice es una sola tabla plana `chunks` (opción 1A) y guarda el texto del chunk (opción 2A) | Una tabla se explica en una frase y una sola consulta devuelve todo lo que `search` necesita; el texto ocupa 25 MB y evita reabrir 1.847 ficheros por búsqueda |
 | 2026-09-23 | `save_chunks` reconstruye el índice borrando el fichero (`unlink(missing_ok=True)`) en vez de vaciar la tabla con `DELETE FROM` (opción A) | SQLite marca las páginas borradas como libres pero nunca las devuelve al sistema: con `DELETE` el fichero heredaba su tamaño máximo (medido: 55 MB tras un `--max_chunk_size 50`, sin bajar nunca). Trade-off aceptado: si el indexado falla, no queda índice viejo; reconstruirlo cuesta 3,65 s |
 | 2026-09-23 | `CREATE TABLE` sin `IF NOT EXISTS` | Con el fichero recién borrado la tabla no puede existir, así que la cláusula no protegía de nada (ponytail). Efecto medido: si alguien quita el `unlink`, dos tests se ponen rojos en vez de duplicar filas en silencio |
@@ -117,14 +127,21 @@ M3 antes de optimizar nada.
   `file_path` letra a letra con `data/raw/vllm-0.10.1/...` y nunca
   coincidirían (recall 0 aunque la búsqueda fuera perfecta); Jose dio como
   motivo que cambian entre máquinas, que es secundario.
-- **Ensayar en el primer `/ensayo` (paso 8 del slice #20, 2026-09-23):
-  SIN RESPONDER.** Jose pidió cerrar el slice sin contestar. Las tres
-  preguntas: (1) qué hace cada uno de los dos gestores de contexto de
-  `with closing(sqlite3.connect(...)) as connection, connection:` y qué se
-  rompe al quitar cada uno por separado; (2) por qué dos `index` seguidos no
-  duplican los chunks, en qué línea está la garantía, y por qué antes el
-  fichero se quedaba grande aunque las filas fueran pocas; (3) cuántos
-  sitios hay que tocar para trocear `.json` con una estrategia propia.
+- **Repasar (paso 8 del slice #20, respondido el 2026-09-24):** 2 de 3.
+  Bien la garantía del `unlink` y los tres sitios que toca una estrategia
+  nueva (`INDEXABLE_SUFFIXES`, la función nueva y una línea en `CHUNKERS`).
+  **Falló** el segundo gestor de contexto: Jose dijo que muestra un mensaje
+  de si todo fue bien; en realidad gestiona la **transacción** (commit al
+  salir bien, rollback si hay excepción) y **no cierra** la conexión, que es
+  para lo que hace falta `closing`. Medido: sin el segundo `connection` el
+  índice queda con 0 filas sin dar ningún error; sin `closing` queda 1
+  fichero abierto. Falta también decir en una frase por qué `DELETE FROM`
+  dejaba el fichero grande (páginas libres que SQLite no devuelve al
+  sistema).
+- **Paso 8 del slice #21 (2026-09-25): 3 de 3.** El orden de las
+  comprobaciones (el tipo antes de las comparaciones, por el cortocircuito
+  del `or`), por qué `bool` necesita su propia comprobación, y por qué la
+  guarda vive en el caso de uso y no en la CLI.
 - **Pulido M6:** rechazar un `--save_directory` que parezca un fichero
   (p. ej. termina en `.json`); hoy crea una carpeta con ese nombre.
 
