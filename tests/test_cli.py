@@ -172,6 +172,30 @@ def test_index_reports_missing_corpus_folder() -> None:
     assert result.stderr == "ERROR: corpus folder not found: /nonexistent\n"
 
 
+def test_index_rejects_an_invalid_max_chunk_size(tmp_path: Path) -> None:
+    """``index`` reports an invalid chunk width and writes no index."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.py").write_text("x = 1\n", encoding="utf-8")
+    index_path = tmp_path / "index.db"
+
+    result = run_cli(
+        "index",
+        "--raw_directory",
+        str(corpus),
+        "--index_path",
+        str(index_path),
+        "--max_chunk_size",
+        "0",
+    )
+
+    assert result.returncode == 1
+    assert result.stderr == (
+        "ERROR: max_chunk_size must be an integer between 1 and 2000\n"
+    )
+    assert not index_path.exists()
+
+
 def test_index_writes_the_index_file(tmp_path: Path) -> None:
     """``index`` chunks the corpus and reports where the index was saved."""
     corpus = tmp_path / "corpus"
