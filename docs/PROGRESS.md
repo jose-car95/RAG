@@ -4,20 +4,24 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M2 — Indexado: ingesta, chunking y persistencia en SQLite
-  (en curso). M0 cerrado el 2026-09-16; M1 el 2026-09-18.
-- **Slices cerrados en M2:** #17 descubrir los 1.969 ficheros indexables;
+- **Milestone:** M3 — Recuperación BM25 y línea base (en curso). M0 cerrado
+  el 2026-09-16; M1 el 2026-09-18; **M2 el 2026-09-29**.
+- **M2 cerrado (5 slices):** #17 descubrir los 1.969 ficheros indexables;
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
-  `ast`; #20 índice en SQLite.
-- **Slice en revisión:** #21 "Validate max_chunk_size". Cláusula de guarda
-  en las primeras líneas de `run_index` (antes de leer el corpus, porque
-  `save_chunks` borra el índice para reconstruirlo): rechaza `bool`, lo que
-  no es `int` y lo que está fuera de 1..`MAX_CHUNK_SIZE`. La constante
-  `MAX_CHUNK_SIZE` alimenta la guarda, el mensaje de error (f-string) y el
-  valor por defecto de la CLI. La misma trampa del `bool` queda arreglada en
-  la validación de `k` de `run_search_dataset`.
-- **Verificado (2026-09-29):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 22 source files`.
+  `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
+  milestone: #35 página de conceptos de BM25.
+- **Slices cerrados en M3:** ninguno todavía.
+- **Slice en revisión:** #22 "Tokenize text for lexical search". Nace
+  `src/domain/tokenizer.py` con `tokenize(text) -> list[str]`: minúsculas y
+  el patrón `[a-z0-9_]+` compilado en la constante de módulo
+  `WORD_PATTERN`. Devuelve una lista, no un conjunto, porque BM25 necesita
+  contar repeticiones.
+- **Verificado (2026-09-29, slice #22):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 24 source files`.
+  - `make test` → `113 passed` (10 de tokenización).
+  - **Sobre datos reales:** las 199 preguntas de referencia dan 2.714 tokens (media 13,6 por pregunta, mínimo 6, máximo 35, ninguna con 0 tokens); los 18.942 chunks dan 1.827.646 tokens y un vocabulario de 55.397 palabras. Los identificadores `lm_eval`, `mm_kwargs`, `qk_max`, `int8` y `fp8_min` sobreviven enteros.
+  - **Coincide con la página de conceptos:** los mismos 55.397 y 1.827.646 que se midieron antes de existir el tokenizador.
+- **Verificado (2026-09-29, slice #21):**
   - `make test` → `103 passed` (10 de indexado).
   - **Los seis valores inválidos por la CLI** (`0`, `-5`, `abc`, `2.5`, `2001`, `True`) dan `ERROR: max_chunk_size must be an integer between 1 and 2000` y salida `1`; `500` indexa con salida `0`. Un índice ya guardado sobrevive intacto a una llamada rechazada (mismas filas y mismos bytes).
   - **Antes de este slice** (medido el 2026-09-24): `0` daba `ERROR: range() arg 3 must not be zero` (jerga interna) y `-5` decía `Ingestion complete!` con salida `0` y **cero chunks**, borrando el índice bueno. Causa: `max_chunk_size` es el paso de `range` en `src/domain/chunking.py:30`.
@@ -27,8 +31,8 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** con el merge de #21 se cierra **M2**. Toca
-  M3: tokenización, índice invertido, BM25 y recall@k (issues #22-#27).
+- **Siguiente paso propuesto:** slice #23 "Rank chunks with BM25", que ya
+  puede consumir `tokenize`.
 
 ## Decisiones
 
@@ -73,6 +77,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
 | 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-09-29 | Un token es `[a-z0-9_]+` sobre el texto en minúsculas (opción A), no `\w+` | Medido: `\w+` solo añade 40 palabras de 55.397 (0,07%), todas CJK o acentuadas y de ficheros de prueba de vLLM; la única pregunta no ASCII usa emojis, que los dos patrones descartan. El guion bajo y los dígitos se quedan dentro del token porque 79 de las 199 preguntas preguntan por identificadores (`lm_eval`, `mm_kwargs`, `qk_max`) y `int8`/`fp8` son nombres de técnicas. Coste conocido: `israéliennes` se parte en dos |
+| 2026-09-29 | No se quitan stop words ni se hace stemming | IDF ya reduce a casi cero las palabras comunes; una lista de palabras prohibidas es una cosa más que mantener y justificar. El stemming es experimento medible de M4 |
+| 2026-09-29 | Corrección: compilar el patrón fuera de la función NO es una mejora de rendimiento relevante | Medido: 1,243 s frente a 1,323 s en 200.000 llamadas (×1,06), porque el módulo `re` ya cachea los patrones compilados. El motivo real de la constante es la intención (un único sitio que define qué es una palabra). No rompe la regla del estado global mutable porque un patrón compilado es inmutable (`readonly attribute`) y `findall` devuelve una lista nueva en cada llamada |
 | 2026-09-25 | `max_chunk_size` se valida en `run_index`, no en la CLI (opción A) | La regla 1..2000 es del enunciado, no de la terminal: así vale para cualquier adaptador de entrada (la API HTTP del bonus entraría por el mismo caso de uso). En la CLI solo irían las reglas propias del terminal, como rechazar un `--save_directory` que parezca un fichero |
 | 2026-09-25 | Se rechaza el `bool` explícitamente, aquí y en la validación de `k` (opción B1) | `bool` hereda de `int` en Python, así que `isinstance(True, int)` es `True` y `--max_chunk_size True` colaba como 1 (20 M de chunks de un carácter). Se arregla la causa en los dos sitios, no el síntoma en uno |
 | 2026-09-25 | Constante `MAX_CHUNK_SIZE` en `src/application/index_corpus.py`, leída por la guarda, por el mensaje (f-string) y por el valor por defecto de la CLI | El 2000 estaba en tres sitios. No añade dependencias: la CLI ya importaba de ese módulo. Probado: cambiarla a 1000 actualiza mensaje y límite sin tocar nada más |
@@ -142,6 +149,13 @@ M3 antes de optimizar nada.
   comprobaciones (el tipo antes de las comparaciones, por el cortocircuito
   del `or`), por qué `bool` necesita su propia comprobación, y por qué la
   guarda vive en el caso de uso y no en la CLI.
+- **Paso 8 del slice #22 (2026-09-29): 2 de 3 y media.** Bien por qué la
+  misma función tokeniza la pregunta y el corpus, y por qué devuelve una
+  lista (BM25 cuenta repeticiones). A medias la tercera: dio el beneficio de
+  mantenimiento, pero faltaba que la regla prohíbe el estado **mutable** y
+  que un patrón compilado es inmutable (`readonly attribute`), además de que
+  `findall` devuelve una lista nueva cada vez. Repasar también que el ahorro
+  por compilar fuera es solo del 6%.
 - **Pulido M6:** rechazar un `--save_directory` que parezca un fichero
   (p. ej. termina en `.json`); hoy crea una carpeta con ese nombre.
 
