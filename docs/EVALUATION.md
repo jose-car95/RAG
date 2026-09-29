@@ -20,7 +20,7 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | Salida `StudentSearchResultsAndAnswer` válida | JSON validado por el modelo | Test + demo (M5) | NOT_STARTED |
 | Dos estrategias de chunking | Código de Python y de Markdown/texto, explicable | `src/domain/chunking.py` (`chunk_text` por títulos, `chunk_python` por definiciones con `ast`) + `tests/test_chunking.py` (37 tests, invariante incluido); corpus real: 206 `.md`/`.txt` → 1.759 chunks y 1.763 `.py` → 17.183 chunks, 0 violaciones (slices #18 y #19) | EVIDENCED |
 | `--max_chunk_size` con default 2000 | Ningún chunk > 2000 | Invariante testeado en `tests/test_chunking.py` y medido en el índice real de 18.942 chunks (máximo 2000, 0 por encima); el flag se valida en `run_index` con la constante `MAX_CHUNK_SIZE` y 6 casos inválidos cubiertos en `tests/test_index_corpus.py` (slice #21) | EVIDENCED |
-| TF-IDF o BM25 | Implementación propia explicable | Tests + demo `search` (M3) | NOT_STARTED |
+| TF-IDF o BM25 | Implementación propia explicable | Tokenización propia en `src/domain/tokenizer.py` + `tests/test_tokenizer.py` (10 tests), slice #22; BM25 en el slice #23. Material de estudio con la aritmética real en `docs/conceptos/busqueda-lexica-bm25.html` | IN_PROGRESS |
 | `search "How to configure OpenAI server?" --k 10` | Resultados ordenados y explicables | Demo (M3) | NOT_STARTED |
 | Qwen/Qwen3-0.6B por defecto, contexto dentro del límite de tokens | `answer ... --k 10` funciona en CPU | Demo (M5) | NOT_STARTED |
 | Indexado ≤ 300 s | Tiempo medido | 3,65 s para 1.969 ficheros y 18.942 chunks (2026-09-23, slice #20); fila en la tabla de métricas de `docs/PROGRESS.md`. Se vuelve a medir en M3 con el índice invertido | EVIDENCED |
