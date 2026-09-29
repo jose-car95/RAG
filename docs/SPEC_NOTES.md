@@ -96,6 +96,25 @@ justificar), **ABIERTO** (pendiente, con límite).
   data/processed/`, construido con la carpeta real de `--index_path` para que
   siga siendo cierto si se cambia la ruta.
 
+## Tokenización
+
+- **DECISIÓN (2026-09-29, Jose, opción A)** — Un token es `[a-z0-9_]+` sobre
+  el texto en minúsculas. Dígitos y guion bajo se quedan **dentro** del token.
+- **FACT (medido 2026-09-29)** — `\w+` solo añadiría 40 palabras de las 55.397
+  del vocabulario (0,07%), todas CJK o acentuadas y procedentes de ficheros de
+  prueba de vLLM. La única pregunta de referencia con caracteres no ASCII usa
+  emojis, que ambos patrones descartan.
+- **FACT (medido 2026-09-29)** — 79 de las 199 preguntas de referencia
+  contienen identificadores con guion bajo (`lm_eval`, `mm_kwargs`,
+  `_call_hf_processor`, `qk_max`, `cutlass_scaled_mm`). Partirlos destruiría
+  el término de mayor IDF de esas preguntas.
+- **INTERPRETACIÓN** — No se quitan stop words: IDF ya las reduce a casi cero.
+  Partir `snake_case` y hacer stemming quedan como experimentos medibles de M4,
+  con recall antes y después.
+- **FACT (medido 2026-09-29)** — El corpus indexado da 1.827.646 tokens y un
+  vocabulario de 55.397 palabras; las 199 preguntas dan 2.714 tokens, con una
+  media de 13,6 por pregunta y ninguna vacía.
+
 ## Validación de `max_chunk_size`
 
 - **FACT (medido 2026-09-24)** — Fire ignora la anotación `int` y adivina el
