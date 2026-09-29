@@ -1,0 +1,724 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Búsqueda léxica, TF-IDF y BM25: conceptos para el proyecto RAG</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #5b5b5b; --line: #d7d7d7;
+    --soft: #f4f4f5; --accent: #1f5fa8; --warn: #a33; --ok: #1d7a4a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --fg: #e7e7e7; --muted: #a2a2a2; --line: #333842;
+      --soft: #1c1f25; --accent: #7fb0ea; --warn: #e88; --ok: #6fd39b;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; max-width: 62rem; padding: 2rem 1.1rem 5rem;
+    background: var(--bg); color: var(--fg); line-height: 1.6;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  h1 { font-size: 1.85rem; line-height: 1.25; margin: 0 0 .3rem; }
+  h2 {
+    font-size: 1.3rem; margin: 2.6rem 0 .8rem; padding-top: .8rem;
+    border-top: 1px solid var(--line);
+  }
+  h3 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+  p, li { font-size: .97rem; }
+  code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  code { background: var(--soft); padding: .1rem .3rem; border-radius: 3px; font-size: .88em; }
+  pre {
+    background: var(--soft); border: 1px solid var(--line); border-radius: 6px;
+    padding: .8rem .9rem; overflow-x: auto; font-size: .85rem; line-height: 1.45;
+  }
+  pre code { background: none; padding: 0; font-size: 1em; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .9rem; display: block; overflow-x: auto; }
+  th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; vertical-align: top; }
+  th { background: var(--soft); }
+  td.num, th.num { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  .lead { color: var(--muted); font-size: 1.02rem; margin-top: 0; }
+  .note, .warn, .ok {
+    border-left: 3px solid var(--accent); background: var(--soft);
+    padding: .7rem .9rem; border-radius: 0 6px 6px 0; margin: 1rem 0;
+  }
+  .warn { border-left-color: var(--warn); }
+  .ok { border-left-color: var(--ok); }
+  .fig { margin: 1.2rem 0; }
+  .fig svg { width: 100%; height: auto; }
+  .fig figcaption { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  nav ol { margin: .4rem 0 0; padding-left: 1.3rem; }
+  nav a { color: var(--accent); }
+  .tag {
+    display: inline-block; font-size: .72rem; letter-spacing: .04em;
+    text-transform: uppercase; color: var(--muted); border: 1px solid var(--line);
+    border-radius: 999px; padding: .05rem .5rem; vertical-align: middle;
+  }
+  .formula {
+    background: var(--soft); border: 1px solid var(--line); border-radius: 6px;
+    padding: .9rem 1rem; margin: 1rem 0; overflow-x: auto;
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem;
+  }
+  svg text { fill: currentColor; font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 11px; }
+  svg .box { fill: none; stroke: currentColor; stroke-width: 1.2; }
+  svg .soft { fill: currentColor; opacity: .07; stroke: none; }
+  svg .lbl { font-size: 10px; opacity: .75; }
+  svg .arrow { stroke: currentColor; stroke-width: 1.2; fill: none; }
+  svg .dash { stroke: currentColor; stroke-width: 1; fill: none; stroke-dasharray: 4 3; opacity: .55; }
+  svg .thick { stroke: currentColor; stroke-width: 2; fill: none; }
+</style>
+</head>
+<body>
+
+<h1>Búsqueda léxica, TF-IDF y BM25: lo que necesito dominar</h1>
+<p class="lead">Material de estudio para M3 del proyecto <em>RAG against the machine</em>.
+Todos los números de esta página están medidos sobre nuestro índice real
+(18.942 chunks del corpus de vLLM 0.10.1) y sobre una pregunta real de los
+datasets públicos. Ninguno es inventado.</p>
+
+<nav>
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#problema">El problema: de una pregunta a cinco fragmentos</a></li>
+    <li><a href="#tokenizar">Tokenizar: de texto a palabras comparables</a></li>
+    <li><a href="#invertido">El índice invertido</a></li>
+    <li><a href="#tf">TF: contar apariciones (y por qué no basta)</a></li>
+    <li><a href="#idf">IDF: las palabras raras informan más</a></li>
+    <li><a href="#tfidf">TF-IDF: el producto de los dos</a></li>
+    <li><a href="#bm25">BM25: dos arreglos sobre TF-IDF</a></li>
+    <li><a href="#cuenta">La cuenta completa con datos reales</a></li>
+    <li><a href="#recall">Recall@k e IoU: cómo se nos mide</a></li>
+    <li><a href="#proyecto">Qué haremos en este proyecto</a></li>
+    <li><a href="#glosario">Glosario</a></li>
+    <li><a href="#defensa">Preguntas de defensa</a></li>
+  </ol>
+</nav>
+
+<h2 id="problema">1. El problema: de una pregunta a cinco fragmentos</h2>
+
+<p>Tenemos 18.942 <strong>chunks</strong> (fragmentos de texto) guardados en
+SQLite. Llega una pregunta escrita por una persona:</p>
+
+<pre><code>What HTTP endpoint is used to dynamically load a LoRA adapter in vLLM?</code></pre>
+
+<p>Y la respuesta correcta, según el dataset público, está en un sitio concreto
+del corpus:</p>
+
+<pre><code>data/raw/vllm-0.10.1/docs/features/lora.md  [4695:6098]</code></pre>
+
+<p>Nuestro trabajo en M3 es devolver ese fragmento entre los 5 primeros
+resultados. Ni más ni menos. El modelo de lenguaje llegará en M5 y solo sabrá
+redactar con lo que le demos: si la recuperación falla, la respuesta será mala
+por muy bueno que sea el modelo. Por eso M3 es el corazón del proyecto.</p>
+
+<div class="note">
+<strong>Búsqueda léxica</strong> (<em>lexical search</em>, de <em>lexis</em>,
+«palabra» en griego) significa buscar <strong>por las palabras que aparecen
+escritas</strong>, no por el significado. Si la pregunta dice «endpoint» y el
+documento dice «endpoint», hay coincidencia. Si la pregunta dice «endpoint» y
+el documento dice «URL de la API», la búsqueda léxica <em>no</em> los relaciona:
+para eso harían falta <strong>embeddings</strong> (representar el significado
+como una lista de números), que son el bonus del proyecto, no lo obligatorio.
+</div>
+
+<p>La idea de fondo, y es más simple de lo que parece: <strong>si comparten
+palabras, probablemente hablan de lo mismo</strong>. Todo lo demás de esta
+página son refinamientos de esa frase.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 640 132" role="img" aria-label="Recorrido de una pregunta hasta los cinco resultados">
+  <rect class="soft" x="4" y="34" width="110" height="40" rx="5"></rect>
+  <rect class="box" x="4" y="34" width="110" height="40" rx="5"></rect>
+  <text x="59" y="50" text-anchor="middle">pregunta</text>
+  <text x="59" y="65" text-anchor="middle" class="lbl">texto libre</text>
+
+  <path class="arrow" d="M116 54 H 148"></path>
+  <path class="arrow" d="M142 50 l6 4 -6 4"></path>
+
+  <rect class="box" x="150" y="34" width="112" height="40" rx="5"></rect>
+  <text x="206" y="50" text-anchor="middle">tokenizar</text>
+  <text x="206" y="65" text-anchor="middle" class="lbl">7 palabras</text>
+
+  <path class="arrow" d="M264 54 H 296"></path>
+  <path class="arrow" d="M290 50 l6 4 -6 4"></path>
+
+  <rect class="box" x="298" y="14" width="126" height="80" rx="5"></rect>
+  <text x="361" y="34" text-anchor="middle">índice invertido</text>
+  <text x="361" y="50" text-anchor="middle" class="lbl">palabra -&gt; chunks</text>
+  <text x="361" y="66" text-anchor="middle" class="lbl">4.972 candidatos</text>
+  <text x="361" y="82" text-anchor="middle" class="lbl">de 18.942</text>
+
+  <path class="arrow" d="M426 54 H 458"></path>
+  <path class="arrow" d="M452 50 l6 4 -6 4"></path>
+
+  <rect class="box" x="460" y="34" width="86" height="40" rx="5"></rect>
+  <text x="503" y="50" text-anchor="middle">BM25</text>
+  <text x="503" y="65" text-anchor="middle" class="lbl">puntuar</text>
+
+  <path class="arrow" d="M548 54 H 578"></path>
+  <path class="arrow" d="M572 50 l6 4 -6 4"></path>
+
+  <rect class="soft" x="580" y="34" width="56" height="40" rx="5"></rect>
+  <rect class="box" x="580" y="34" width="56" height="40" rx="5"></rect>
+  <text x="608" y="50" text-anchor="middle">top-k</text>
+  <text x="608" y="65" text-anchor="middle" class="lbl">k=5</text>
+
+  <text x="4" y="118" class="lbl">Las dos cajas sombreadas son lo que ve el usuario; las tres del medio son nuestro trabajo en M3.</text>
+</svg>
+<figcaption>Figura 1. El recorrido completo de una búsqueda. Los 4.972
+candidatos son los chunks reales de nuestro índice que contienen al menos una
+palabra de esa pregunta.</figcaption>
+</figure>
+
+<h2 id="tokenizar">2. Tokenizar: de texto a palabras comparables</h2>
+
+<p><strong>Tokenizar</strong> (<em>to tokenize</em>, de <em>token</em>, «ficha»)
+es partir un texto en las piezas que vas a comparar. Cada pieza es un
+<strong>token</strong>. Suena trivial y no lo es, porque hay que decidir qué
+cuenta como una pieza.</p>
+
+<p>La analogía: imagina que quieres saber si dos cestas de la compra se parecen.
+Antes de comparar tienes que ponerte de acuerdo en qué es «un artículo». ¿Son
+lo mismo «tomate» y «Tomates»? ¿Y «tomate frito» es uno o son dos? Si cada uno
+cuenta a su manera, la comparación no significa nada. Tokenizar es fijar esas
+reglas, y lo importante es aplicar <strong>las mismas</strong> a la pregunta y
+al corpus.</p>
+
+<p>Las decisiones que tenemos delante en el slice #22:</p>
+
+<table>
+<tr><th>Decisión</th><th>Ejemplo real del corpus</th><th>Efecto</th></tr>
+<tr>
+  <td>Pasar todo a minúsculas</td>
+  <td><code>vLLM</code>, <code>VLLM</code>, <code>vllm</code> → <code>vllm</code></td>
+  <td>La pregunta escribe <code>vLLM</code> y el código <code>vllm</code>: sin
+      esto no coincidirían nunca</td>
+</tr>
+<tr>
+  <td>Qué caracteres forman una palabra</td>
+  <td><code>max_num_seqs</code>, <code>fused_batched_moe</code></td>
+  <td>En código hay guiones bajos por todas partes. Si los partes, un
+      identificador se convierte en palabras sueltas sin sentido</td>
+</tr>
+<tr>
+  <td>Qué hacer con los números</td>
+  <td><code>fp8</code>, <code>int8</code>, <code>0.10.1</code></td>
+  <td>Aquí los números <em>son</em> información: <code>int8</code> es el nombre
+      de una técnica</td>
+</tr>
+<tr>
+  <td>Descartar palabras vacías</td>
+  <td><code>the</code>, <code>is</code>, <code>a</code>, <code>in</code></td>
+  <td>Son las <strong>stop words</strong>. Se pueden quitar, pero
+      <a href="#idf">IDF</a> ya las castiga sola: quitarlas es opcional</td>
+</tr>
+</table>
+
+<p>Medido en nuestro índice con una tokenización sencilla (minúsculas y grupos
+de letras, números y guion bajo):</p>
+
+<table>
+<tr><th>Medida</th><th class="num">Valor</th></tr>
+<tr><td>Tokens totales en los 18.942 chunks</td><td class="num">1.827.646</td></tr>
+<tr><td>Palabras distintas (el <strong>vocabulario</strong>)</td><td class="num">55.397</td></tr>
+<tr><td>Longitud media de un chunk</td><td class="num">96,5 tokens</td></tr>
+<tr><td>Chunk más corto / más largo</td><td class="num">0 / 404 tokens</td></tr>
+</table>
+
+<div class="warn">
+<strong>Ojo al chunk de 0 tokens.</strong> Existe de verdad en nuestro índice: un
+fragmento que solo tiene símbolos y espacios. Cuando programes la puntuación,
+dividir por la longitud de un documento vacío es una división por cero. Es
+justo el tipo de caso límite que un test tiene que cubrir.
+</div>
+
+<h2 id="invertido">3. El índice invertido</h2>
+
+<p>Con la pregunta ya en 7 palabras, la pregunta obvia es: ¿comparo esas
+palabras con los 18.942 chunks, uno por uno? Funcionaría, pero es trabajo
+tirado a la basura: la mayoría de los chunks no contienen <em>ninguna</em> de
+las palabras.</p>
+
+<p>Un <strong>índice invertido</strong> (<em>inverted index</em>) es un
+diccionario que va <strong>de la palabra a los documentos donde aparece</strong>.
+Se llama «invertido» porque el orden natural es el contrario: un documento
+contiene palabras. Aquí le damos la vuelta.</p>
+
+<p>La analogía es el índice del final de un libro de texto: en vez de leer las
+600 páginas buscando «mitocondria», vas al índice, encuentras «mitocondria:
+41, 88, 203» y abres tres páginas. Las páginas que te da el índice para una
+palabra se llaman su <strong>posting list</strong> (lista de apariciones).</p>
+
+<figure class="fig">
+<svg viewBox="0 0 640 220" role="img" aria-label="Índice invertido con listas de apariciones reales">
+  <text x="4" y="14" class="lbl">DIRECTO: cada chunk contiene palabras</text>
+  <rect class="box" x="4" y="24" width="150" height="34" rx="4"></rect>
+  <text x="12" y="38">chunk 8123</text>
+  <text x="12" y="52" class="lbl">http endpoint lora ...</text>
+  <rect class="box" x="4" y="64" width="150" height="34" rx="4"></rect>
+  <text x="12" y="78">chunk 14077</text>
+  <text x="12" y="92" class="lbl">lora lora lora ...</text>
+
+  <path class="arrow" d="M162 60 H 196"></path>
+  <path class="arrow" d="M190 56 l6 4 -6 4"></path>
+  <text x="179" y="48" text-anchor="middle" class="lbl">se invierte</text>
+
+  <text x="206" y="14" class="lbl">INVERTIDO: cada palabra apunta a sus chunks (df = cuántos)</text>
+  <rect class="soft" x="206" y="24" width="430" height="182" rx="5"></rect>
+  <rect class="box" x="206" y="24" width="430" height="182" rx="5"></rect>
+
+  <text x="218" y="44">http</text>
+  <path class="dash" d="M300 40 H 470"></path>
+  <text x="480" y="44">-&gt; 295 chunks</text>
+
+  <text x="218" y="66">endpoint</text>
+  <path class="dash" d="M300 62 H 440"></path>
+  <text x="480" y="66">-&gt; 107 chunks</text>
+
+  <text x="218" y="88">dynamically</text>
+  <path class="dash" d="M300 84 H 400"></path>
+  <text x="480" y="88">-&gt; 34 chunks</text>
+
+  <text x="218" y="110">load</text>
+  <path class="dash" d="M300 106 H 500"></path>
+  <text x="480" y="110">-&gt; 595 chunks</text>
+
+  <text x="218" y="132">lora</text>
+  <path class="dash" d="M300 128 H 500"></path>
+  <text x="480" y="132">-&gt; 617 chunks</text>
+
+  <text x="218" y="154">adapter</text>
+  <path class="dash" d="M300 150 H 390"></path>
+  <text x="480" y="154">-&gt; 79 chunks</text>
+
+  <text x="218" y="176">vllm</text>
+  <path class="dash" d="M300 172 H 560"></path>
+  <text x="480" y="176">-&gt; 3.985 chunks</text>
+
+  <text x="218" y="198" class="lbl">union de las 7 listas = 4.972 candidatos (26,2% del indice)</text>
+</svg>
+<figcaption>Figura 2. Las siete listas reales de nuestro índice. La longitud de
+cada raya es proporcional a su <code>df</code>: <code>vllm</code> está en casi
+todas partes, <code>dynamically</code> casi en ninguna. Esa diferencia es la
+materia prima de IDF.</figcaption>
+</figure>
+
+<p>Dos números que salen de ahí y que hay que saber explicar:</p>
+
+<ul>
+  <li><strong>Con la unión de las listas</strong> (chunks con <em>al menos una</em>
+      palabra) puntúas 4.972 en vez de 18.942: casi cuatro veces menos trabajo.</li>
+  <li><strong>Con la intersección</strong> (chunks con <em>todas</em> las
+      palabras) queda exactamente <strong>1 chunk</strong>... y resulta ser el
+      correcto. Tentador, pero es una trampa: exigir todas las palabras deja
+      muchísimas preguntas <em>sin ningún resultado</em>. Por eso se usa la
+      unión y se <em>ordena</em> con una puntuación, en vez de filtrar.</li>
+</ul>
+
+<h2 id="tf">4. TF: contar apariciones (y por qué no basta)</h2>
+
+<p><strong>TF</strong> es <em>term frequency</em>, «frecuencia del término»: las
+veces que una palabra aparece en un documento. La intuición es razonable: si
+«adapter» sale 13 veces en un fragmento, ese fragmento habla de adaptadores.</p>
+
+<p>Pero contar y ya lleva a errores. Estos dos chunks son reales, de nuestro
+índice, y ambos hablan de LoRA:</p>
+
+<table>
+<tr>
+  <th>Chunk</th>
+  <th class="num">http</th><th class="num">endpoint</th>
+  <th class="num">dynamically</th><th class="num">load</th>
+  <th class="num">lora</th><th class="num">adapter</th><th class="num">vllm</th>
+  <th class="num">total</th>
+</tr>
+<tr>
+  <td><code>docs/features/lora.md</code> [4695:6100]<br>
+      <span class="lbl">la fuente correcta</span></td>
+  <td class="num">2</td><td class="num">2</td><td class="num">1</td>
+  <td class="num">2</td><td class="num">10</td><td class="num">13</td>
+  <td class="num">2</td><td class="num">32</td>
+</tr>
+<tr>
+  <td><code>vllm/lora/lora.py</code> [4798:6294]<br>
+      <span class="lbl">señuelo: código, no documentación</span></td>
+  <td class="num">0</td><td class="num">0</td><td class="num">0</td>
+  <td class="num">0</td><td class="num">23</td><td class="num">0</td>
+  <td class="num">0</td><td class="num">23</td>
+</tr>
+</table>
+
+<p>El señuelo repite <code>lora</code> 23 veces, más que ninguna palabra del
+chunk bueno. Si solo contaras apariciones de la palabra más repetida, ganaría
+el fichero de código, que no responde a la pregunta. Falta algo: <strong>no
+todas las palabras valen lo mismo</strong>.</p>
+
+<h2 id="idf">5. IDF: las palabras raras informan más</h2>
+
+<p><strong>IDF</strong> es <em>inverse document frequency</em>, «frecuencia
+inversa de documento». Es un peso por palabra: <strong>cuanto en menos
+documentos aparece una palabra, más informa cuando aparece</strong>.</p>
+
+<p>La analogía: en una fiesta de 200 personas, que alguien diga «llevo
+zapatos» no te ayuda a encontrarlo; que diga «llevo un sombrero verde» te
+lleva directo. «Zapatos» tiene IDF bajo, «sombrero verde» IDF alto. Y esto
+explica por qué las <em>stop words</em> no hacen falta tratarlas aparte:
+<code>the</code> aparece en casi todos los documentos, así que su IDF es
+casi cero y se anula sola.</p>
+
+<p>La fórmula que usa BM25, con <code>N</code> = número de documentos y
+<code>df</code> = en cuántos aparece la palabra:</p>
+
+<div class="formula">
+IDF(palabra) = ln( 1 + (N - df + 0.5) / (df + 0.5) )
+</div>
+
+<p>El <code>ln</code> es el <strong>logaritmo natural</strong>: aplasta las
+diferencias grandes. Sin él, una palabra 100 veces más rara pesaría 100 veces
+más, y eso desequilibra la cuenta. Los <code>0.5</code> son un
+<strong>suavizado</strong> (<em>smoothing</em>): evitan dividir por cero y que
+el resultado se vaya al infinito con palabras rarísimas.</p>
+
+<p>Calculado con nuestro índice real (<code>N = 18.942</code>):</p>
+
+<table>
+<tr><th>Palabra</th><th class="num">df</th><th class="num">% de chunks</th><th class="num">IDF</th></tr>
+<tr><td><code>dynamically</code></td><td class="num">34</td><td class="num">0,18%</td><td class="num">6,31</td></tr>
+<tr><td><code>adapter</code></td><td class="num">79</td><td class="num">0,42%</td><td class="num">5,47</td></tr>
+<tr><td><code>endpoint</code></td><td class="num">107</td><td class="num">0,56%</td><td class="num">5,17</td></tr>
+<tr><td><code>http</code></td><td class="num">295</td><td class="num">1,56%</td><td class="num">4,16</td></tr>
+<tr><td><code>load</code></td><td class="num">595</td><td class="num">3,14%</td><td class="num">3,46</td></tr>
+<tr><td><code>lora</code></td><td class="num">617</td><td class="num">3,26%</td><td class="num">3,42</td></tr>
+<tr><td><code>vllm</code></td><td class="num">3.985</td><td class="num">21,04%</td><td class="num">1,56</td></tr>
+</table>
+
+<div class="ok">
+<strong>Lee esa tabla de abajo arriba y tienes la idea entera.</strong>
+<code>vllm</code> está en 1 de cada 5 chunks del corpus (es un repositorio de
+vLLM, claro), así que aporta cuatro veces menos que <code>dynamically</code>.
+La palabra que parecía más importante de la pregunta es casi la más inútil
+para <em>distinguir</em> un chunk de otro.
+</div>
+
+<h2 id="tfidf">6. TF-IDF: el producto de los dos</h2>
+
+<p><strong>TF-IDF</strong> multiplica las dos ideas: cuántas veces aparece
+(TF) por cuánto informa esa palabra (IDF). Se suma para todas las palabras de
+la pregunta y eso da la puntuación del documento:</p>
+
+<div class="formula">
+puntuación(pregunta, chunk) = suma sobre cada palabra de [ TF(palabra, chunk) × IDF(palabra) ]
+</div>
+
+<p>Es un salto enorme respecto a contar a pelo, y ya resolvería nuestro
+ejemplo. Pero le quedan dos defectos, y BM25 existe precisamente para
+arreglarlos.</p>
+
+<h3>Defecto 1: la décima aparición cuenta lo mismo que la primera</h3>
+
+<p>Con TF-IDF, un chunk con 20 veces «lora» puntúa el doble que uno con 10. ¿De
+verdad habla el doble de LoRA? No: pasar de 0 a 1 aparición es un salto
+informativo gigante (el tema aparece), y pasar de 19 a 20 no dice casi nada.</p>
+
+<h3>Defecto 2: los documentos largos hacen trampa</h3>
+
+<p>Un texto largo contiene más palabras de todo, así que acumula más TF por el
+simple hecho de ser largo. Sin corregirlo, la búsqueda se inclina hacia los
+fragmentos grandes aunque hablen del tema de pasada.</p>
+
+<h2 id="bm25">7. BM25: dos arreglos sobre TF-IDF</h2>
+
+<p><strong>BM25</strong> significa <em>Best Matching 25</em>: fue el
+vigesimoquinto experimento de una serie de investigación de los años 90, y es
+el que quedó. Hoy sigue siendo la referencia de la búsqueda léxica: es lo que
+hay dentro de buscadores como Lucene o Elasticsearch.</p>
+
+<p>La fórmula completa, por cada palabra de la pregunta:</p>
+
+<div class="formula">
+BM25(palabra, chunk) = IDF(palabra) × [ tf × (k1 + 1) ] / [ tf + k1 × (1 - b + b × dl / avgdl) ]
+</div>
+
+<p>Da respeto, pero solo tiene cinco ingredientes, y tres ya los conoces:</p>
+
+<table>
+<tr><th>Símbolo</th><th>Qué es</th><th>En nuestro proyecto</th></tr>
+<tr><td><code>tf</code></td><td>Veces que la palabra aparece en el chunk</td><td>Se cuenta al indexar</td></tr>
+<tr><td><code>IDF</code></td><td>Peso de la palabra, lo de la sección anterior</td><td>Sale de <code>df</code> y <code>N=18.942</code></td></tr>
+<tr><td><code>dl</code></td><td><em>document length</em>: longitud del chunk en tokens</td><td>Entre 0 y 404</td></tr>
+<tr><td><code>avgdl</code></td><td><em>average document length</em>: longitud media</td><td><strong>96,5 tokens</strong></td></tr>
+<tr><td><code>k1</code>, <code>b</code></td><td>Los dos mandos que ajustan la fórmula</td><td>Valores habituales: <code>k1=1.5</code>, <code>b=0.75</code></td></tr>
+</table>
+
+<h3>El mando <code>k1</code>: saturación</h3>
+
+<p><strong>Saturación</strong> (<em>saturation</em>) es que las aportaciones
+dejen de crecer a partir de cierto punto. La analogía: el primer vaso de agua
+con sed te salva; el sexto ya casi no aporta. <code>k1</code> decide a qué
+velocidad se llega a ese techo. Con <code>k1</code> pequeño la curva se aplana
+en seguida (solo importa si la palabra está o no); con <code>k1</code> grande se
+parece más a contar linealmente.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 560 240" role="img" aria-label="Curva de saturación de BM25 frente a TF lineal">
+  <path class="arrow" d="M40 200 H 530"></path>
+  <path class="arrow" d="M40 200 V 24"></path>
+  <text x="285" y="228" text-anchor="middle" class="lbl">tf: veces que la palabra aparece en el chunk</text>
+  <text x="14" y="112" class="lbl" transform="rotate(-90 14 112)" text-anchor="middle">aportación</text>
+
+  <path class="dash" d="M40 200 70,158 100,115 130,72 160,30 530,30"></path>
+  <text x="250" y="24" class="lbl">TF-IDF: lineal, sin techo</text>
+
+  <polyline class="thick" points="40,200 70,158 100,139 130,129 160,123 190,118 220,115 250,113 280,111 310,109 340,108 370,106 400,106 430,105 460,104 490,103 520,103"></polyline>
+  <text x="330" y="126" class="lbl">BM25 con k1=1.5: se satura en 2,5</text>
+
+  <path class="dash" d="M40 96 H 530"></path>
+  <text x="496" y="92" class="lbl">techo = k1 + 1 = 2,5</text>
+
+  <path class="dash" d="M340 108 V 200"></path>
+  <text x="340" y="214" text-anchor="middle" class="lbl">10</text>
+  <path class="dash" d="M430 105 V 200"></path>
+  <text x="430" y="214" text-anchor="middle" class="lbl">13</text>
+  <text x="46" y="214" class="lbl">0</text>
+  <text x="70" y="214" text-anchor="middle" class="lbl">1</text>
+
+  <circle cx="340" cy="108" r="3" fill="currentColor"></circle>
+  <circle cx="430" cy="105" r="3" fill="currentColor"></circle>
+</svg>
+<figcaption>Figura 3. La curva real de BM25 con <code>k1=1.5</code> para un chunk
+de longitud media. Los dos puntos marcados son los <code>tf</code> reales del
+chunk correcto: con 10 apariciones se aporta 2,17 y con 13, 2,24. Pasar de 10 a
+23 apariciones (más del doble) solo sube de 2,17 a 2,35: eso es la saturación.
+Ojo: en la tabla de la sección 8 esos mismos <code>tf</code> dan 1,95 y 2,05, un
+poco menos, porque el chunk real mide 211 tokens y la curva está dibujada para
+la longitud media de 96,5. Esa rebaja es exactamente el trabajo de
+<code>b</code>.</figcaption>
+</figure>
+
+<h3>El mando <code>b</code>: normalización por longitud</h3>
+
+<p><strong>Normalizar</strong> es poner cosas de distinto tamaño en una escala
+comparable. Aquí se compara la longitud del chunk (<code>dl</code>) con la media
+(<code>avgdl</code>): si el chunk es más largo que la media, sus apariciones
+valen algo menos; si es más corto, algo más.</p>
+
+<p><code>b</code> decide cuánto se aplica esa corrección: con <code>b=0</code> se
+ignora la longitud, con <code>b=1</code> se corrige del todo. El
+<code>b=0.75</code> habitual es un punto intermedio.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 600 150" role="img" aria-label="Efecto de la longitud del chunk en la puntuación">
+  <text x="4" y="14" class="lbl">misma palabra, mismo tf=2, distinta longitud de chunk (avgdl = 96,5 tokens)</text>
+
+  <rect class="box" x="4" y="26" width="120" height="30" rx="4"></rect>
+  <rect class="soft" x="4" y="26" width="120" height="30" rx="4"></rect>
+  <text x="132" y="45">chunk corto, 48 tokens</text>
+  <text x="440" y="45">aporta MÁS</text>
+
+  <rect class="box" x="4" y="66" width="240" height="30" rx="4"></rect>
+  <rect class="soft" x="4" y="66" width="240" height="30" rx="4"></rect>
+  <text x="252" y="85">chunk medio, 96,5 tokens</text>
+  <text x="440" y="85">referencia</text>
+
+  <rect class="box" x="4" y="106" width="420" height="30" rx="4"></rect>
+  <rect class="soft" x="4" y="106" width="420" height="30" rx="4"></rect>
+  <text x="432" y="125">chunk largo, 211 tokens</text>
+  <text x="520" y="125">aporta MENOS</text>
+</svg>
+<figcaption>Figura 4. Por qué existe <code>b</code>: sin él, el chunk largo
+ganaría solo por contener más texto. El de 211 tokens es nuestro chunk correcto
+real, más del doble de la media.</figcaption>
+</figure>
+
+<h2 id="cuenta">8. La cuenta completa con datos reales</h2>
+
+<p>Aquí está la fórmula aplicada de verdad a los dos chunks de la sección 4, con
+<code>k1=1.5</code>, <code>b=0.75</code>, <code>N=18.942</code> y
+<code>avgdl=96,5</code>. El <strong>chunk correcto</strong> mide 211 tokens, así
+que su denominador de normalización es
+<code>1,5 × (1 - 0,75 + 0,75 × 211/96,5) = 2,835</code>:</p>
+
+<table>
+<tr>
+  <th>Palabra</th><th class="num">tf</th>
+  <th class="num">saturado</th><th class="num">IDF</th><th class="num">aporta</th>
+</tr>
+<tr><td><code>http</code></td><td class="num">2</td><td class="num">1,03</td><td class="num">4,16</td><td class="num">4,30</td></tr>
+<tr><td><code>endpoint</code></td><td class="num">2</td><td class="num">1,03</td><td class="num">5,17</td><td class="num">5,35</td></tr>
+<tr><td><code>dynamically</code></td><td class="num">1</td><td class="num">0,65</td><td class="num">6,31</td><td class="num">4,11</td></tr>
+<tr><td><code>load</code></td><td class="num">2</td><td class="num">1,03</td><td class="num">3,46</td><td class="num">3,58</td></tr>
+<tr><td><code>lora</code></td><td class="num">10</td><td class="num">1,95</td><td class="num">3,42</td><td class="num">6,67</td></tr>
+<tr><td><code>adapter</code></td><td class="num">13</td><td class="num">2,05</td><td class="num">5,47</td><td class="num">11,23</td></tr>
+<tr><td><code>vllm</code></td><td class="num">2</td><td class="num">1,03</td><td class="num">1,56</td><td class="num">1,61</td></tr>
+<tr><td><strong>TOTAL</strong></td><td class="num">32</td><td class="num"></td><td class="num"></td><td class="num"><strong>36,86</strong></td></tr>
+</table>
+
+<p>Y el <strong>señuelo</strong> de 187 tokens, que solo tiene
+<code>lora</code> repetido 23 veces:</p>
+
+<table>
+<tr>
+  <th>Palabra</th><th class="num">tf</th>
+  <th class="num">saturado</th><th class="num">IDF</th><th class="num">aporta</th>
+</tr>
+<tr><td><code>lora</code></td><td class="num">23</td><td class="num">2,25</td><td class="num">3,42</td><td class="num">7,70</td></tr>
+<tr><td>las otras seis</td><td class="num">0</td><td class="num">0,00</td><td class="num">—</td><td class="num">0,00</td></tr>
+<tr><td><strong>TOTAL</strong></td><td class="num">23</td><td class="num"></td><td class="num"></td><td class="num"><strong>7,70</strong></td></tr>
+</table>
+
+<div class="ok">
+<strong>36,86 frente a 7,70.</strong> El chunk correcto gana con claridad, y
+mira <em>por qué</em>: su palabra más valiosa no es la más repetida. Con 13
+apariciones e IDF 5,47, <code>adapter</code> aporta 11,23, casi el doble que
+<code>lora</code> con sus 10. Y el señuelo, que tenía la cuenta más alta de una
+sola palabra (23), se queda en 7,70 porque esa palabra es común y porque la
+saturación no le paga el exceso de repeticiones. Los dos arreglos de BM25
+trabajando a la vez.
+</div>
+
+<h2 id="recall">9. Recall@k e IoU: cómo se nos mide</h2>
+
+<p><strong>Recall@k</strong> (<em>recall</em>, «recuperación» o «exhaustividad»)
+responde a: <strong>de las fuentes correctas, cuántas he traído entre mis k
+primeros resultados</strong>. Si una pregunta tiene 2 fuentes buenas y devuelvo
+5 chunks entre los que están las 2, el recall de esa pregunta es 1,0; si solo
+encuentro una, es 0,5. El recall del dataset es la media de todas las
+preguntas.</p>
+
+<p>Lo que nos exige el enunciado con <code>k=5</code>:</p>
+
+<table>
+<tr><th>Dataset</th><th class="num">Recall@5 mínimo</th><th>Por qué es más fácil o difícil</th></tr>
+<tr><td>Documentación (<code>.md</code>)</td><td class="num">≥ 0,80</td>
+    <td>La pregunta y la respuesta usan el mismo vocabulario en prosa</td></tr>
+<tr><td>Código (<code>.py</code>)</td><td class="num">≥ 0,50</td>
+    <td>La pregunta está en inglés y la respuesta es código: hay menos palabras
+        compartidas</td></tr>
+</table>
+
+<p>Y falta una pieza: ¿cuándo se considera que un chunk mío «es» la fuente
+correcta? No puede ser coincidencia exacta de caracteres, porque nuestros
+cortes nunca caerán justo donde los puso quien hizo el dataset. Se usa el
+<strong>IoU</strong> (<em>Intersection over Union</em>, «intersección sobre
+unión»): se miden los dos rangos de caracteres y se divide lo que comparten
+entre todo lo que ocupan juntos.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 620 160" role="img" aria-label="IoU entre nuestro chunk y la fuente de referencia">
+  <text x="4" y="14" class="lbl">posiciones de carácter dentro de docs/features/lora.md</text>
+
+  <rect class="box" x="60" y="30" width="480" height="26" rx="3"></rect>
+  <rect class="soft" x="60" y="30" width="480" height="26" rx="3"></rect>
+  <text x="4" y="47">nuestro</text>
+  <text x="66" y="24" class="lbl">4695</text>
+  <text x="540" y="24" class="lbl" text-anchor="end">6100</text>
+
+  <rect class="box" x="60" y="66" width="479" height="26" rx="3"></rect>
+  <text x="4" y="83">dataset</text>
+  <text x="66" y="110" class="lbl">4695</text>
+  <text x="539" y="110" class="lbl" text-anchor="end">6098</text>
+
+  <path class="dash" d="M60 30 V 118"></path>
+  <path class="dash" d="M539 66 V 118"></path>
+  <path class="dash" d="M540 30 V 118"></path>
+
+  <path class="arrow" d="M60 128 H 539"></path>
+  <text x="300" y="144" text-anchor="middle" class="lbl">intersección = 1.403 caracteres · unión = 1.405 · IoU = 0,9986</text>
+</svg>
+<figcaption>Figura 5. El caso real: nuestro chunk empieza en el mismo carácter
+que la fuente del dataset y acaba 2 caracteres más allá. IoU = 0,9986, muy por
+encima del umbral de 0,05 que exige la corrección.</figcaption>
+</figure>
+
+<div class="note">
+<strong>El umbral es 0,05, y es generoso a propósito.</strong> Basta con que
+nuestro chunk se solape un 5% con la fuente para que cuente como acierto. Es
+decir: el chunking no tiene que ser perfecto, tiene que <em>contener</em> la
+respuesta. Lo que de verdad decide la nota es el orden que da BM25.
+</div>
+
+<h2 id="proyecto">10. Qué haremos en este proyecto</h2>
+
+<p>Los seis slices de M3, en el orden en que dependen unos de otros:</p>
+
+<table>
+<tr><th>Issue</th><th>Slice</th><th>Concepto de esta página</th></tr>
+<tr><td>#22</td><td>Tokenizar texto</td><td>Sección 2</td></tr>
+<tr><td>#23</td><td>Puntuar chunks con BM25</td><td>Secciones 4 a 8</td></tr>
+<tr><td>#24</td><td>El comando <code>search</code></td><td>Figura 1 completa</td></tr>
+<tr><td>#25</td><td><code>retrieved_sources</code> en <code>search_dataset</code></td><td>Las 200 preguntas</td></tr>
+<tr><td>#26</td><td><code>evaluate</code> con recall@k</td><td>Sección 9</td></tr>
+<tr><td>#27</td><td>Línea base</td><td>El número de partida</td></tr>
+</table>
+
+<p>Y tres reglas del proyecto que tienen que ver con todo esto:</p>
+
+<ul>
+  <li><strong>BM25 lo escribimos nosotros.</strong> SQLite trae BM25 en su
+      extensión FTS5 y el enunciado lo prohíbe en la parte obligatoria: lo que
+      se evalúa es que entiendas la fórmula, no que sepas llamar a una función.</li>
+  <li><strong>Los parámetros no se ajustan contra los datasets con respuestas
+      conocidas.</strong> Se parte de los valores habituales
+      (<code>k1=1.5</code>, <code>b=0.75</code>), se mide la línea base y se
+      explica. Perseguir el número del conjunto de referencia infla la métrica,
+      se derrumba con datos nuevos y no se puede justificar en la defensa.</li>
+  <li><strong>200 preguntas en 90 segundos como máximo.</strong> Eso son 0,45 s
+      por pregunta, y por eso existe el índice invertido: puntuar 18.942 chunks
+      por pregunta desde cero no cabe en ese presupuesto.</li>
+</ul>
+
+<h2 id="glosario">11. Glosario</h2>
+
+<table>
+<tr><th>Término</th><th>Una frase</th></tr>
+<tr><td>búsqueda léxica</td><td>Buscar por las palabras escritas, no por el significado.</td></tr>
+<tr><td>token</td><td>Cada pieza en que se parte un texto para poder compararlo.</td></tr>
+<tr><td>tokenizar</td><td>Partir un texto en tokens aplicando las mismas reglas a la pregunta y al corpus.</td></tr>
+<tr><td>vocabulario</td><td>El conjunto de palabras distintas del corpus; aquí, 55.397.</td></tr>
+<tr><td>stop word</td><td>Palabra muy común (<code>the</code>, <code>is</code>) que casi no distingue documentos.</td></tr>
+<tr><td>índice invertido</td><td>Diccionario de palabra a los documentos donde aparece.</td></tr>
+<tr><td>posting list</td><td>La lista de documentos asociada a una palabra en el índice invertido.</td></tr>
+<tr><td>TF</td><td><em>Term frequency</em>: veces que una palabra aparece en un documento.</td></tr>
+<tr><td>df</td><td><em>Document frequency</em>: en cuántos documentos aparece una palabra.</td></tr>
+<tr><td>IDF</td><td>Peso de una palabra: más alto cuanto en menos documentos aparece.</td></tr>
+<tr><td>TF-IDF</td><td>Puntuación que multiplica las apariciones por el peso de cada palabra.</td></tr>
+<tr><td>BM25</td><td>TF-IDF con dos arreglos: saturación de las repeticiones y corrección por longitud.</td></tr>
+<tr><td>saturación</td><td>Que las repeticiones de más aporten cada vez menos, hasta un techo.</td></tr>
+<tr><td><code>k1</code></td><td>Mando que fija lo rápido que se satura; habitual 1,5.</td></tr>
+<tr><td><code>b</code></td><td>Mando que fija cuánto se corrige por longitud; habitual 0,75.</td></tr>
+<tr><td><code>dl</code> / <code>avgdl</code></td><td>Longitud de un chunk y longitud media de todos; aquí 96,5 tokens.</td></tr>
+<tr><td>normalizar</td><td>Poner cosas de distinto tamaño en una escala comparable.</td></tr>
+<tr><td>recall@k</td><td>Qué proporción de las fuentes correctas aparece entre los k primeros resultados.</td></tr>
+<tr><td>IoU</td><td>Intersección entre unión de dos rangos; mide si dos fragmentos son «el mismo».</td></tr>
+<tr><td>embeddings</td><td>Representar el significado como números, para buscar sin compartir palabras; es el bonus.</td></tr>
+</table>
+
+<h2 id="defensa">12. Preguntas de defensa</h2>
+
+<ol>
+  <li>¿Qué es la búsqueda léxica y qué tipo de pregunta se le escapa?</li>
+  <li>¿Para qué sirve un índice invertido? Da el número de candidatos que te
+      ahorra en nuestro corpus.</li>
+  <li>¿Por qué no basta con contar apariciones? Pon el ejemplo del chunk
+      señuelo.</li>
+  <li>¿Qué diferencia hay entre TF-IDF y BM25? Nombra los dos arreglos y sus
+      dos parámetros.</li>
+  <li>¿Qué hacen <code>k1</code> y <code>b</code>, y qué pasaría con
+      <code>b=0</code>?</li>
+  <li>¿Por qué <code>vllm</code> pesa cuatro veces menos que
+      <code>dynamically</code> en nuestro corpus?</li>
+  <li>¿Cómo se decide que un chunk tuyo «es» la fuente correcta? ¿Qué umbral y
+      por qué es generoso?</li>
+  <li>SQLite trae BM25 en FTS5: ¿por qué lo implementamos nosotros?</li>
+  <li>¿Por qué no ajustas <code>k1</code> y <code>b</code> hasta que suba el
+      recall de los datasets públicos?</li>
+</ol>
+
+<p class="lead">Última actualización: 2026-09-29 · antes del slice #22 de M3.
+Datos medidos sobre <code>data/processed/index.db</code> (18.942 chunks) y
+<code>dataset_docs_public.json</code>.</p>
+
+</body>
+</html>
