@@ -28,7 +28,7 @@ def run_search_dataset(dataset_path: str, k: int, save_directory: str) -> Path:
         ValueError: If ``k`` is not a positive integer, or the dataset
             cannot be loaded, or the results cannot be written.
     """
-    if not isinstance(k, int) or k <= 0:
+    if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
         raise ValueError("k must be a positive integer")
 
     dataset: RagDataset = load_dataset(Path(dataset_path))
