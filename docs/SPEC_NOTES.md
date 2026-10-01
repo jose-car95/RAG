@@ -96,6 +96,35 @@ justificar), **ABIERTO** (pendiente, con límite).
   data/processed/`, construido con la carpeta real de `--index_path` para que
   siga siendo cierto si se cambia la ruta.
 
+## Recuperación con BM25
+
+- **DECISIÓN (2026-10-01, Jose)** — Se usa **BM25**, no TF-IDF, con los valores
+  habituales `k1=1.5` y `b=0.75`, que **no se ajustan** contra los datasets de
+  referencia.
+- **FACT (medido 2026-10-01)** — En los dos chunks reales de la pregunta
+  pública sobre cargar un adaptador LoRA, la ventaja del chunk correcto sobre
+  el señuelo pasa de ×1,78 con TF-IDF a ×4,79 con BM25. TF-IDF no normaliza
+  por longitud, y nuestros chunks van de 0 a 404 tokens.
+- **FACT (medido 2026-10-01)** — Con `k1=0, b=0` esa ventaja subiría a ×8,63
+  **en esa única pregunta**. Es el ejemplo de por qué no se calibra contra
+  respuestas conocidas.
+- **DECISIÓN (2026-10-01, Jose, opción A)** — El índice invertido se
+  construye **en memoria** al arrancar el proceso, no se persiste en SQLite.
+  Medido: 0,88-1,22 s construirlo y 1,75 s las 199 preguntas, unos 3 s de los
+  90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas.
+- **FACT (medido 2026-10-01)** — La unión de las listas de apariciones de una
+  pregunta **no es un filtro fuerte**: mediana de 13.731 candidatos de 18.942
+  (72% del corpus), mínimo 5.014 y máximo 17.014. El índice invertido se gana
+  su sitio porque da `df` ya contado y evita retokenizar el corpus en cada
+  consulta.
+- **INTERPRETACIÓN** — La consulta se recorre sin términos repetidos: se usa
+  la variante simple de BM25, sin ponderar la frecuencia del término *en la
+  consulta*. Los empates se rompen por `chunk_id` ascendente, para que el
+  orden no dependa del recorrido del diccionario.
+- **INTERPRETACIÓN** — Un término ausente del corpus tiene `df` 0 y un IDF
+  alto e inofensivo, porque ningún chunk lo suma. Se resuelve con
+  `postings.get(term, {})`, sin lanzar.
+
 ## Tokenización
 
 - **DECISIÓN (2026-09-29, Jose, opción A)** — Un token es `[a-z0-9_]+` sobre

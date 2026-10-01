@@ -89,6 +89,7 @@ datasets públicos. Ninguno es inventado.</p>
     <li><a href="#tfidf">TF-IDF: el producto de los dos</a></li>
     <li><a href="#bm25">BM25: dos arreglos sobre TF-IDF</a></li>
     <li><a href="#cuenta">La cuenta completa con datos reales</a></li>
+    <li><a href="#mandos">Los dos mandos, en números</a></li>
     <li><a href="#recall">Recall@k e IoU: cómo se nos mide</a></li>
     <li><a href="#proyecto">Qué haremos en este proyecto</a></li>
     <li><a href="#glosario">Glosario</a></li>
@@ -169,7 +170,8 @@ página son refinamientos de esa frase.</p>
 </svg>
 <figcaption>Figura 1. El recorrido completo de una búsqueda. Los 4.972
 candidatos son los chunks reales de nuestro índice que contienen al menos una
-palabra de esa pregunta.</figcaption>
+palabra de <em>esta</em> pregunta; en la media de las 199 preguntas reales son
+bastantes más (ver la sección 3).</figcaption>
 </figure>
 
 <h2 id="tokenizar">2. Tokenizar: de texto a palabras comparables</h2>
@@ -309,13 +311,29 @@ materia prima de IDF.</figcaption>
 
 <ul>
   <li><strong>Con la unión de las listas</strong> (chunks con <em>al menos una</em>
-      palabra) puntúas 4.972 en vez de 18.942: casi cuatro veces menos trabajo.</li>
+      palabra) puntúas 4.972 en vez de 18.942 <em>para esta pregunta de siete
+      palabras</em>.</li>
   <li><strong>Con la intersección</strong> (chunks con <em>todas</em> las
       palabras) queda exactamente <strong>1 chunk</strong>... y resulta ser el
       correcto. Tentador, pero es una trampa: exigir todas las palabras deja
       muchísimas preguntas <em>sin ningún resultado</em>. Por eso se usa la
       unión y se <em>ordena</em> con una puntuación, en vez de filtrar.</li>
 </ul>
+
+<div class="warn">
+<strong>Cuidado con el número de candidatos: 4.972 es esta pregunta, no la
+norma.</strong> Medido sobre las 199 preguntas reales de los datasets públicos,
+la mediana es de <strong>13.731 candidatos</strong> de 18.942, o sea el
+<strong>72% del corpus</strong> (mínimo 5.014, máximo 17.014). Es lógico: una
+pregunta tiene 13,6 palabras de media, y basta con que <em>una</em> aparezca
+para que el chunk entre en la lista.
+<br><br>
+Así que el índice invertido <strong>no se gana el sueldo descartando
+chunks</strong>. Se lo gana por dos otras razones: te da <code>df</code> ya
+contado para IDF, y te ahorra volver a tokenizar 1,8 millones de tokens en cada
+consulta. Medido: construirlo una vez cuesta 1,22 s y responder a las 199
+preguntas con él ya montado, 1,75 s (9 ms por pregunta).
+</div>
 
 <h2 id="tf">4. TF: contar apariciones (y por qué no basta)</h2>
 
@@ -324,7 +342,10 @@ veces que una palabra aparece en un documento. La intuición es razonable: si
 «adapter» sale 13 veces en un fragmento, ese fragmento habla de adaptadores.</p>
 
 <p>Pero contar y ya lleva a errores. Estos dos chunks son reales, de nuestro
-índice, y ambos hablan de LoRA:</p>
+índice, y ambos hablan de LoRA. El segundo es un <strong>señuelo</strong>
+(<em>decoy</em>, el pato de plástico del cazador): un candidato que se parece
+mucho al bueno y no lo es, elegido a propósito para comprobar que la puntuación
+no se deja engañar por la repetición.</p>
 
 <table>
 <tr>
@@ -578,7 +599,107 @@ saturación no le paga el exceso de repeticiones. Los dos arreglos de BM25
 trabajando a la vez.
 </div>
 
-<h2 id="recall">9. Recall@k e IoU: cómo se nos mide</h2>
+<h2 id="mandos">9. Los dos mandos, en números</h2>
+
+<p>La fórmula tiene dos valores que elegimos nosotros, <code>k1</code> y
+<code>b</code>, y conviene saber de dónde salen: <strong>no se deducen de
+ninguna matemática</strong>. Son empíricos. En los años 90, el equipo que
+desarrolló BM25 probó la fórmula contra colecciones de documentos de referencia
+y buscó qué valores funcionaban bien <em>en muchas colecciones distintas</em>.
+El consenso que quedó es <code>k1</code> entre 1,2 y 2,0 y <code>b</code>
+alrededor de 0,75. Tanto, que <strong>Lucene y Elasticsearch</strong>, los dos
+motores de búsqueda más usados, vienen de fábrica con <code>k1=1.2</code> y
+<code>b=0.75</code>. Nuestro 1,5 está dentro del rango habitual.</p>
+
+<h3><code>k1</code>: cuánto pagan las repeticiones</h3>
+
+<p>Aportación de una palabra según las veces que aparece, en un chunk de
+longitud media:</p>
+
+<table>
+<tr><th class="num">tf</th><th class="num">k1=0</th><th class="num">k1=0,5</th>
+    <th class="num">k1=1,2</th><th class="num">k1=1,5</th><th class="num">k1=3</th>
+    <th class="num">k1=10</th></tr>
+<tr><td class="num">1</td><td class="num">1,00</td><td class="num">1,00</td><td class="num">1,00</td><td class="num">1,00</td><td class="num">1,00</td><td class="num">1,00</td></tr>
+<tr><td class="num">2</td><td class="num">1,00</td><td class="num">1,20</td><td class="num">1,38</td><td class="num">1,43</td><td class="num">1,60</td><td class="num">1,83</td></tr>
+<tr><td class="num">5</td><td class="num">1,00</td><td class="num">1,36</td><td class="num">1,77</td><td class="num">1,92</td><td class="num">2,50</td><td class="num">3,67</td></tr>
+<tr><td class="num">10</td><td class="num">1,00</td><td class="num">1,43</td><td class="num">1,96</td><td class="num">2,17</td><td class="num">3,08</td><td class="num">5,50</td></tr>
+<tr><td class="num">23</td><td class="num">1,00</td><td class="num">1,47</td><td class="num">2,09</td><td class="num">2,35</td><td class="num">3,54</td><td class="num">7,67</td></tr>
+<tr><td><strong>techo</strong></td><td class="num">1</td><td class="num">1,5</td><td class="num">2,2</td><td class="num">2,5</td><td class="num">4</td><td class="num">11</td></tr>
+</table>
+
+<p>Lee las dos columnas extremas y tienes la idea entera. Con
+<strong><code>k1 = 0</code></strong> toda la columna vale 1,00: da igual que la
+palabra aparezca una vez o veintitrés, <strong>solo cuenta si está o no
+está</strong>. Con <strong><code>k1 = 10</code></strong> las repeticiones pagan
+mucho y la curva se acerca a contar linealmente. Y el techo es siempre
+<code>k1 + 1</code>, así que <code>k1</code> se explica en una frase:
+<em>es la altura del techo, y cuanto más alto, más tarda una palabra en
+saturarse</em>.</p>
+
+<h3><code>b</code>: cuánto castiga ser largo</h3>
+
+<p>La misma palabra con <code>tf=2</code> y <code>k1=1,5</code>; lo único que
+cambia es la longitud del chunk (la media es 96,5 tokens):</p>
+
+<table>
+<tr><th class="num">dl</th><th class="num">b=0</th><th class="num">b=0,25</th>
+    <th class="num">b=0,5</th><th class="num">b=0,75</th><th class="num">b=1</th></tr>
+<tr><td class="num">10</td><td class="num">1,43</td><td class="num">1,58</td><td class="num">1,77</td><td class="num">2,01</td><td class="num">2,32</td></tr>
+<tr><td class="num">48</td><td class="num">1,43</td><td class="num">1,51</td><td class="num">1,60</td><td class="num">1,70</td><td class="num">1,82</td></tr>
+<tr><td class="num">96</td><td class="num">1,43</td><td class="num">1,43</td><td class="num">1,43</td><td class="num">1,43</td><td class="num">1,43</td></tr>
+<tr><td class="num">211</td><td class="num">1,43</td><td class="num">1,27</td><td class="num">1,14</td><td class="num">1,03</td><td class="num">0,95</td></tr>
+<tr><td class="num">404</td><td class="num">1,43</td><td class="num">1,06</td><td class="num">0,85</td><td class="num">0,71</td><td class="num">0,60</td></tr>
+</table>
+
+<p>Con <strong><code>b = 0</code></strong> la columna es <strong>plana</strong>:
+la longitud no influye en nada y la fórmula se queda en TF-IDF con saturación.
+Con <strong><code>b = 1</code></strong> el castigo es máximo: un chunk de 404
+tokens puntúa 0,60 donde uno de 10 puntúa 2,32, casi cuatro veces menos por la
+misma palabra. Y fíjate en que <strong>la fila de 96 tokens es idéntica en todas
+las columnas</strong>: es la longitud media, donde <code>dl/avgdl = 1</code> y
+la corrección se anula sola. <code>b</code> solo mueve a los que se desvían de
+la media.</p>
+
+<h3>Qué cambia en el ranking de verdad</h3>
+
+<p>La misma pareja de chunks de la sección 8, con distintos ajustes:</p>
+
+<table>
+<tr><th class="num">k1</th><th class="num">b</th><th class="num">correcto</th>
+    <th class="num">señuelo</th><th class="num">ventaja</th><th>gana</th></tr>
+<tr><td class="num">1,5</td><td class="num">0,75</td><td class="num">36,86</td><td class="num">7,70</td><td class="num">4,78x</td><td>correcto</td></tr>
+<tr><td class="num">1,2</td><td class="num">0,75</td><td class="num">35,43</td><td class="num">6,92</td><td class="num">5,12x</td><td>correcto</td></tr>
+<tr><td class="num">0,5</td><td class="num">0,75</td><td class="num">31,83</td><td class="num">4,95</td><td class="num">6,43x</td><td>correcto</td></tr>
+<tr><td class="num">3,0</td><td class="num">0,75</td><td class="num">42,74</td><td class="num">11,20</td><td class="num">3,81x</td><td>correcto</td></tr>
+<tr><td class="num">10,0</td><td class="num">0,75</td><td class="num">56,16</td><td class="num">21,64</td><td class="num">2,60x</td><td>correcto</td></tr>
+<tr><td class="num">1,5</td><td class="num">0,0</td><td class="num">46,52</td><td class="num">8,03</td><td class="num">5,79x</td><td>correcto</td></tr>
+<tr><td class="num">1,5</td><td class="num">1,0</td><td class="num">34,65</td><td class="num">7,60</td><td class="num">4,56x</td><td>correcto</td></tr>
+<tr><td class="num">0,0</td><td class="num">0,0</td><td class="num">29,56</td><td class="num">3,42</td><td class="num">8,63x</td><td>correcto</td></tr>
+</table>
+
+<ol>
+  <li><strong>El chunk correcto gana en todas las combinaciones.</strong> Estos
+      parámetros afinan, no deciden. Lo que decide es IDF.</li>
+  <li><strong>Subir <code>k1</code> a 10 le hace un favor al señuelo</strong>:
+      la ventaja baja de 4,78x a 2,60x, porque pagas más sus 23 repeticiones.
+      Cuanto más premias repetir, más se acerca el que solo sabe repetir.</li>
+  <li><strong>Los valores absolutos no significan nada.</strong> BM25 no tiene
+      escala: un 56 no es un «mejor resultado» que un 36, es el mismo chunk con
+      otros ajustes. Solo importa el <em>orden</em>.</li>
+</ol>
+
+<div class="warn">
+<strong>La trampa que esta tabla te tiende.</strong> La última fila
+(<code>k1=0</code>, <code>b=0</code>) da la mayor ventaja de todas: 8,63x. Si de
+ahí concluyeras «pues usemos 0 y 0», estarías ajustando los parámetros contra
+<em>una</em> pregunta cuya respuesta ya conoces. Subiría el número de esa
+pregunta y se desplomaría con las demás, y en la defensa no podrías justificar
+la elección. Los valores se quedan en los de la literatura, y si algún día hay
+que calibrar, se calibra contra un conjunto propio y se explica.
+</div>
+
+<h2 id="recall">10. Recall@k e IoU: cómo se nos mide</h2>
 
 <p><strong>Recall@k</strong> (<em>recall</em>, «recuperación» o «exhaustividad»)
 responde a: <strong>de las fuentes correctas, cuántas he traído entre mis k
@@ -639,7 +760,7 @@ decir: el chunking no tiene que ser perfecto, tiene que <em>contener</em> la
 respuesta. Lo que de verdad decide la nota es el orden que da BM25.
 </div>
 
-<h2 id="proyecto">10. Qué haremos en este proyecto</h2>
+<h2 id="proyecto">11. Qué haremos en este proyecto</h2>
 
 <p>Los seis slices de M3, en el orden en que dependen unos de otros:</p>
 
@@ -649,7 +770,7 @@ respuesta. Lo que de verdad decide la nota es el orden que da BM25.
 <tr><td>#23</td><td>Puntuar chunks con BM25</td><td>Secciones 4 a 8</td></tr>
 <tr><td>#24</td><td>El comando <code>search</code></td><td>Figura 1 completa</td></tr>
 <tr><td>#25</td><td><code>retrieved_sources</code> en <code>search_dataset</code></td><td>Las 200 preguntas</td></tr>
-<tr><td>#26</td><td><code>evaluate</code> con recall@k</td><td>Sección 9</td></tr>
+<tr><td>#26</td><td><code>evaluate</code> con recall@k</td><td>Sección 10</td></tr>
 <tr><td>#27</td><td>Línea base</td><td>El número de partida</td></tr>
 </table>
 
@@ -669,7 +790,7 @@ respuesta. Lo que de verdad decide la nota es el orden que da BM25.
       por pregunta desde cero no cabe en ese presupuesto.</li>
 </ul>
 
-<h2 id="glosario">11. Glosario</h2>
+<h2 id="glosario">12. Glosario</h2>
 
 <table>
 <tr><th>Término</th><th>Una frase</th></tr>
@@ -692,10 +813,11 @@ respuesta. Lo que de verdad decide la nota es el orden que da BM25.
 <tr><td>normalizar</td><td>Poner cosas de distinto tamaño en una escala comparable.</td></tr>
 <tr><td>recall@k</td><td>Qué proporción de las fuentes correctas aparece entre los k primeros resultados.</td></tr>
 <tr><td>IoU</td><td>Intersección entre unión de dos rangos; mide si dos fragmentos son «el mismo».</td></tr>
+<tr><td>señuelo (<em>decoy</em>)</td><td>Candidato que parece la respuesta correcta y no lo es, usado para comprobar que el sistema no se engaña.</td></tr>
 <tr><td>embeddings</td><td>Representar el significado como números, para buscar sin compartir palabras; es el bonus.</td></tr>
 </table>
 
-<h2 id="defensa">12. Preguntas de defensa</h2>
+<h2 id="defensa">13. Preguntas de defensa</h2>
 
 <ol>
   <li>¿Qué es la búsqueda léxica y qué tipo de pregunta se le escapa?</li>
@@ -716,7 +838,7 @@ respuesta. Lo que de verdad decide la nota es el orden que da BM25.
       recall de los datasets públicos?</li>
 </ol>
 
-<p class="lead">Última actualización: 2026-09-29 · antes del slice #22 de M3.
+<p class="lead">Última actualización: 2026-09-29 · slice #23 de M3.
 Datos medidos sobre <code>data/processed/index.db</code> (18.942 chunks) y
 <code>dataset_docs_public.json</code>.</p>
 
