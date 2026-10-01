@@ -10,14 +10,20 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slices cerrados en M3:** ninguno todavía.
-- **Slice en revisión:** #22 "Tokenize text for lexical search". Nace
-  `src/domain/tokenizer.py` con `tokenize(text) -> list[str]`: minúsculas y
-  el patrón `[a-z0-9_]+` compilado en la constante de módulo
-  `WORD_PATTERN`. Devuelve una lista, no un conjunto, porque BM25 necesita
-  contar repeticiones.
+- **Slices cerrados en M3:** #22 tokenización.
+- **Slice en revisión:** #23 "Rank chunks with BM25". Nace
+  `src/domain/bm25.py` con tres piezas: `Bm25Index` (un `NamedTuple` con
+  `postings`, `lengths`, `average_length` y `document_count`), `build_index`
+  (recorre el corpus una sola vez, porque puede llegar como generador) e
+  `idf` y `rank` (la fórmula con `K1=1.5` y `B=0.75`, orden descendente y
+  desempate por `chunk_id` ascendente). El índice invertido vive en memoria,
+  no en SQLite.
+- **Verificado (2026-10-01, slice #23):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 26 source files`.
+  - `make test` → `131 passed` (18 de BM25).
+  - **Primera búsqueda real del proyecto.** Pregunta de `dataset_docs_public.json` («What HTTP endpoint is used to dynamically load a LoRA adapter in vLLM?»): el chunk correcto sale **en posición 1** con 41,27 puntos e **IoU 0,9986** contra la fuente de referencia; los puestos 3 y 5 son sus chunks vecinos del mismo fichero. Índice construido en 0,88 s y búsqueda en **22 ms**, así que 200 preguntas serían unos 5 s de los 90 permitidos.
+  - **Reparto de la puntuación del chunk ganador:** `adapter` 11,23 (df 79, tf 13), `lora` 6,67, `endpoint` 5,35, `http` 4,30, `dynamically` 4,11 (el término más raro, pero con tf 1), `a` 2,77 (tf 12 y df 4.818). Prueba medida de que hacen falta las dos cosas, y de por qué no se mantiene una lista de stop words.
 - **Verificado (2026-09-29, slice #22):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 24 source files`.
   - `make test` → `113 passed` (10 de tokenización).
   - **Sobre datos reales:** las 199 preguntas de referencia dan 2.714 tokens (media 13,6 por pregunta, mínimo 6, máximo 35, ninguna con 0 tokens); los 18.942 chunks dan 1.827.646 tokens y un vocabulario de 55.397 palabras. Los identificadores `lm_eval`, `mm_kwargs`, `qk_max`, `int8` y `fp8_min` sobreviven enteros.
   - **Coincide con la página de conceptos:** los mismos 55.397 y 1.827.646 que se midieron antes de existir el tokenizador.
@@ -31,8 +37,10 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** slice #23 "Rank chunks with BM25", que ya
-  puede consumir `tokenize`.
+- **Siguiente paso propuesto:** slice #24 "Implement the search command",
+  el primero que hace visible BM25 por terminal. Después #25
+  (`retrieved_sources` reales), #26 (`evaluate` con recall@k) y #27 (línea
+  base). Con esos cuatro, M3 cierra y el RAG ya recupera y se mide.
 
 ## Decisiones
 
@@ -77,6 +85,11 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
 | 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
+| 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
+| 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
+| 2026-10-01 | La consulta se recorre sin repetidos (`set`) y el empate se rompe por `chunk_id` ascendente | Existe una variante de BM25 que pondera cuántas veces aparece un término **en la consulta**; usamos la versión simple, que suma una vez por término distinto. Sin desempate explícito, el orden de dos chunks empatados dependería del recorrido del diccionario y los resultados cambiarían entre ejecuciones |
+| 2026-10-01 | `K1=1.5` y `B=0.75`, y no se tocan | Son los valores empíricos de la literatura (Lucene y Elasticsearch traen 1.2 y 0.75). Medido: con `k1=0, b=0` la ventaja del chunk correcto sube a ×8,63 en **una** pregunta, que es exactamente la trampa de ajustar contra respuestas conocidas. El comentario junto a las constantes lo deja escrito |
 | 2026-09-29 | Un token es `[a-z0-9_]+` sobre el texto en minúsculas (opción A), no `\w+` | Medido: `\w+` solo añade 40 palabras de 55.397 (0,07%), todas CJK o acentuadas y de ficheros de prueba de vLLM; la única pregunta no ASCII usa emojis, que los dos patrones descartan. El guion bajo y los dígitos se quedan dentro del token porque 79 de las 199 preguntas preguntan por identificadores (`lm_eval`, `mm_kwargs`, `qk_max`) y `int8`/`fp8` son nombres de técnicas. Coste conocido: `israéliennes` se parte en dos |
 | 2026-09-29 | No se quitan stop words ni se hace stemming | IDF ya reduce a casi cero las palabras comunes; una lista de palabras prohibidas es una cosa más que mantener y justificar. El stemming es experimento medible de M4 |
 | 2026-09-29 | Corrección: compilar el patrón fuera de la función NO es una mejora de rendimiento relevante | Medido: 1,243 s frente a 1,323 s en 200.000 llamadas (×1,06), porque el módulo `re` ya cachea los patrones compilados. El motivo real de la constante es la intención (un único sitio que define qué es una palabra). No rompe la regla del estado global mutable porque un patrón compilado es inmutable (`readonly attribute`) y `findall` devuelve una lista nueva en cada llamada |
@@ -156,6 +169,12 @@ M3 antes de optimizar nada.
   que un patrón compilado es inmutable (`readonly attribute`), además de que
   `findall` devuelve una lista nueva cada vez. Repasar también que el ahorro
   por compilar fuera es solo del 6%.
+- **Paso 8 del slice #23 (2026-10-01): 2 y medio de 3.** Bien el `set` de la
+  consulta, el IDF calculado fuera del bucle interior, y qué término aportó
+  más (`adapter`, raro y repetido). **A medias** la del `sorted`: confundió
+  cuál es `pair[0]` (el id) y cuál `pair[1]` (la puntuación), y faltaban las
+  dos consecuencias: sin el signo menos salen los peores primero, y sin el
+  desempate explícito el orden depende del recorrido del diccionario.
 - **Pulido M6:** rechazar un `--save_directory` que parezca un fichero
   (p. ej. termina en `.json`); hoy crea una carpeta con ese nombre.
 
