@@ -109,8 +109,36 @@ def test_search_dataset_reports_missing_dataset() -> None:
     )
 
 
+def make_tiny_index(tmp_path: Path) -> Path:
+    """Build an index of its own, so the test needs no local state.
+
+    The real ``data/processed/index.db`` is generated and never committed, so
+    a test that relied on it passed here and failed in CI.
+
+    Args:
+        tmp_path: Temporary folder provided by pytest.
+
+    Returns:
+        Path of the index.
+    """
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "notes.md").write_text(
+        "# Endpoints\nThe http endpoint loads a lora adapter.\n",
+        encoding="utf-8",
+    )
+    index_path = tmp_path / "index.db"
+    run_cli(
+        "index", "--raw_directory", str(corpus),
+        "--index_path", str(index_path),
+    )
+    return index_path
+
+
 def test_search_dataset_writes_results_file(tmp_path: Path) -> None:
     """The results file is written and its path is reported."""
+    index_path = make_tiny_index(tmp_path)
+
     result = run_cli(
         "search_dataset",
         "--dataset_path",
@@ -119,6 +147,8 @@ def test_search_dataset_writes_results_file(tmp_path: Path) -> None:
         "10",
         "--save_directory",
         str(tmp_path),
+        "--index_path",
+        str(index_path),
     )
 
     output_path = tmp_path / "dataset_docs_public.json"
@@ -129,7 +159,7 @@ def test_search_dataset_writes_results_file(tmp_path: Path) -> None:
     assert output_path.is_file()
 
 
-def test_search_dataset_uses_default_save_directory() -> None:
+def test_search_dataset_uses_default_save_directory(tmp_path: Path) -> None:
     """Without ``--save_directory`` the file goes to the default folder."""
     output_path = (
         REPO_ROOT / "data/output/search_results/dataset_code_public.json"
@@ -142,6 +172,8 @@ def test_search_dataset_uses_default_save_directory() -> None:
         "data/datasets/UnansweredQuestions/dataset_code_public.json",
         "--k",
         "10",
+        "--index_path",
+        str(make_tiny_index(tmp_path)),
     )
 
     assert result.returncode == 0, result.stderr
