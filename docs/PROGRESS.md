@@ -10,18 +10,23 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slices cerrados en M3:** #22 tokenización; #23 BM25.
-- **Slice en revisión:** #24 "Implement the search command". **Primer
-  comando de recuperación usable por terminal.** Nace `load_chunks` en
-  `src/adapters/sqlite_index.py` (comprueba el fichero antes de conectar,
-  porque `sqlite3.connect` lo crearía, y materializa las filas en una lista
-  antes de cerrar la conexión) y el caso de uso
-  `src/application/search.py` (`run_search`: valida `k` y la query, carga,
-  construye el índice, llama a `rank` y devuelve
-  `(MinimalSource, puntuación)`). La CLI solo imprime.
-  Además, **el material de estudio pasa a un único fichero con pestañas**:
-  `docs/conceptos/index.html` sustituye a las dos páginas anteriores y
-  añade la pestaña «El pipeline de búsqueda».
+- **Slices cerrados en M3:** #22 tokenización; #23 BM25; #24 comando `search`.
+- **Slice en revisión:** #25 "Fill retrieved_sources in search_dataset".
+  **El RAG ya recupera de verdad para las 200 preguntas.** Nace
+  `src/application/retrieval.py` con lo que comparten los dos casos de uso
+  (`CorpusIndex`, `load_index`, `search_index` y `validate_query_and_k`), y
+  `search.py` se queda solo con `run_search`, así que **ningún caso de uso
+  depende de otro**. `run_search_dataset` carga el índice **una vez** antes
+  del bucle y busca cada pregunta con `search_index`, con barra de tqdm.
+- **Verificado (2026-10-06, slice #25):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 29 source files`.
+  - `make test` → `153 passed`.
+  - **Las 199 preguntas públicas: 3,79 s (docs) + 4,07 s (code) = 7,86 s** de los 90 permitidos, con 115 MB de memoria. Reconstruir el índice por pregunta habría costado 184 s: medido antes de implementar y es el motivo del refactor.
+  - **PRIMERA MEDICIÓN DE RECALL con la moulinette local** (`--k 5`):
+    - **docs: Recall@5 = 0,840** (umbral ≥ 0,80) → **pasa**, con 4 puntos de margen. Recall@1 0,650; Recall@3 0,790.
+    - **code: Recall@5 = 0,485** (umbral ≥ 0,50) → **falla por 0,015**, que es una pregunta y media de 99. Recall@1 0,263; Recall@3 0,424.
+    - `recall@10` sale idéntico a `recall@5` porque se generaron 5 fuentes por pregunta (`--k 5`), no porque el método tenga techo ahí.
+  - **Objetivo de M4, ya concreto:** subir el recall de código 1,5 puntos mejorando **el método** (trocear clases de Python por métodos, fusionar secciones pequeñas de Markdown) y midiendo antes y después. **No** ajustando `k1` y `b` contra estos datasets, que es lo que prohíbe el contrato.
 - **Verificado (2026-10-06, slice #24):**
   - `make lint` → flake8 sin salida; mypy `Success: no issues found in 28 source files`.
   - `make test` → `149 passed` (13 de `run_search`, 2 de `load_chunks`, 3 de la CLI).
@@ -45,10 +50,17 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** slice #25 "Fill retrieved_sources in
-  search_dataset", que reutiliza `run_search` para las 200 preguntas.
-  Después #26 (`evaluate` con recall@k) y #27 (línea base). Con esos tres,
-  M3 cierra y el RAG ya recupera **y se mide**.
+- **Siguiente paso propuesto:** slice #26 "Report recall@k with evaluate",
+  el último comando obligatorio de M3 que no existe. Después #27 (registrar
+  la línea base con los scripts de examen) y M3 cierra.
+- **Pendiente de una palabra (2026-10-06):** en
+  `src/application/search_dataset.py:54` el `tqdm` dice `desc="Indexing"`
+  cuando está buscando; debe decir `"Searching"`. Lo escribe Jose.
+- **Pendiente apuntado (2026-10-06):** la ruta por defecto del índice está
+  ahora en **tres** sitios (`cli.py` en `index`, `search` y
+  `search_dataset`), que era el disparador acordado para sacarla a una
+  constante compartida. No se hizo en este slice para no mezclar dos cosas en
+  el mismo diff.
 
 ## Decisiones
 
@@ -93,6 +105,10 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
 | 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-10-06 | Lo compartido por los dos casos de uso vive en `src/application/retrieval.py`; `search.py` se queda solo con `run_search` | Pregunta de Jose: un caso de uso no debe depender de otro. `load_index` y `search_index` no son casos de uso (nadie los ejecuta desde la terminal), son pasos compartidos, y con módulo propio los dos casos de uso dependen de él y no entre ellos. Ningún ciclo posible |
+| 2026-10-06 | `validate_query_and_k` es una función compartida, llamada desde `run_search` (antes de cargar el índice) y desde `search_index` | El refactor movió las guardas detrás de `load_index` y un test cazó la regresión: una query vacía respondía por el índice en vez de por la query. Una implementación, dos porteros; `run_search` falla antes de gastar un segundo |
+| 2026-10-06 | El índice se carga una vez por dataset, no por pregunta | Medido: 0,92 s por llamada × 200 = 184 s frente a los 90 s permitidos. Con una sola carga, 7,86 s. Hay un test (`test_the_index_is_built_only_once`) que cuenta las llamadas, para que nadie lo "simplifique" |
+| 2026-10-06 | **Verificado en el enunciado: el proyecto NO exige orientación a objetos** | Se revisaron los 23 «must» del PDF y todas las menciones de clases; detalle en `docs/SPEC_NOTES.md`. Duda de Jose por un proyecto anterior que sí lo exigía |
 | 2026-10-06 | Una query vacía o con solo espacios es un error (`ERROR: query must not be empty`, salida 1), no un resultado vacío (opción A1) | Cierra el ABIERTO de `docs/SPEC_NOTES.md`. Mismo trato que `k`: una entrada sin sentido se rechaza en la frontera. `search "asdfghjkl"` es otro caso, una búsqueda legítima sin resultados, y sale con 0 |
 | 2026-10-06 | `search` imprime posición, puntuación, `file_path` y rango; sin fragmento del texto (opción B1) | El `file_path` y el rango son lo que exige el enunciado y lo que compara el corrector; el texto añadiría ruido y decisiones nuevas (cuántos caracteres, saltos de línea). Añadirlo es un cambio de dos líneas en M6 si ayuda a la demo |
 | 2026-10-06 | Capas separadas: `load_chunks` en el adaptador, `run_search` en aplicación, la CLI solo imprime (opción C1) | `search_dataset` (#25) necesita el mismo pipeline, así que meterlo en la CLI lo habría duplicado de inmediato |
@@ -134,6 +150,9 @@ M3 antes de optimizar nada.
 | Fecha | Métrica | Valor | Umbral | Comando que lo reproduce |
 |---|---|---|---|---|
 | 2026-09-23 | Tiempo de indexado | **3,65 s** (1.969 ficheros, 18.942 chunks) | ≤ 300 s | `uv run python -m src index` |
+| 2026-10-06 | **Recall@5 docs (públicos)** | **0,840** | ≥ 0,80 | `search_dataset --k 5` + `./moulinette-ubuntu evaluate_student_search_results` |
+| 2026-10-06 | **Recall@5 code (públicos)** | **0,485** | ≥ 0,50 | ídem; **falla por 0,015**, objetivo de M4 |
+| 2026-10-06 | 199 preguntas (docs + code) | **7,86 s** (3,79 + 4,07), 115 MB | ≤ 90 s | `uv run python -m src search_dataset --dataset_path ... --k 5` |
 | 2026-10-06 | `search` de una consulta | **1,12 s** (1,10-1,15 s en tres consultas seguidas), 115 MB | — | `uv run python -m src search "How to configure OpenAI server?" --k 5` |
 | 2026-09-23 | Tamaño del índice | 25 MB (26.075.136 bytes), 0 páginas libres | — | `uv run python -m src index` + `ls -l data/processed/index.db` |
 | — | 200 preguntas (docs + code) | — | ≤ 90 s | pendiente (M3) |
@@ -198,6 +217,11 @@ M3 antes de optimizar nada.
   desarrolladas en la pestaña «El pipeline de búsqueda» de
   `docs/conceptos/index.html`, con diagrama de capas. **Hay que ensayarlas en
   voz alta**: es el recorrido que más probablemente le pidan en la defensa.
+- **Paso 8 del slice #25 (2026-10-06): PENDIENTE.** Jose cerró la sesión para
+  cambiar de chat. Preguntas a cobrar: por qué el índice se carga una vez y
+  qué test lo protege; por qué `load_index` y `search_index` están en
+  `retrieval.py` y no en `search.py`; y por qué `validate_query_and_k` se
+  llama dos veces sin que eso sea duplicación.
 - **Pulido M6:** rechazar un `--save_directory` que parezca un fichero
   (p. ej. termina en `.json`); hoy crea una carpeta con ese nombre.
 
