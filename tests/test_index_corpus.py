@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from src.adapters.sqlite_index import save_chunks
+from src.adapters.sqlite_index import load_chunks, save_chunks
 from src.application.index_corpus import run_index
 
 PY_FILE = (
@@ -228,3 +228,34 @@ def test_chunks_respect_a_smaller_size(tmp_path: Path) -> None:
 
     widths = [last - first for _, first, last, _ in read_rows(index_path)]
     assert widths and max(widths) <= 20
+
+
+def test_stored_chunks_are_read_back_with_their_location() -> None:
+    """``load_chunks`` returns what ``save_chunks`` wrote, ids included."""
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as folder:
+        index_path = str(Path(folder) / "index.db")
+        chunks = [
+            ("data/raw/a.py", 0, 5, "alpha"),
+            ("data/raw/b.md", 5, 9, "beta"),
+        ]
+        save_chunks(chunks, index_path)
+
+        rows = load_chunks(index_path)
+
+    stored = [(path, first, last, text)
+              for _, path, first, last, text in rows]
+    assert stored == chunks
+    assert [chunk_id for chunk_id, *_ in rows] == [1, 2]
+
+
+def test_loading_a_missing_index_creates_no_file(tmp_path: Path) -> None:
+    """A missing index is reported without leaving an empty database."""
+    index_path = tmp_path / "nope" / "index.db"
+    message = f"^index not found: {index_path}; run index first$"
+
+    with pytest.raises(ValueError, match=message):
+        load_chunks(str(index_path))
+
+    assert not index_path.exists()

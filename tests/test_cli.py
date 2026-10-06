@@ -57,7 +57,6 @@ def test_help_lists_required_commands() -> None:
 @pytest.mark.parametrize(
     "args",
     [
-        ("search", "What is vLLM?", "--k", "10"),
         ("answer", "What is vLLM?", "--k", "10"),
         (
             "answer_dataset",
@@ -170,6 +169,72 @@ def test_index_reports_missing_corpus_folder() -> None:
 
     assert result.returncode == 1
     assert result.stderr == "ERROR: corpus folder not found: /nonexistent\n"
+
+
+def test_search_prints_the_ranked_sources(tmp_path: Path) -> None:
+    """``search`` prints one numbered line per source, best first."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "b.md").write_text(
+        "# Endpoints\nThe http endpoint loads a lora adapter.\n",
+        encoding="utf-8",
+    )
+    index_path = tmp_path / "index.db"
+    run_cli(
+        "index", "--raw_directory", str(corpus),
+        "--index_path", str(index_path),
+    )
+
+    result = run_cli(
+        "search", "http endpoint", "--k", "5",
+        "--index_path", str(index_path),
+    )
+
+    assert result.returncode == 0, result.stderr
+    first_line = result.stdout.splitlines()[0]
+    assert first_line.startswith("1. ")
+    assert str(corpus / "b.md") in first_line
+    assert "[0:" in first_line
+
+
+def test_search_rejects_an_empty_query(tmp_path: Path) -> None:
+    """``search ""`` is a user error, not an empty result."""
+    result = run_cli("search", "", "--index_path", str(tmp_path / "index.db"))
+
+    assert result.returncode == 1
+    assert result.stderr == "ERROR: query must not be empty\n"
+
+
+def test_search_reports_a_missing_index(tmp_path: Path) -> None:
+    """Searching before indexing says what to run."""
+    index_path = tmp_path / "index.db"
+
+    result = run_cli("search", "lora", "--index_path", str(index_path))
+
+    assert result.returncode == 1
+    assert result.stderr == (
+        f"ERROR: index not found: {index_path}; run index first\n"
+    )
+    assert not index_path.exists()
+
+
+def test_search_says_when_nothing_is_found(tmp_path: Path) -> None:
+    """A query with no match prints a message instead of nothing."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "b.md").write_text("# Endpoints\n", encoding="utf-8")
+    index_path = tmp_path / "index.db"
+    run_cli(
+        "index", "--raw_directory", str(corpus),
+        "--index_path", str(index_path),
+    )
+
+    result = run_cli(
+        "search", "kubernetes", "--index_path", str(index_path)
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == "No sources found.\n"
 
 
 def test_index_rejects_an_invalid_max_chunk_size(tmp_path: Path) -> None:
