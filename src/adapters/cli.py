@@ -10,6 +10,7 @@ from pathlib import Path
 import fire
 
 from src.application.index_corpus import run_index, MAX_CHUNK_SIZE
+from src.application.search import run_search
 from src.application.search_dataset import run_search_dataset
 
 
@@ -46,14 +47,33 @@ class RagCli:
             f"{Path(index_path).parent}/"
         )
 
-    def search(self, query: str, k: int = 10) -> None:
-        """Return the top-k sources for a single question.
+    def search(
+        self,
+        query: str,
+        k: int = 10,
+        index_path: str = "data/processed/index.db"
+    ) -> None:
+        """Print the best sources for a single question, best first.
+
+        Each line carries the score, the ``file_path`` as it appears in the
+        corpus and the character range, which is what identifies a source.
 
         Args:
-            query: Question to search for.
-            k: Number of sources to return.
+            query: Question to search for; it cannot be empty.
+            k: Maximum number of sources to print.
+            index_path: SQLite index to search, built by ``index``.
         """
-        print("search: not implemented yet")
+        results = run_search(query, k, index_path)
+        if not results:
+            print("No sources found.")
+        for position, (source, score) in enumerate(results, start=1):
+            print(
+                f"{position}.  "
+                f"{score:.2f}  "
+                f"{source.file_path}  "
+                f"[{source.first_character_index}:"
+                f"{source.last_character_index}]"
+            )
 
     def search_dataset(
         self,
