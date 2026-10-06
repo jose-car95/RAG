@@ -1,34 +1,31 @@
-from src.adapters.sqlite_index import load_chunks
-from src.domain.tokenizer import tokenize
-from src.domain.bm25 import build_index, rank
+"""Use case: search one query against the stored index."""
+
+from src.application.retrieval import (
+    load_index,
+    search_index,
+    validate_query_and_k
+)
 from src.domain.models import MinimalSource
 
 
 def run_search(
     query: str, k: int, index_path: str
 ) -> list[tuple[MinimalSource, float]]:
-    if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
-        raise ValueError("k must be a positive integer")
-    clean_query = query.strip()
-    if not clean_query:
-        raise ValueError("query must not be empty")
-    rows = load_chunks(index_path)
-    index = build_index(
-        (chunk_id, tokenize(text)) for chunk_id, _, _, _, text in rows
-    )
-    locations = {
-        chunk_id: (file_path, first_index, last_index)
-        for chunk_id, file_path, first_index, last_index, _ in rows
-    }
+    """Search one query, loading the index for this call alone.
 
-    results = []
-    for chunk_id, score in rank(index, tokenize(clean_query), k):
-        file_path, first_index, last_index = locations[chunk_id]
-        source = MinimalSource(
-            file_path=file_path,
-            first_character_index=first_index,
-            last_character_index=last_index
-        )
-        results.append((source, score))
+    Args:
+        query: Question to search for.
+        k: Maximum number of sources.
+        index_path: Path of the SQLite index.
 
-    return results
+    Returns:
+        Pairs of source and score, best first.
+
+    Raises:
+        ValueError: If the arguments are invalid or the index cannot be read.
+    """
+    # Checked before loading, because building the index costs about a
+    # second and a bad query or k does not deserve that work.
+    validate_query_and_k(query, k)
+    corpus = load_index(index_path)
+    return search_index(corpus, query, k)
