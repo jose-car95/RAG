@@ -167,10 +167,14 @@ uno en uno, cuando llega su slice, nunca todos de golpe:
   `docs/*.pdf`, `docs/README.md`, `docs/eval/`, `docs/contexto_ia_new_proyect.txt`
   y el corpus `data/raw/vllm-0.10.1/`.
 - **Interpretaciones de zonas grises:** `docs/SPEC_NOTES.md`.
-- **Material de estudio de Jose:** `docs/conceptos/` (páginas HTML autocontenidas,
-  en español y con diagramas, para los conceptos nuevos de cada milestone; hoy:
-  `bases-de-datos.html` para M2). Mantenerlas al día cuando una decisión las
-  contradiga, y anclar los ejemplos a datos reales del proyecto.
+- **Material de estudio de Jose:** `docs/conceptos/index.html`, **un único
+  fichero HTML autocontenido** (sin red, sin dependencias) con una **pestaña por
+  bloque de conceptos**: «Bases de datos» (M2), «Búsqueda léxica y BM25» (M3) y
+  «El pipeline de búsqueda» (M3). En español, con diagramas SVG en línea,
+  glosario y preguntas de defensa en cada pestaña. Al añadir un bloque se añade
+  una pestaña, no un fichero nuevo, y sus identificadores llevan prefijo
+  (`db-`, `lex-`, `pipe-`) para que no choquen. Mantenerlo al día cuando una
+  decisión lo contradiga, y anclar los ejemplos a datos reales del proyecto.
 
 ## Reglas de producto no negociables
 
