@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Búsqueda léxica, TF-IDF y BM25: conceptos para el proyecto RAG</title>
+<title>Conceptos del proyecto RAG</title>
 <style>
-  :root {
+:root {
     --bg: #ffffff; --fg: #1a1a1a; --muted: #5b5b5b; --line: #d7d7d7;
     --soft: #f4f4f5; --accent: #1f5fa8; --warn: #a33; --ok: #1d7a4a;
   }
@@ -68,10 +68,459 @@
   svg .arrow { stroke: currentColor; stroke-width: 1.2; fill: none; }
   svg .dash { stroke: currentColor; stroke-width: 1; fill: none; stroke-dasharray: 4 3; opacity: .55; }
   svg .thick { stroke: currentColor; stroke-width: 2; fill: none; }
+
+  /* --- pestañas --- */
+  .tabs {
+    position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap;
+    gap: .3rem; padding: .6rem 0 .5rem; margin: 0 0 .5rem;
+    background: var(--bg); border-bottom: 1px solid var(--line);
+  }
+  .tabs button {
+    font: inherit; font-size: .9rem; cursor: pointer; color: var(--muted);
+    background: var(--soft); border: 1px solid var(--line);
+    border-radius: 999px; padding: .35rem .9rem;
+  }
+  .tabs button:hover { color: var(--fg); }
+  .tabs button[aria-selected="true"] {
+    color: var(--bg); background: var(--accent); border-color: var(--accent);
+    font-weight: 600;
+  }
+  .panel[hidden] { display: none; }
+  .panel > h1 { margin-top: 1rem; }
+  @media (max-width: 30rem) { .tabs button { font-size: .82rem; padding: .3rem .7rem; } }
+
 </style>
 </head>
 <body>
 
+<div class="tabs" role="tablist" aria-label="Conceptos">
+  <button role="tab" id="tab-db" aria-controls="panel-db" aria-selected="false"
+          onclick="showTab('db')">Bases de datos</button>
+  <button role="tab" id="tab-lex" aria-controls="panel-lex" aria-selected="false"
+          onclick="showTab('lex')">Búsqueda léxica y BM25</button>
+  <button role="tab" id="tab-pipe" aria-controls="panel-pipe" aria-selected="false"
+          onclick="showTab('pipe')">El pipeline de búsqueda</button>
+</div>
+
+<div class="panel" id="panel-db" role="tabpanel" aria-labelledby="tab-db" hidden>
+<h1>Bases de datos: lo que necesito dominar</h1>
+<p class="lead">Material de estudio para M2 del proyecto <em>RAG against the machine</em>.
+Todos los ejemplos usan datos reales del proyecto: los chunks del corpus de vLLM.</p>
+
+<nav>
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#db-por-que">¿Por qué una base de datos y no ficheros?</a></li>
+    <li><a href="#db-anatomia">Anatomía: tabla, fila, columna, esquema</a></li>
+    <li><a href="#db-claves">Claves: primaria y ajena</a></li>
+    <li><a href="#db-sql">SQL: las cinco frases que necesito</a></li>
+    <li><a href="#db-parametrizadas">Consultas parametrizadas e inyección SQL</a></li>
+    <li><a href="#db-transacciones">Transacciones</a></li>
+    <li><a href="#db-indices">Índices de base de datos (y el choque de nombres)</a></li>
+    <li><a href="#db-sqlite">SQLite frente a cliente-servidor</a></li>
+    <li><a href="#db-familias">Las familias de bases de datos</a></li>
+    <li><a href="#db-nuestro-caso">Qué haremos en este proyecto</a></li>
+    <li><a href="#db-glosario">Glosario</a></li>
+    <li><a href="#db-defensa">Preguntas de defensa</a></li>
+  </ol>
+</nav>
+
+<h2 id="db-por-que">1. ¿Por qué una base de datos y no ficheros?</h2>
+
+<p>Nuestro índice tendrá unos <strong>18.900 chunks</strong> (17.183 de código y 1.759 de
+documentación). De cada uno guardamos cuatro datos: el fichero, la posición inicial, la
+posición final y el texto.</p>
+
+<p>Con ficheros sueltos tendríamos que cargarlo <em>todo</em> en memoria al arrancar cada
+comando y recorrerlo entero para cada pregunta. Una base de datos nos da tres cosas:</p>
+
+<ul>
+  <li><strong>Consultas</strong>: pedir «los chunks de este fichero» sin leer los 18.900.</li>
+  <li><strong>Tipos y reglas</strong>: la base de datos rechaza un chunk sin ruta o con un
+      índice que no es un número.</li>
+  <li><strong>Escrituras seguras</strong>: si el indexado se corta a mitad, no queda un
+      fichero medio escrito (ver <a href="#db-transacciones">transacciones</a>).</li>
+</ul>
+
+<div class="note">
+<strong>Nuestra decisión</strong> (registrada el 2026-09-13): <strong>SQLite</strong> con el módulo
+<code>sqlite3</code> de la librería estándar, sin ORM, y escribiendo el SQL a mano para poder
+explicarlo. El índice será un único fichero: <code>data/processed/index.db</code>.
+</div>
+
+<h2 id="db-anatomia">2. Anatomía: tabla, fila, columna, esquema</h2>
+
+<p>Una <strong>tabla</strong> es una hoja de cálculo con reglas: cada <strong>columna</strong> tiene un
+nombre y un tipo, y cada <strong>fila</strong> es un dato completo. La descripción de las tablas y
+sus columnas se llama <strong>esquema</strong> (<em>schema</em>).</p>
+
+<figure class="fig">
+<svg viewBox="0 0 680 230" role="img" aria-label="Diagrama de una tabla con columnas y filas">
+  <text x="0" y="14" class="lbl">tabla: chunks</text>
+  <rect class="soft" x="0" y="22" width="660" height="26"></rect>
+  <rect class="box" x="0" y="22" width="660" height="26"></rect>
+  <rect class="box" x="0" y="48" width="660" height="26"></rect>
+  <rect class="box" x="0" y="74" width="660" height="26"></rect>
+  <rect class="box" x="0" y="100" width="660" height="26"></rect>
+  <line class="box" x1="40" y1="22" x2="40" y2="126"></line>
+  <line class="box" x1="300" y1="22" x2="300" y2="126"></line>
+  <line class="box" x1="380" y1="22" x2="380" y2="126"></line>
+  <line class="box" x1="460" y1="22" x2="460" y2="126"></line>
+  <text x="8" y="39">id</text>
+  <text x="48" y="39">file_path</text>
+  <text x="308" y="39">first</text>
+  <text x="388" y="39">last</text>
+  <text x="468" y="39">text</text>
+  <text x="8" y="65">1</text>
+  <text x="48" y="65">…/docs/features/lora.md</text>
+  <text x="308" y="65">4695</text>
+  <text x="388" y="65">6098</text>
+  <text x="468" y="65">"### Using API…"</text>
+  <text x="8" y="91">2</text>
+  <text x="48" y="91">…/docs/features/lora.md</text>
+  <text x="308" y="91">6098</text>
+  <text x="388" y="91">7480</text>
+  <text x="468" y="91">"## Serving LoRA…"</text>
+  <text x="8" y="117">3</text>
+  <text x="48" y="117">…/vllm/entrypoints/api.py</text>
+  <text x="308" y="117">0</text>
+  <text x="388" y="117">1870</text>
+  <text x="468" y="117">"import asyncio…"</text>
+  <path class="arrow" d="M 520 150 L 520 132"></path>
+  <text x="440" y="164" class="lbl">columna: mismo dato en todas las filas</text>
+  <path class="arrow" d="M 690 61 L 668 61" transform="translate(-20,0)"></path>
+  <text x="0" y="196" class="lbl">fila (o registro): un chunk completo</text>
+  <path class="arrow" d="M 150 190 L 150 106"></path>
+  <text x="0" y="218" class="lbl">esquema: los nombres y tipos de esas columnas</text>
+</svg>
+<figcaption>Cada fila es un chunk; cada columna, un dato del chunk.</figcaption>
+</figure>
+
+<p>Los tipos que usa SQLite son pocos y simples: <code>INTEGER</code> (números enteros),
+<code>TEXT</code> (texto), <code>REAL</code> (decimales) y <code>BLOB</code> (datos binarios).</p>
+
+<h2 id="db-claves">3. Claves: primaria y ajena</h2>
+
+<p>La <strong>clave primaria</strong> (<em>primary key</em>) es la columna que identifica cada fila sin
+repetirse, como el DNI. En SQLite, <code>INTEGER PRIMARY KEY</code> se rellena sola: 1, 2, 3…</p>
+
+<p>La <strong>clave ajena</strong> (<em>foreign key</em>) es una columna que <em>apunta</em> a la clave primaria
+de otra tabla. Sirve para no repetir datos: si guardáramos la ruta del fichero en cada uno de
+los 18.900 chunks, esa ruta larga se repetiría cientos de veces.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 680 220" role="img" aria-label="Relación entre la tabla files y la tabla chunks">
+  <text x="0" y="14" class="lbl">tabla: files</text>
+  <rect class="soft" x="0" y="22" width="280" height="24"></rect>
+  <rect class="box" x="0" y="22" width="280" height="24"></rect>
+  <rect class="box" x="0" y="46" width="280" height="24"></rect>
+  <rect class="box" x="0" y="70" width="280" height="24"></rect>
+  <line class="box" x1="34" y1="22" x2="34" y2="94"></line>
+  <text x="6" y="38">id</text><text x="42" y="38">path</text>
+  <text x="6" y="62">7</text><text x="42" y="62">…/docs/features/lora.md</text>
+  <text x="6" y="86">8</text><text x="42" y="86">…/vllm/entrypoints/api.py</text>
+  <text x="6" y="110" class="lbl">clave primaria</text>
+  <path class="arrow" d="M 20 104 L 20 96"></path>
+
+  <text x="360" y="14" class="lbl">tabla: chunks</text>
+  <rect class="soft" x="360" y="22" width="300" height="24"></rect>
+  <rect class="box" x="360" y="22" width="300" height="24"></rect>
+  <rect class="box" x="360" y="46" width="300" height="24"></rect>
+  <rect class="box" x="360" y="70" width="300" height="24"></rect>
+  <rect class="box" x="360" y="94" width="300" height="24"></rect>
+  <line class="box" x1="394" y1="22" x2="394" y2="118"></line>
+  <line class="box" x1="452" y1="22" x2="452" y2="118"></line>
+  <text x="366" y="38">id</text><text x="400" y="38">file_id</text><text x="460" y="38">first / last</text>
+  <text x="366" y="62">1</text><text x="400" y="62">7</text><text x="460" y="62">4695 / 6098</text>
+  <text x="366" y="86">2</text><text x="400" y="86">7</text><text x="460" y="86">6098 / 7480</text>
+  <text x="366" y="110">3</text><text x="400" y="110">8</text><text x="460" y="110">0 / 1870</text>
+
+  <path class="arrow" d="M 396 60 C 330 60, 330 62, 34 62" stroke-dasharray="4 3"></path>
+  <text x="150" y="150" class="lbl">clave ajena: file_id apunta a files.id</text>
+  <text x="0" y="186" class="lbl">Ventaja: la ruta larga se guarda UNA vez, no 18.900 veces.</text>
+  <text x="0" y="206" class="lbl">Coste: para ver la ruta de un chunk hay que juntar las dos tablas (JOIN).</text>
+</svg>
+<figcaption>Dos tablas relacionadas por una clave ajena.</figcaption>
+</figure>
+
+<div class="note">
+Si guardar la ruta en cada chunk (una tabla) o separar <code>files</code> y <code>chunks</code>
+(dos tablas con clave ajena) es justo una de las decisiones del slice #20. Las dos son
+defendibles: una tabla es más simple; dos ocupan menos y evitan repetir texto.
+</div>
+
+<h2 id="db-sql">4. SQL: las cinco frases que necesito</h2>
+
+<p><strong>SQL</strong> (<em>Structured Query Language</em>) es el idioma para hablar con la base de datos.
+Con estas cinco frases se hace el 95% del trabajo.</p>
+
+<h3>Crear la tabla</h3>
+<pre><code>CREATE TABLE IF NOT EXISTS chunks (
+    id                    INTEGER PRIMARY KEY,
+    file_path             TEXT    NOT NULL,
+    first_character_index INTEGER NOT NULL,
+    last_character_index  INTEGER NOT NULL,
+    text                  TEXT    NOT NULL
+);</code></pre>
+<p><code>NOT NULL</code> significa «esta columna no puede quedar vacía». Es la base de datos
+protegiendo el invariante, igual que hace pydantic en el dominio.</p>
+
+<h3>Insertar filas</h3>
+<pre><code>INSERT INTO chunks (file_path, first_character_index, last_character_index, text)
+VALUES (?, ?, ?, ?);</code></pre>
+<p>Los <code>?</code> son huecos que se rellenan al ejecutar. Nunca se pegan los valores dentro
+del texto del SQL: ver <a href="#db-parametrizadas">inyección SQL</a>.</p>
+
+<h3>Consultar con condición</h3>
+<pre><code>SELECT first_character_index, last_character_index
+FROM chunks
+WHERE file_path = ?
+ORDER BY first_character_index;</code></pre>
+<p><code>SELECT</code> elige columnas, <code>FROM</code> la tabla, <code>WHERE</code> filtra filas y
+<code>ORDER BY</code> ordena. Con <code>LIMIT 10</code> te quedas con las diez primeras: eso será
+nuestro <em>top-k</em> en M3.</p>
+
+<h3>Juntar dos tablas</h3>
+<pre><code>SELECT files.path, chunks.first_character_index
+FROM chunks
+JOIN files ON files.id = chunks.file_id
+WHERE files.path LIKE '%lora.md';</code></pre>
+<p>Un <strong>JOIN</strong> («unir») empareja filas de dos tablas por una condición, normalmente la
+clave ajena. Es cómo se «deshace» la separación del apartado anterior.</p>
+
+<h3>Actualizar y borrar</h3>
+<pre><code>UPDATE chunks SET text = ? WHERE id = ?;
+DELETE FROM chunks;              -- vacía la tabla: reindexar desde cero</code></pre>
+
+<h2 id="db-parametrizadas">5. Consultas parametrizadas e inyección SQL</h2>
+
+<p>Tentación: construir el SQL pegando texto.</p>
+
+<pre><code># MAL: pega el valor dentro del SQL
+cursor.execute(f"SELECT * FROM chunks WHERE file_path = '{path}'")
+
+# BIEN: el valor viaja aparte, en una tupla
+cursor.execute("SELECT * FROM chunks WHERE file_path = ?", (path,))</code></pre>
+
+<div class="warn">
+<strong>Por qué importa.</strong> Si <code>path</code> valiera <code>x' OR 1=1; DROP TABLE chunks; --</code>,
+la primera versión ejecutaría <em>dos</em> órdenes: una consulta que devuelve todo y otra que
+<strong>borra la tabla</strong>. Eso es una <strong>inyección SQL</strong>: el dato se convierte en código.
+Con <code>?</code>, la base de datos trata ese texto como <em>un valor</em>, nunca como SQL.
+</div>
+
+<p>En nuestro proyecto el «atacante» sería inocente: una ruta con un apóstrofo o una pregunta
+del usuario con comillas bastaría para romper la consulta. La forma correcta es también la
+más cómoda, así que no hay excusa. Ojo al detalle de la <strong>coma</strong> en <code>(path,)</code>:
+sin ella no es una tupla.</p>
+
+<h2 id="db-transacciones">6. Transacciones</h2>
+
+<p>Una <strong>transacción</strong> agrupa varias escrituras en un «todo o nada»
+(<strong>atomicidad</strong>). O se guardan todas, o no se guarda ninguna. Si el indexado se corta con
+Ctrl+C a mitad, no queda un índice con la mitad de los chunks.</p>
+
+<p>Y hay un efecto práctico enorme: <strong>velocidad</strong>. Sin transacción explícita, SQLite
+confirma en disco cada <code>INSERT</code>; con una sola transacción para los 18.900 chunks,
+confirma una vez. La diferencia suele ser de dos órdenes de magnitud, y nosotros tenemos un
+límite de 300 segundos.</p>
+
+<pre><code>with sqlite3.connect(index_path) as connection:   # una transacción
+    connection.executemany(
+        "INSERT INTO chunks (file_path, first_character_index, "
+        "last_character_index, text) VALUES (?, ?, ?, ?)",
+        rows,                                     # 18.900 tuplas
+    )
+# al salir del with: COMMIT si todo fue bien, ROLLBACK si hubo excepción</code></pre>
+
+<p><strong>COMMIT</strong> es «confirma los cambios» y <strong>ROLLBACK</strong> es «deshazlos». Fíjate en que
+la conexión es un <em>context manager</em>, como el <code>open</code> del slice #4: el mismo patrón
+que exige el enunciado para no dejar recursos abiertos.</p>
+
+<h2 id="db-indices">7. Índices de base de datos (y el choque de nombres)</h2>
+
+<div class="warn">
+<strong>Cuidado con la palabra «índice».</strong> En RAG, el <em>índice</em> es toda la estructura de
+búsqueda que construimos. En bases de datos, un <em>índice</em> es un atajo para encontrar filas
+rápido. Son cosas distintas con el mismo nombre.
+</div>
+
+<p>Sin índice, para responder <code>WHERE file_path = '…lora.md'</code> la base de datos recorre
+las 18.900 filas una por una: es un <strong>escaneo completo</strong> (<em>full scan</em>). Con un índice
+sobre esa columna, salta directamente a las filas que valen.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 680 210" role="img" aria-label="Escaneo completo frente a búsqueda por índice">
+  <text x="0" y="14" class="lbl">sin índice: escaneo completo</text>
+  <rect class="box" x="0" y="22" width="300" height="70"></rect>
+  <text x="10" y="42">fila 1 → ¿coincide? no</text>
+  <text x="10" y="58">fila 2 → ¿coincide? no</text>
+  <text x="10" y="74">… 18.900 comprobaciones</text>
+
+  <text x="360" y="14" class="lbl">con índice: árbol ordenado (B-tree)</text>
+  <rect class="box" x="480" y="22" width="90" height="20"></rect>
+  <text x="492" y="36">docs/… ?</text>
+  <rect class="box" x="400" y="62" width="90" height="20"></rect>
+  <text x="410" y="76">benchmarks/…</text>
+  <rect class="box" x="560" y="62" width="90" height="20"></rect>
+  <text x="572" y="76">vllm/…</text>
+  <rect class="box" x="480" y="102" width="90" height="20"></rect>
+  <text x="492" y="116">lora.md → fila 1</text>
+  <path class="arrow" d="M 505 42 L 460 60"></path>
+  <path class="arrow" d="M 545 42 L 590 60"></path>
+  <path class="arrow" d="M 490 82 L 515 100"></path>
+  <text x="360" y="150" class="lbl">3 saltos en vez de 18.900 comprobaciones</text>
+
+  <text x="0" y="178" class="lbl">CREATE INDEX idx_chunks_path ON chunks(file_path);</text>
+  <text x="0" y="198" class="lbl">Coste: ocupa espacio y hace los INSERT algo más lentos.</text>
+</svg>
+<figcaption>Un índice de base de datos es como el índice alfabético de un libro.</figcaption>
+</figure>
+
+<p>Para ver si una consulta usa el índice o escanea, SQLite tiene una orden muy útil:
+<code>EXPLAIN QUERY PLAN SELECT …</code>. Dice, en texto, qué plan va a seguir.</p>
+
+<h2 id="db-sqlite">8. SQLite frente a cliente-servidor</h2>
+
+<figure class="fig">
+<svg viewBox="0 0 680 200" role="img" aria-label="SQLite embebida frente a base de datos con servidor">
+  <text x="0" y="14" class="lbl">SQLite: una librería dentro de tu programa</text>
+  <rect class="box" x="0" y="24" width="270" height="90"></rect>
+  <text x="14" y="46">tu programa (python -m src)</text>
+  <rect class="soft" x="14" y="56" width="240" height="24"></rect>
+  <rect class="box" x="14" y="56" width="240" height="24"></rect>
+  <text x="24" y="72">sqlite3 (librería estándar)</text>
+  <path class="arrow" d="M 135 80 L 135 130"></path>
+  <rect class="box" x="60" y="132" width="150" height="26"></rect>
+  <text x="70" y="149">data/processed/index.db</text>
+  <text x="0" y="182" class="lbl">Sin instalar nada, sin red, sin usuarios: un fichero.</text>
+
+  <text x="380" y="14" class="lbl">PostgreSQL: un servidor aparte</text>
+  <rect class="box" x="380" y="24" width="120" height="40"></rect>
+  <text x="392" y="48">programa A</text>
+  <rect class="box" x="380" y="72" width="120" height="40"></rect>
+  <text x="392" y="96">programa B</text>
+  <rect class="box" x="560" y="46" width="110" height="44"></rect>
+  <text x="572" y="72">servidor</text>
+  <path class="arrow" d="M 500 44 L 560 62"></path>
+  <path class="arrow" d="M 500 92 L 560 76"></path>
+  <rect class="box" x="585" y="120" width="60" height="24"></rect>
+  <text x="596" y="137">disco</text>
+  <path class="arrow" d="M 615 90 L 615 118"></path>
+  <text x="380" y="182" class="lbl">Varios programas a la vez, permisos, red… y hay que instalarlo.</text>
+</svg>
+<figcaption>Embebida frente a cliente-servidor: la diferencia es quién guarda los datos.</figcaption>
+</figure>
+
+<table>
+<tr><th></th><th>SQLite (embebida)</th><th>PostgreSQL / MySQL (servidor)</th></tr>
+<tr><td>Instalación</td><td>Ninguna: viene con Python</td><td>Instalar y arrancar un servicio</td></tr>
+<tr><td>Dónde viven los datos</td><td>Un fichero <code>.db</code></td><td>En el servidor</td></tr>
+<tr><td>Varios programas escribiendo</td><td>Limitado</td><td>Su especialidad</td></tr>
+<tr><td>Nuestro caso</td><td><strong>Encaja</strong>: un usuario, un proceso, 30 MB</td><td>Imposible: el corrector solo ejecuta <code>uv sync</code></td></tr>
+</table>
+
+<h2 id="db-familias">9. Las familias de bases de datos</h2>
+
+<table>
+<tr><th>Familia</th><th>Cómo guarda los datos</th><th>Ejemplos</th><th>Buena para</th><th>En este proyecto</th></tr>
+<tr>
+  <td><strong>Relacional</strong></td><td>Tablas con filas, columnas y relaciones; SQL</td>
+  <td>SQLite, PostgreSQL, MySQL</td><td>Datos con estructura fija y consultas variadas</td>
+  <td><strong>Sí</strong>: SQLite es nuestro índice</td>
+</tr>
+<tr>
+  <td><strong>Clave-valor</strong></td><td>Un diccionario gigante: una clave, un valor</td>
+  <td>Redis, Memcached</td><td>Cachés y datos de sesión, muy rápido</td>
+  <td>Posible en el bonus de caché, aunque un fichero o SQLite bastan</td>
+</tr>
+<tr>
+  <td><strong>Documental</strong></td><td>Documentos tipo JSON, cada uno con sus campos</td>
+  <td>MongoDB, CouchDB</td><td>Datos irregulares que cambian de forma</td><td>No</td>
+</tr>
+<tr>
+  <td><strong>De búsqueda</strong></td><td>Índice invertido: de cada palabra, en qué documentos aparece</td>
+  <td>Elasticsearch, Solr, FTS5 de SQLite</td><td>Búsqueda de texto con ranking (BM25 incluido)</td>
+  <td>Lo haremos <strong>a mano</strong> en M3: FTS5 daría el BM25 hecho y no aprenderíamos nada</td>
+</tr>
+<tr>
+  <td><strong>Vectorial</strong></td><td>Vectores de números; busca «lo más parecido en significado»</td>
+  <td>FAISS, Chroma, pgvector</td><td>Búsqueda semántica con embeddings</td>
+  <td>Sería el bonus 1 (embeddings) y el 2 (híbrida)</td>
+</tr>
+<tr>
+  <td><strong>De grafos</strong></td><td>Nodos y relaciones entre ellos</td>
+  <td>Neo4j</td><td>Redes: amistades, dependencias, rutas</td><td>No</td>
+</tr>
+</table>
+
+<div class="note">
+<strong>Idea clave:</strong> cada familia optimiza un tipo de pregunta. «Dame las filas de este
+fichero» es relacional. «Dame los documentos con estas palabras, ordenados por relevancia»
+es de búsqueda. «Dame lo más parecido a esta frase» es vectorial. Un RAG completo suele
+mezclar dos o tres.
+</div>
+
+<h2 id="db-nuestro-caso">10. Qué haremos en este proyecto</h2>
+
+<p><span class="tag">borrador</span> El diseño concreto se decide en el slice #20; esto es el
+punto de partida.</p>
+
+<ul>
+  <li><strong>Un fichero</strong>, <code>data/processed/index.db</code>, creado por
+      <code>uv run python -m src index</code> y configurable con <code>--index_path</code>.</li>
+  <li><strong>Una tabla de chunks</strong> con la ruta, las dos posiciones y el texto. Con eso ya
+      se puede devolver una fuente con el formato que exige el enunciado.</li>
+  <li><strong>Una transacción</strong> para los ~18.900 <code>INSERT</code>, y una barra de
+      <strong>tqdm</strong> mientras se indexa.</li>
+  <li><strong>Reindexar</strong> deja la base como nueva, sin duplicar chunks.</li>
+</ul>
+
+<p>Y en M3, para BM25, harán falta las <strong>estadísticas de palabras</strong>: qué palabras
+aparecen en cada chunk y cuántas veces. Ahí aparecerá la idea de <strong>índice invertido</strong>
+(de la palabra a los chunks), que es exactamente lo que hacen por dentro las bases de datos
+de búsqueda.</p>
+
+<h2 id="db-glosario">11. Glosario</h2>
+
+<table>
+<tr><th>Término</th><th>En una frase</th></tr>
+<tr><td>Base de datos</td><td>Programa o librería que guarda datos con estructura y sabe responder preguntas sobre ellos</td></tr>
+<tr><td>Tabla / fila / columna</td><td>Hoja de datos / un dato completo / un campo del dato</td></tr>
+<tr><td>Esquema (<em>schema</em>)</td><td>La descripción de las tablas y sus columnas</td></tr>
+<tr><td>Clave primaria</td><td>Columna que identifica cada fila sin repetirse</td></tr>
+<tr><td>Clave ajena (<em>foreign key</em>)</td><td>Columna que apunta a la clave primaria de otra tabla</td></tr>
+<tr><td>SQL</td><td>El idioma para crear, insertar, consultar y modificar datos</td></tr>
+<tr><td>JOIN</td><td>Juntar filas de dos tablas por una condición</td></tr>
+<tr><td>Consulta parametrizada</td><td>Pasar los valores con <code>?</code>, aparte del SQL</td></tr>
+<tr><td>Inyección SQL</td><td>Ataque en el que un dato se ejecuta como si fuera SQL</td></tr>
+<tr><td>Transacción</td><td>Grupo de escrituras «todo o nada»</td></tr>
+<tr><td>COMMIT / ROLLBACK</td><td>Confirmar los cambios / deshacerlos</td></tr>
+<tr><td>Atomicidad</td><td>Que no pueda quedarse a medias</td></tr>
+<tr><td>Índice de base de datos</td><td>Atajo para encontrar filas sin recorrer toda la tabla</td></tr>
+<tr><td>Escaneo completo</td><td>Recorrer todas las filas una por una</td></tr>
+<tr><td>Embebida / cliente-servidor</td><td>Librería dentro de tu programa / servidor aparte al que te conectas</td></tr>
+<tr><td>Índice invertido</td><td>De cada palabra, la lista de documentos donde aparece</td></tr>
+<tr><td>ORM</td><td>Capa que traduce objetos a tablas y esconde el SQL; no lo usamos</td></tr>
+</table>
+
+<h2 id="db-defensa">12. Preguntas de defensa</h2>
+
+<p>Si puedo responder estas seis en voz alta, voy servido:</p>
+
+<ol>
+  <li>¿Por qué SQLite y no PostgreSQL, y por qué no ficheros sueltos?</li>
+  <li>¿Qué guarda cada fila de tu tabla de chunks y por qué esas columnas?</li>
+  <li>¿Qué es una consulta parametrizada y qué pasaría sin ella?</li>
+  <li>¿Para qué usas una transacción al indexar? Dos motivos.</li>
+  <li>¿Qué diferencia hay entre el «índice» de tu RAG y un «índice» de base de datos?</li>
+  <li>SQLite trae BM25 en su extensión FTS5: ¿por qué no lo usas?</li>
+</ol>
+
+<p class="lead">Última actualización: 2026-09-22 · slice #20 de M2.</p>
+</div>
+
+<div class="panel" id="panel-lex" role="tabpanel" aria-labelledby="tab-lex" hidden>
 <h1>Búsqueda léxica, TF-IDF y BM25: lo que necesito dominar</h1>
 <p class="lead">Material de estudio para M3 del proyecto <em>RAG against the machine</em>.
 Todos los números de esta página están medidos sobre nuestro índice real
@@ -81,23 +530,23 @@ datasets públicos. Ninguno es inventado.</p>
 <nav>
   <strong>Contenido</strong>
   <ol>
-    <li><a href="#problema">El problema: de una pregunta a cinco fragmentos</a></li>
-    <li><a href="#tokenizar">Tokenizar: de texto a palabras comparables</a></li>
-    <li><a href="#invertido">El índice invertido</a></li>
-    <li><a href="#tf">TF: contar apariciones (y por qué no basta)</a></li>
-    <li><a href="#idf">IDF: las palabras raras informan más</a></li>
-    <li><a href="#tfidf">TF-IDF: el producto de los dos</a></li>
-    <li><a href="#bm25">BM25: dos arreglos sobre TF-IDF</a></li>
-    <li><a href="#cuenta">La cuenta completa con datos reales</a></li>
-    <li><a href="#mandos">Los dos mandos, en números</a></li>
-    <li><a href="#recall">Recall@k e IoU: cómo se nos mide</a></li>
-    <li><a href="#proyecto">Qué haremos en este proyecto</a></li>
-    <li><a href="#glosario">Glosario</a></li>
-    <li><a href="#defensa">Preguntas de defensa</a></li>
+    <li><a href="#lex-problema">El problema: de una pregunta a cinco fragmentos</a></li>
+    <li><a href="#lex-tokenizar">Tokenizar: de texto a palabras comparables</a></li>
+    <li><a href="#lex-invertido">El índice invertido</a></li>
+    <li><a href="#lex-tf">TF: contar apariciones (y por qué no basta)</a></li>
+    <li><a href="#lex-idf">IDF: las palabras raras informan más</a></li>
+    <li><a href="#lex-tfidf">TF-IDF: el producto de los dos</a></li>
+    <li><a href="#lex-bm25">BM25: dos arreglos sobre TF-IDF</a></li>
+    <li><a href="#lex-cuenta">La cuenta completa con datos reales</a></li>
+    <li><a href="#lex-mandos">Los dos mandos, en números</a></li>
+    <li><a href="#lex-recall">Recall@k e IoU: cómo se nos mide</a></li>
+    <li><a href="#lex-proyecto">Qué haremos en este proyecto</a></li>
+    <li><a href="#lex-glosario">Glosario</a></li>
+    <li><a href="#lex-defensa">Preguntas de defensa</a></li>
   </ol>
 </nav>
 
-<h2 id="problema">1. El problema: de una pregunta a cinco fragmentos</h2>
+<h2 id="lex-problema">1. El problema: de una pregunta a cinco fragmentos</h2>
 
 <p>Tenemos 18.942 <strong>chunks</strong> (fragmentos de texto) guardados en
 SQLite. Llega una pregunta escrita por una persona:</p>
@@ -174,7 +623,7 @@ palabra de <em>esta</em> pregunta; en la media de las 199 preguntas reales son
 bastantes más (ver la sección 3).</figcaption>
 </figure>
 
-<h2 id="tokenizar">2. Tokenizar: de texto a palabras comparables</h2>
+<h2 id="lex-tokenizar">2. Tokenizar: de texto a palabras comparables</h2>
 
 <p><strong>Tokenizar</strong> (<em>to tokenize</em>, de <em>token</em>, «ficha»)
 es partir un texto en las piezas que vas a comparar. Cada pieza es un
@@ -214,7 +663,7 @@ al corpus.</p>
   <td>Descartar palabras vacías</td>
   <td><code>the</code>, <code>is</code>, <code>a</code>, <code>in</code></td>
   <td>Son las <strong>stop words</strong>. Se pueden quitar, pero
-      <a href="#idf">IDF</a> ya las castiga sola: quitarlas es opcional</td>
+      <a href="#lex-idf">IDF</a> ya las castiga sola: quitarlas es opcional</td>
 </tr>
 </table>
 
@@ -236,7 +685,7 @@ dividir por la longitud de un documento vacío es una división por cero. Es
 justo el tipo de caso límite que un test tiene que cubrir.
 </div>
 
-<h2 id="invertido">3. El índice invertido</h2>
+<h2 id="lex-invertido">3. El índice invertido</h2>
 
 <p>Con la pregunta ya en 7 palabras, la pregunta obvia es: ¿comparo esas
 palabras con los 18.942 chunks, uno por uno? Funcionaría, pero es trabajo
@@ -335,7 +784,7 @@ consulta. Medido: construirlo una vez cuesta 1,22 s y responder a las 199
 preguntas con él ya montado, 1,75 s (9 ms por pregunta).
 </div>
 
-<h2 id="tf">4. TF: contar apariciones (y por qué no basta)</h2>
+<h2 id="lex-tf">4. TF: contar apariciones (y por qué no basta)</h2>
 
 <p><strong>TF</strong> es <em>term frequency</em>, «frecuencia del término»: las
 veces que una palabra aparece en un documento. La intuición es razonable: si
@@ -376,7 +825,7 @@ chunk bueno. Si solo contaras apariciones de la palabra más repetida, ganaría
 el fichero de código, que no responde a la pregunta. Falta algo: <strong>no
 todas las palabras valen lo mismo</strong>.</p>
 
-<h2 id="idf">5. IDF: las palabras raras informan más</h2>
+<h2 id="lex-idf">5. IDF: las palabras raras informan más</h2>
 
 <p><strong>IDF</strong> es <em>inverse document frequency</em>, «frecuencia
 inversa de documento». Es un peso por palabra: <strong>cuanto en menos
@@ -423,7 +872,7 @@ La palabra que parecía más importante de la pregunta es casi la más inútil
 para <em>distinguir</em> un chunk de otro.
 </div>
 
-<h2 id="tfidf">6. TF-IDF: el producto de los dos</h2>
+<h2 id="lex-tfidf">6. TF-IDF: el producto de los dos</h2>
 
 <p><strong>TF-IDF</strong> multiplica las dos ideas: cuántas veces aparece
 (TF) por cuánto informa esa palabra (IDF). Se suma para todas las palabras de
@@ -449,7 +898,7 @@ informativo gigante (el tema aparece), y pasar de 19 a 20 no dice casi nada.</p>
 simple hecho de ser largo. Sin corregirlo, la búsqueda se inclina hacia los
 fragmentos grandes aunque hablen del tema de pasada.</p>
 
-<h2 id="bm25">7. BM25: dos arreglos sobre TF-IDF</h2>
+<h2 id="lex-bm25">7. BM25: dos arreglos sobre TF-IDF</h2>
 
 <p><strong>BM25</strong> significa <em>Best Matching 25</em>: fue el
 vigesimoquinto experimento de una serie de investigación de los años 90, y es
@@ -553,7 +1002,7 @@ ganaría solo por contener más texto. El de 211 tokens es nuestro chunk correct
 real, más del doble de la media.</figcaption>
 </figure>
 
-<h2 id="cuenta">8. La cuenta completa con datos reales</h2>
+<h2 id="lex-cuenta">8. La cuenta completa con datos reales</h2>
 
 <p>Aquí está la fórmula aplicada de verdad a los dos chunks de la sección 4, con
 <code>k1=1.5</code>, <code>b=0.75</code>, <code>N=18.942</code> y
@@ -599,7 +1048,7 @@ saturación no le paga el exceso de repeticiones. Los dos arreglos de BM25
 trabajando a la vez.
 </div>
 
-<h2 id="mandos">9. Los dos mandos, en números</h2>
+<h2 id="lex-mandos">9. Los dos mandos, en números</h2>
 
 <p>La fórmula tiene dos valores que elegimos nosotros, <code>k1</code> y
 <code>b</code>, y conviene saber de dónde salen: <strong>no se deducen de
@@ -699,7 +1148,7 @@ la elección. Los valores se quedan en los de la literatura, y si algún día ha
 que calibrar, se calibra contra un conjunto propio y se explica.
 </div>
 
-<h2 id="recall">10. Recall@k e IoU: cómo se nos mide</h2>
+<h2 id="lex-recall">10. Recall@k e IoU: cómo se nos mide</h2>
 
 <p><strong>Recall@k</strong> (<em>recall</em>, «recuperación» o «exhaustividad»)
 responde a: <strong>de las fuentes correctas, cuántas he traído entre mis k
@@ -760,7 +1209,7 @@ decir: el chunking no tiene que ser perfecto, tiene que <em>contener</em> la
 respuesta. Lo que de verdad decide la nota es el orden que da BM25.
 </div>
 
-<h2 id="proyecto">11. Qué haremos en este proyecto</h2>
+<h2 id="lex-proyecto">11. Qué haremos en este proyecto</h2>
 
 <p>Los seis slices de M3, en el orden en que dependen unos de otros:</p>
 
@@ -790,7 +1239,7 @@ respuesta. Lo que de verdad decide la nota es el orden que da BM25.
       por pregunta desde cero no cabe en ese presupuesto.</li>
 </ul>
 
-<h2 id="glosario">12. Glosario</h2>
+<h2 id="lex-glosario">12. Glosario</h2>
 
 <table>
 <tr><th>Término</th><th>Una frase</th></tr>
@@ -817,7 +1266,7 @@ respuesta. Lo que de verdad decide la nota es el orden que da BM25.
 <tr><td>embeddings</td><td>Representar el significado como números, para buscar sin compartir palabras; es el bonus.</td></tr>
 </table>
 
-<h2 id="defensa">13. Preguntas de defensa</h2>
+<h2 id="lex-defensa">13. Preguntas de defensa</h2>
 
 <ol>
   <li>¿Qué es la búsqueda léxica y qué tipo de pregunta se le escapa?</li>
@@ -841,6 +1290,259 @@ respuesta. Lo que de verdad decide la nota es el orden que da BM25.
 <p class="lead">Última actualización: 2026-09-29 · slice #23 de M3.
 Datos medidos sobre <code>data/processed/index.db</code> (18.942 chunks) y
 <code>dataset_docs_public.json</code>.</p>
+</div>
+
+<div class="panel" id="panel-pipe" role="tabpanel" aria-labelledby="tab-pipe" hidden>
+
+<h1>El pipeline de búsqueda, pieza por pieza</h1>
+<p class="lead">Las tres preguntas del paso 8 del slice #24, respondidas. Es el
+recorrido que tienes que poder contar en voz alta en la defensa.</p>
+
+<nav>
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#pipe-cadena">La cadena completa de <code>search</code></a></li>
+    <li><a href="#pipe-adaptador">Por qué el adaptador comprueba el fichero antes de conectar</a></li>
+    <li><a href="#pipe-validar">Quién valida qué, y por qué no todo en el mismo sitio</a></li>
+    <li><a href="#pipe-defensa">Preguntas de defensa</a></li>
+  </ol>
+</nav>
+
+<h2 id="pipe-cadena">1. La cadena completa de <code>search</code></h2>
+
+<p>Esto es lo que ocurre, en orden, al escribir
+<code>uv run python -m src search "How to configure OpenAI server?" --k 5</code>:</p>
+
+<figure class="fig">
+<svg viewBox="0 0 660 330" role="img" aria-label="Recorrido de la orden search por las capas">
+  <text x="4" y="14" class="lbl">ADAPTADORES DE ENTRADA</text>
+  <rect class="soft" x="4" y="22" width="652" height="74" rx="6"></rect>
+  <rect class="box" x="4" y="22" width="652" height="74" rx="6"></rect>
+  <rect class="box" x="16" y="34" width="120" height="24" rx="4"></rect>
+  <text x="76" y="50" text-anchor="middle">__main__.py</text>
+  <rect class="box" x="150" y="34" width="120" height="24" rx="4"></rect>
+  <text x="210" y="50" text-anchor="middle">main()</text>
+  <rect class="box" x="284" y="34" width="150" height="24" rx="4"></rect>
+  <text x="359" y="50" text-anchor="middle">run() frontera</text>
+  <rect class="box" x="448" y="34" width="100" height="24" rx="4"></rect>
+  <text x="498" y="50" text-anchor="middle">fire.Fire</text>
+  <rect class="box" x="562" y="34" width="84" height="24" rx="4"></rect>
+  <text x="604" y="50" text-anchor="middle">RagCli</text>
+  <text x="16" y="78" class="lbl">traduce argumentos, imprime, y ningún error sale como traceback</text>
+  <text x="16" y="90" class="lbl">decide el código de salida: 0 bien, 1 error, 130 Ctrl+C</text>
+
+  <path class="arrow" d="M330 98 V 118"></path>
+  <path class="arrow" d="M326 112 l4 6 4 -6"></path>
+
+  <text x="4" y="134" class="lbl">APLICACIÓN</text>
+  <rect class="soft" x="4" y="142" width="652" height="52" rx="6"></rect>
+  <rect class="box" x="4" y="142" width="652" height="52" rx="6"></rect>
+  <rect class="box" x="16" y="152" width="170" height="24" rx="4"></rect>
+  <text x="101" y="168" text-anchor="middle">run_search()</text>
+  <text x="200" y="168" class="lbl">valida k y la query, coordina, no sabe de SQLite ni de fórmulas</text>
+
+  <path class="arrow" d="M170 196 V 216"></path>
+  <path class="arrow" d="M166 210 l4 6 4 -6"></path>
+  <path class="arrow" d="M480 196 V 216"></path>
+  <path class="arrow" d="M476 210 l4 6 4 -6"></path>
+
+  <text x="4" y="232" class="lbl">DOMINIO (cálculo puro)</text>
+  <rect class="soft" x="4" y="240" width="330" height="80" rx="6"></rect>
+  <rect class="box" x="4" y="240" width="330" height="80" rx="6"></rect>
+  <rect class="box" x="16" y="250" width="100" height="24" rx="4"></rect>
+  <text x="66" y="266" text-anchor="middle">tokenize</text>
+  <rect class="box" x="126" y="250" width="100" height="24" rx="4"></rect>
+  <text x="176" y="266" text-anchor="middle">build_index</text>
+  <rect class="box" x="236" y="250" width="86" height="24" rx="4"></rect>
+  <text x="279" y="266" text-anchor="middle">rank + idf</text>
+  <rect class="box" x="16" y="284" width="140" height="24" rx="4"></rect>
+  <text x="86" y="300" text-anchor="middle">MinimalSource</text>
+  <text x="166" y="300" class="lbl">no toca disco jamás</text>
+
+  <text x="350" y="232" class="lbl">ADAPTADOR DE SALIDA</text>
+  <rect class="soft" x="350" y="240" width="306" height="80" rx="6"></rect>
+  <rect class="box" x="350" y="240" width="306" height="80" rx="6"></rect>
+  <rect class="box" x="362" y="250" width="130" height="24" rx="4"></rect>
+  <text x="427" y="266" text-anchor="middle">load_chunks</text>
+  <text x="362" y="292" class="lbl">SELECT ... FROM chunks</text>
+  <text x="362" y="306" class="lbl">ORDER BY id  ->  SQLite</text>
+</svg>
+<figcaption>Figura. Las flechas apuntan siempre hacia dentro: los adaptadores
+conocen la aplicación, la aplicación conoce el dominio, y el dominio no conoce a
+nadie.</figcaption>
+</figure>
+
+<ol>
+  <li><code>python -m src</code> hace que Python ejecute
+      <code>src/__main__.py</code>, que es lo que convierte la carpeta en un
+      programa ejecutable.</li>
+  <li><code>__main__.py</code> llama a <code>sys.exit(main())</code>: el número
+      que devuelva <code>main</code> será el código de salida del proceso.</li>
+  <li><code>main()</code> devuelve <code>run(RagCli())</code>, pasándole una
+      <strong>instancia</strong> ya creada, no la clase.</li>
+  <li><code>run()</code> es la <strong>frontera de errores</strong>: envuelve la
+      llamada a Fire en un <code>try</code>. Aquí se decide que ninguna
+      excepción salga como traceback y que un fallo valga salida 1.</li>
+  <li><strong>Fire</strong> mira la primera palabra (<code>search</code>),
+      encuentra el método con ese nombre, asigna el texto a <code>query</code>
+      por posición y <code>--k 5</code> a <code>k</code>, adivinando el tipo.
+      Traduce, no valida.</li>
+  <li><code>RagCli.search</code> llama a
+      <code>run_search(query, k, index_path)</code>. Es lo único que hace,
+      además de imprimir.</li>
+  <li><code>run_search</code> (aplicación) valida <code>k</code> y la query, y
+      entonces pide las filas a <code>load_chunks</code>.</li>
+  <li><code>load_chunks</code> (adaptador de salida) comprueba que el fichero
+      existe, abre SQLite, lanza el <code>SELECT</code> y devuelve las filas.</li>
+  <li><code>run_search</code> tokeniza el texto de cada chunk con
+      <code>tokenize</code>, construye el índice invertido con
+      <code>build_index</code>, se guarda un diccionario de
+      <code>id → (file_path, first, last)</code>, y llama a <code>rank</code>
+      con los tokens de la query.</li>
+  <li><code>rank</code> (dominio) usa <code>idf</code>, <code>K1</code> y
+      <code>B</code>, ordena y corta a <code>k</code>. Devuelve parejas
+      <code>(chunk_id, puntuación)</code>.</li>
+  <li><code>run_search</code> convierte cada id en un
+      <code>MinimalSource</code> con el diccionario de metadatos y devuelve
+      parejas <code>(MinimalSource, puntuación)</code>.</li>
+  <li><code>RagCli.search</code> imprime una línea por pareja, o
+      <code>No sources found.</code> si la lista está vacía. <code>run</code>
+      devuelve 0 y <code>sys.exit</code> lo entrega al sistema.</li>
+</ol>
+
+<div class="note">
+<strong>La frase corta para la defensa:</strong> <em>«la CLI traduce e imprime,
+la aplicación coordina y valida las reglas del enunciado, el dominio calcula sin
+tocar disco, y un único adaptador sabe de SQLite»</em>.
+</div>
+
+<h2 id="pipe-adaptador">2. Por qué el adaptador comprueba el fichero antes de conectar</h2>
+
+<p>Porque <code>sqlite3.connect</code> <strong>crea el fichero si no
+existe</strong>. Medido:</p>
+
+<pre><code>¿existe el fichero antes?  False
+al consultar: OperationalError: no such table: chunks
+¿existe el fichero DESPUÉS? True (0 bytes)</code></pre>
+
+<p>Si conectáramos primero, pasarían dos cosas malas a la vez: dejaríamos un
+<code>index.db</code> vacío de 0 bytes en el disco de quien nos corrige, y el
+mensaje hablaría de una <em>tabla</em> que falta, que es jerga interna, en vez
+de decir lo único útil: <em>ejecuta <code>index</code> primero</em>.</p>
+
+<p>Así que la comprobación es una <strong>cláusula de guarda</strong>: va
+primero, corta antes de hacer nada, y deja el disco como estaba.</p>
+
+<h3>Y por qué <code>list(...)</code> y no lo que devuelve <code>execute</code></h3>
+
+<p>Un cursor de SQLite es <strong>perezoso</strong>: va trayendo las filas a
+medida que las recorres. Pero la conexión se cierra al salir del
+<code>with closing(...)</code>, así que quien reciba el cursor intentaría leer
+de una conexión ya cerrada:</p>
+
+<pre><code>devolviendo el cursor -> ProgrammingError: Cannot operate on a closed database.
+devolviendo list(...)  -> [(1,), (2,)]</code></pre>
+
+<p><code>list(...)</code> fuerza a leer todas las filas <em>mientras la conexión
+sigue abierta</em>. Aquí la lista no es pereza: es la única opción correcta sin
+dejar la conexión abierta a merced de quien llame.</p>
+
+<h2 id="pipe-validar">3. Quién valida qué, y por qué no todo en el mismo sitio</h2>
+
+<p><code>run_search</code> valida <code>k</code> y la query, pero
+<strong>no</strong> valida <code>index_path</code>. No es un olvido: cada
+comprobación vive donde está el conocimiento para hacerla.</p>
+
+<table>
+<tr><th>Qué se valida</th><th>Dónde</th><th>Por qué ahí</th></tr>
+<tr>
+  <td><code>k</code> entre 1 e infinito, y la query no vacía</td>
+  <td><strong>aplicación</strong> (<code>run_search</code>)</td>
+  <td>Son <em>reglas del problema</em>, no de la terminal. Si mañana llega la
+      API HTTP del bonus, entra por el mismo caso de uso y se encuentra el
+      mismo portero</td>
+</tr>
+<tr>
+  <td>Que el índice exista y se pueda leer</td>
+  <td><strong>adaptador</strong> (<code>load_chunks</code>)</td>
+  <td>Es un <em>hecho del mundo exterior</em>. Solo el adaptador sabe qué es un
+      índice válido: un fichero con una tabla <code>chunks</code>. La
+      aplicación no puede tocar disco, así que tampoco puede comprobarlo</td>
+</tr>
+<tr>
+  <td>Que los tipos de los flags sean los que son</td>
+  <td><strong>nadie</strong>, y es deliberado</td>
+  <td>Fire adivina tipos y no valida. Por eso las guardas rechazan
+      <code>str</code>, <code>float</code> y <code>bool</code> además de los
+      rangos</td>
+</tr>
+</table>
+
+<p>Y el usuario no nota la diferencia: <code>load_chunks</code> lanza un
+<code>ValueError</code> con su mensaje, y la frontera de errores de la CLI lo
+convierte en <code>ERROR: ...</code> con salida 1, igual que si lo hubiera
+lanzado la aplicación. <strong>Dónde se valida es una decisión de diseño;
+cómo se ve desde fuera es siempre igual.</strong></p>
+
+<div class="warn">
+<strong>El error que esto evita:</strong> validar la ruta también en
+<code>run_search</code> sería duplicar la comprobación en dos sitios. El día que
+cambie lo que significa «índice válido» (por ejemplo, al añadir una tabla),
+habría que acordarse de los dos. Una comprobación, un sitio.
+</div>
+
+<h2 id="pipe-defensa">4. Preguntas de defensa</h2>
+
+<ol>
+  <li>Cuenta el recorrido de <code>search "..." --k 5</code> nombrando las capas
+      por las que pasa.</li>
+  <li>¿Quién decide el código de salida del programa, y dónde está escrito?</li>
+  <li>¿Por qué <code>load_chunks</code> comprueba el fichero antes de conectar?
+      Da los dos motivos.</li>
+  <li>¿Por qué devuelve una lista y no el cursor?</li>
+  <li>¿Por qué <code>k</code> se valida en la aplicación y la ruta del índice en
+      el adaptador?</li>
+  <li>Si añadiéramos una API HTTP, ¿qué habría que reescribir y qué no?</li>
+</ol>
+
+</div>
+
+<script>
+  var TABS = ["db", "lex", "pipe"];
+
+  function showTab(name, keepHash) {
+    TABS.forEach(function (one) {
+      document.getElementById("panel-" + one).hidden = one !== name;
+      document.getElementById("tab-" + one)
+        .setAttribute("aria-selected", one === name ? "true" : "false");
+    });
+    if (!keepHash) {
+      history.replaceState(null, "", "#" + name);
+      window.scrollTo(0, 0);
+    }
+  }
+
+  // Un enlace interno puede apuntar a otra pestaña: la abre antes de saltar.
+  document.addEventListener("click", function (event) {
+    var link = event.target.closest('a[href^="#"]');
+    if (!link) { return; }
+    var target = link.getAttribute("href").slice(1);
+    var owner = TABS.find(function (one) { return target.indexOf(one + "-") === 0; });
+    if (owner) { showTab(owner, true); }
+  });
+
+  (function start() {
+    var wanted = location.hash.slice(1);
+    var owner = TABS.indexOf(wanted) >= 0
+      ? wanted
+      : TABS.find(function (one) { return wanted.indexOf(one + "-") === 0; });
+    showTab(owner || "db", true);
+    if (wanted && TABS.indexOf(wanted) < 0) {
+      var anchor = document.getElementById(wanted);
+      if (anchor) { anchor.scrollIntoView(); }
+    }
+  })();
+</script>
 
 </body>
 </html>

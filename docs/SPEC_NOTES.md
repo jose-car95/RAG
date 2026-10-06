@@ -96,6 +96,29 @@ justificar), **ABIERTO** (pendiente, con límite).
   data/processed/`, construido con la carpeta real de `--index_path` para que
   siga siendo cierto si se cambia la ruta.
 
+## El comando `search`
+
+- **DECISIÓN (2026-10-06, Jose, opción B1)** — Cada línea imprime posición,
+  puntuación con dos decimales, `file_path` tal como está en el corpus y el
+  rango de caracteres entre corchetes. Sin fragmento del texto: añadiría ruido
+  y decisiones nuevas, y lo que compara el corrector es la ruta y el rango.
+- **DECISIÓN (2026-10-06, Jose, opción C1)** — Capas separadas: `load_chunks`
+  (adaptador) lee SQLite, `run_search` (aplicación) valida y coordina, la CLI
+  solo imprime. `search_dataset` reutilizará el mismo caso de uso.
+- **FACT (medido 2026-10-06)** — `sqlite3.connect` **crea** el fichero que no
+  encuentra: sin comprobarlo antes, un `search` sin índice dejaría un
+  `index.db` de 0 bytes y fallaría con `no such table: chunks`. La guarda con
+  `is_file()` va antes de conectar.
+- **FACT (medido 2026-10-06)** — Devolver el cursor de SQLite en vez de
+  `list(...)` falla con `ProgrammingError: Cannot operate on a closed
+  database`, porque el cursor es perezoso y la conexión ya se cerró.
+- **INTERPRETACIÓN** — La ruta del índice la valida el adaptador y no el caso
+  de uso: `k` y la query son reglas del problema, pero que el índice exista es
+  un hecho del mundo exterior y la aplicación no toca disco.
+- **FACT (medido 2026-10-06)** — Un `search` suelto tarda 1,12 s sobre el
+  corpus real (1,10-1,15 s en tres consultas), y el 90% de ese tiempo es
+  construir el índice invertido en memoria, no buscar.
+
 ## Recuperación con BM25
 
 - **DECISIÓN (2026-10-01, Jose)** — Se usa **BM25**, no TF-IDF, con los valores
@@ -197,7 +220,11 @@ justificar), **ABIERTO** (pendiente, con límite).
   con `retrieved_sources` vacíos es válido (`Student data is valid: True`,
   recall 0) tanto con `"k": 10` como con `"k": 0`: la moulinette no impone
   nada sobre `k`.
-- **ABIERTO** — Semántica de la query vacía en `search`. Límite: M3.
+- **DECISIÓN (2026-10-06, Jose, opción A1)** — Una query vacía o con solo
+  espacios es un **error**: `ERROR: query must not be empty`, salida 1. Se
+  distingue de una búsqueda legítima sin resultados (`search "asdfghjkl"`),
+  que imprime `No sources found.` y sale con 0. Cierra el ABIERTO que vencía
+  en M3.
 - **FACT (medido 2026-09-15)** — Fire traduce pero NO valida: adivina tipos
   (`--k abc` llega como `'abc'`; `search 123` llega como el entero `123`) y
   los type hints no se comprueban al ejecutar. La validación es nuestra.

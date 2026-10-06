@@ -23,6 +23,11 @@ INSERT_CHUNK_SQL = """
     )
     VALUES (?, ?, ?, ?)
 """
+SELECT_CHUNKS_SQL = """
+    SELECT id, file_path, first_character_index, last_character_index, text
+    FROM chunks
+    ORDER BY id
+"""
 
 
 def save_chunks(
@@ -54,3 +59,33 @@ def save_chunks(
 
     except (sqlite3.Error, OSError) as error:
         raise ValueError(f"cannot write index: {index_path}") from error
+
+
+def load_chunks(index_path: str) -> list[tuple[int, str, int, int, str]]:
+    """Read every stored chunk, in index order.
+
+    The file is checked before connecting because ``sqlite3.connect``
+    creates the database it cannot find, which would leave an empty index
+    behind and report a missing table instead of a missing index.
+
+    The rows are materialised into a list on purpose: returning the cursor
+    would hand the caller a closed connection.
+
+    Args:
+        index_path: Path of the SQLite index.
+
+    Returns:
+        One tuple per chunk: id, file path, first and last character index,
+        and text.
+
+    Raises:
+        ValueError: If the index does not exist or cannot be read.
+    """
+    index_file = Path(index_path)
+    if not index_file.is_file():
+        raise ValueError(f"index not found: {index_path}; run index first")
+    try:
+        with closing(sqlite3.connect(index_file)) as connection:
+            return list(connection.execute(SELECT_CHUNKS_SQL))
+    except (sqlite3.Error, OSError) as error:
+        raise ValueError(f"cannot read index: {index_path}") from error
