@@ -79,16 +79,26 @@ class RagCli:
         self,
         dataset_path: str,
         k: int = 10,
-        save_directory: str = "data/output/search_results"
+        save_directory: str = "data/output/search_results",
+        index_path: str = "data/processed/index.db"
     ) -> None:
         """Search every question of a dataset and save the results.
+
+        The index is loaded once for the whole dataset, so searching 200
+        questions costs barely more than searching one.
 
         Args:
             dataset_path: Path to the JSON dataset of questions.
             k: Number of sources to return per question.
             save_directory: Directory where the results file is written.
+            index_path: SQLite index to search, built by ``index``.
         """
-        output_path = run_search_dataset(dataset_path, k, save_directory)
+        output_path = run_search_dataset(
+            dataset_path,
+            k,
+            save_directory,
+            index_path
+        )
         print(f"Saved student_search_results to {output_path}")
 
     def answer(self, query: str, k: int = 10) -> None:
