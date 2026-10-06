@@ -51,7 +51,7 @@ def run_search_dataset(
 
     for question in tqdm(
         dataset.rag_questions,
-        desc="Indexing",
+        desc="Searching",
         unit="question"
     ):
         search_results.append(
