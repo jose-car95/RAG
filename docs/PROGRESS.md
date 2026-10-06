@@ -10,16 +10,24 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slices cerrados en M3:** #22 tokenización.
-- **Slice en revisión:** #23 "Rank chunks with BM25". Nace
-  `src/domain/bm25.py` con tres piezas: `Bm25Index` (un `NamedTuple` con
-  `postings`, `lengths`, `average_length` y `document_count`), `build_index`
-  (recorre el corpus una sola vez, porque puede llegar como generador) e
-  `idf` y `rank` (la fórmula con `K1=1.5` y `B=0.75`, orden descendente y
-  desempate por `chunk_id` ascendente). El índice invertido vive en memoria,
-  no en SQLite.
+- **Slices cerrados en M3:** #22 tokenización; #23 BM25.
+- **Slice en revisión:** #24 "Implement the search command". **Primer
+  comando de recuperación usable por terminal.** Nace `load_chunks` en
+  `src/adapters/sqlite_index.py` (comprueba el fichero antes de conectar,
+  porque `sqlite3.connect` lo crearía, y materializa las filas en una lista
+  antes de cerrar la conexión) y el caso de uso
+  `src/application/search.py` (`run_search`: valida `k` y la query, carga,
+  construye el índice, llama a `rank` y devuelve
+  `(MinimalSource, puntuación)`). La CLI solo imprime.
+  Además, **el material de estudio pasa a un único fichero con pestañas**:
+  `docs/conceptos/index.html` sustituye a las dos páginas anteriores y
+  añade la pestaña «El pipeline de búsqueda».
+- **Verificado (2026-10-06, slice #24):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 28 source files`.
+  - `make test` → `149 passed` (13 de `run_search`, 2 de `load_chunks`, 3 de la CLI).
+  - **`search` real contra el corpus**, con la pregunta literal del enunciado (`"How to configure OpenAI server?" --k 5`): las tres primeras fuentes son ejemplos de `examples/online_serving/openai_*`. **1,12 s** y 115 MB de memoria; tres consultas seguidas dan 1,14 / 1,10 / 1,15 s, así que el tiempo es estable y lo domina construir el índice, no buscar.
+  - **Los seis criterios de aceptación, de punta a punta:** query vacía y solo espacios → `ERROR: query must not be empty`, salida 1; `asdfghjkl` → `No sources found.`, salida 0; `--k 0` → `ERROR: k must be a positive integer`, salida 1; sin índice → `ERROR: index not found: <ruta>; run index first`, salida 1 **y el fichero no se crea**; la pregunta de LoRA → la fuente correcta en posición 1 con 41,27.
 - **Verificado (2026-10-01, slice #23):**
-  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 26 source files`.
   - `make test` → `131 passed` (18 de BM25).
   - **Primera búsqueda real del proyecto.** Pregunta de `dataset_docs_public.json` («What HTTP endpoint is used to dynamically load a LoRA adapter in vLLM?»): el chunk correcto sale **en posición 1** con 41,27 puntos e **IoU 0,9986** contra la fuente de referencia; los puestos 3 y 5 son sus chunks vecinos del mismo fichero. Índice construido en 0,88 s y búsqueda en **22 ms**, así que 200 preguntas serían unos 5 s de los 90 permitidos.
   - **Reparto de la puntuación del chunk ganador:** `adapter` 11,23 (df 79, tf 13), `lora` 6,67, `endpoint` 5,35, `http` 4,30, `dynamically` 4,11 (el término más raro, pero con tf 1), `a` 2,77 (tf 12 y df 4.818). Prueba medida de que hacen falta las dos cosas, y de por qué no se mantiene una lista de stop words.
@@ -37,10 +45,10 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** slice #24 "Implement the search command",
-  el primero que hace visible BM25 por terminal. Después #25
-  (`retrieved_sources` reales), #26 (`evaluate` con recall@k) y #27 (línea
-  base). Con esos cuatro, M3 cierra y el RAG ya recupera y se mide.
+- **Siguiente paso propuesto:** slice #25 "Fill retrieved_sources in
+  search_dataset", que reutiliza `run_search` para las 200 preguntas.
+  Después #26 (`evaluate` con recall@k) y #27 (línea base). Con esos tres,
+  M3 cierra y el RAG ya recupera **y se mide**.
 
 ## Decisiones
 
@@ -85,6 +93,12 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Los comandos largos del pipeline van paso a paso en el README (M6), no como reglas del `Makefile` | Las rutas y nombres de los datasets cambian en la corrección; en el README se ajustan a mano sin tocar código |
 | 2026-09-18 | M1 cerrado en GitHub; issues de M2 (#17-#21) y M3 (#22-#27) creados | Solo se crean issues del milestone actual y del siguiente |
 | 2026-09-18 | Se indexan `.py`, `.md` y `.txt` (1A); flags opcionales `--raw_directory` e `--index_path` con valores por defecto (3A); `last_character_index` exclusivo (FACT medido) | Detalle en `docs/SPEC_NOTES.md` |
+| 2026-10-06 | Una query vacía o con solo espacios es un error (`ERROR: query must not be empty`, salida 1), no un resultado vacío (opción A1) | Cierra el ABIERTO de `docs/SPEC_NOTES.md`. Mismo trato que `k`: una entrada sin sentido se rechaza en la frontera. `search "asdfghjkl"` es otro caso, una búsqueda legítima sin resultados, y sale con 0 |
+| 2026-10-06 | `search` imprime posición, puntuación, `file_path` y rango; sin fragmento del texto (opción B1) | El `file_path` y el rango son lo que exige el enunciado y lo que compara el corrector; el texto añadiría ruido y decisiones nuevas (cuántos caracteres, saltos de línea). Añadirlo es un cambio de dos líneas en M6 si ayuda a la demo |
+| 2026-10-06 | Capas separadas: `load_chunks` en el adaptador, `run_search` en aplicación, la CLI solo imprime (opción C1) | `search_dataset` (#25) necesita el mismo pipeline, así que meterlo en la CLI lo habría duplicado de inmediato |
+| 2026-10-06 | La ruta del índice la valida el adaptador, no el caso de uso | Cada comprobación vive donde está el conocimiento: `k` y la query son reglas del problema (aplicación), que el índice exista es un hecho del mundo exterior y solo el adaptador sabe qué es un índice válido. Duplicarla se desincronizaría al cambiar el esquema |
+| 2026-10-06 | **Medido antes de implementar:** `sqlite3.connect` crea el fichero que no encuentra | Sin comprobarlo antes, un `search` sin índice dejaría un `index.db` de 0 bytes y fallaría con `no such table: chunks`, jerga interna. La guarda va antes de conectar |
+| 2026-10-06 | El material de estudio pasa a un único `docs/conceptos/index.html` con pestañas; se borran `bases-de-datos.html` y `busqueda-lexica-bm25.html` | Petición de Jose: todo en un sitio, con una pestaña por bloque. Los identificadores llevan prefijo (`db-`, `lex-`, `pipe-`) porque `glosario` y `defensa` colisionaban. Autocontenido, sin red ni dependencias, y la URL recuerda la pestaña |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
 | 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
@@ -120,6 +134,7 @@ M3 antes de optimizar nada.
 | Fecha | Métrica | Valor | Umbral | Comando que lo reproduce |
 |---|---|---|---|---|
 | 2026-09-23 | Tiempo de indexado | **3,65 s** (1.969 ficheros, 18.942 chunks) | ≤ 300 s | `uv run python -m src index` |
+| 2026-10-06 | `search` de una consulta | **1,12 s** (1,10-1,15 s en tres consultas seguidas), 115 MB | — | `uv run python -m src search "How to configure OpenAI server?" --k 5` |
 | 2026-09-23 | Tamaño del índice | 25 MB (26.075.136 bytes), 0 páginas libres | — | `uv run python -m src index` + `ls -l data/processed/index.db` |
 | — | 200 preguntas (docs + code) | — | ≤ 90 s | pendiente (M3) |
 | — | Recall@5 docs (públicos) | — | ≥ 0.80 | pendiente (M3) |
@@ -175,6 +190,14 @@ M3 antes de optimizar nada.
   cuál es `pair[0]` (el id) y cuál `pair[1]` (la puntuación), y faltaban las
   dos consecuencias: sin el signo menos salen los peores primero, y sin el
   desempate explícito el orden depende del recorrido del diccionario.
+- **Paso 8 del slice #24 (2026-10-06): RESPONDIDO POR LA IA a petición de
+  Jose**, no por él. Las tres preguntas (la cadena completa de `search` capa
+  por capa; por qué `load_chunks` comprueba el fichero antes de conectar y
+  por qué devuelve `list(...)`; y por qué `k` y la query se validan en la
+  aplicación mientras la ruta del índice se valida en el adaptador) quedan
+  desarrolladas en la pestaña «El pipeline de búsqueda» de
+  `docs/conceptos/index.html`, con diagrama de capas. **Hay que ensayarlas en
+  voz alta**: es el recorrido que más probablemente le pidan en la defensa.
 - **Pulido M6:** rechazar un `--save_directory` que parezca un fichero
   (p. ej. termina en `.json`); hoy crea una carpeta con ese nombre.
 
