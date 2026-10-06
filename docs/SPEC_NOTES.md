@@ -96,6 +96,37 @@ justificar), **ABIERTO** (pendiente, con límite).
   data/processed/`, construido con la carpeta real de `--index_path` para que
   siga siendo cierto si se cambia la ruta.
 
+## ¿Hace falta orientación a objetos?
+
+- **FACT (verificado 2026-10-06 sobre `docs/en.subject.pdf`, 26 páginas)** —
+  **No.** Se buscaron todas las frases con «must» y «mandatory» y todas las
+  menciones de `class`, `object-oriented`, `OOP`, `inherit`, `polymorph` y
+  `encapsulat`. Ningún requisito duro menciona clases ni orientación a
+  objetos: los 23 «must» hablan de Python 3.10+, flake8, mypy, type hints,
+  context managers, `uv`, Fire, tqdm, rutas configurables, la estructura de
+  carpetas, los umbrales y el README.
+- **FACT (verificado 2026-10-06)** — Las dos únicas menciones de clases son
+  permisivas, no prescriptivas: *«Include docstrings in functions **and
+  classes** following PEP 257»* (condicional: documenta las que tengas) y
+  *«Your data models must use pydantic... **Service or orchestration classes
+  (indexer, retriever, pipeline, etc.) do not have to be pydantic**»* (una
+  exención para las clases de servicio, no una obligación de tenerlas).
+- **FACT (verificado 2026-10-06)** — La escala de evaluación interna de
+  `docs/eval/` no menciona objetos en absoluto.
+- **INTERPRETACIÓN** — El proyecto ya tiene clases donde el enunciado las
+  exige o donde se ganan el sueldo: los 8 modelos pydantic, `Bm25Index` (un
+  `NamedTuple`) y `RagCli`. Lo que no hay son clases de servicio con estado
+  mutable: el dominio son funciones puras sobre datos inmutables, más fáciles
+  de testear y de razonar. Una clase se crea cuando haya estado compartido que
+  lo justifique, y la discusión del slice #25 (`load_index` + `search_index`
+  frente a una clase `Retriever`) es exactamente ese debate.
+- **ABIERTO** — `data/output/search_results/<DatasetScope>/`: entendemos que
+  el `<DatasetScope>` lo pone el evaluador dentro de `--save_directory`, no
+  nosotros, porque el enunciado dice que *«the evaluator points them at the
+  datasets and at dedicated output directories»*. Añadir la carpeta por
+  nuestra cuenta duplicaría el nivel. **Confirmar con los scripts de examen en
+  el slice #27**; si no coincidiera, es un cambio de una línea.
+
 ## El comando `search`
 
 - **DECISIÓN (2026-10-06, Jose, opción B1)** — Cada línea imprime posición,
