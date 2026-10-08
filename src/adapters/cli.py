@@ -9,6 +9,7 @@ from pathlib import Path
 
 import fire
 
+from src.application.evaluate import run_evaluate
 from src.application.index_corpus import run_index, MAX_CHUNK_SIZE
 from src.application.search import run_search
 from src.application.search_dataset import run_search_dataset
@@ -24,8 +25,8 @@ EXIT_INTERRUPTED = 130
 class RagCli:
     """Commands required by the subject, exposed through Fire.
 
-    For now every command is a placeholder that only reports it is not
-    implemented yet.
+    ``answer`` and ``answer_dataset`` are still placeholders that only report
+    they are not implemented yet.
     """
     def index(
         self,
@@ -128,13 +129,18 @@ class RagCli:
         student_search_results_path: str,
         dataset_path: str
     ) -> None:
-        """Report recall@k of search results against a reference dataset.
+        """Print recall@1/3/5/10 of search results against a dataset.
+
+        The line has the format of the subject's example, so it can be
+        compared at a glance with the reference tool.
 
         Args:
             student_search_results_path: Path to the search results file.
             dataset_path: Path to the dataset with the correct sources.
         """
-        print("evaluate: not implemented yet")
+        recalls = run_evaluate(student_search_results_path, dataset_path)
+        parts = [f"Recall@{k}: {recall:.3f}" for k, recall in recalls.items()]
+        print(" ".join(parts))
 
 
 def run(component: object, argv: list[str] | None = None) -> int:
