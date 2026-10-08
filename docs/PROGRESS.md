@@ -10,14 +10,23 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slices cerrados en M3:** #22 tokenización; #23 BM25; #24 comando `search`.
-- **Slice en revisión:** #25 "Fill retrieved_sources in search_dataset".
-  **El RAG ya recupera de verdad para las 200 preguntas.** Nace
-  `src/application/retrieval.py` con lo que comparten los dos casos de uso
-  (`CorpusIndex`, `load_index`, `search_index` y `validate_query_and_k`), y
-  `search.py` se queda solo con `run_search`, así que **ningún caso de uso
-  depende de otro**. `run_search_dataset` carga el índice **una vez** antes
-  del bucle y busca cada pregunta con `search_index`, con barra de tqdm.
+- **Slices cerrados en M3:** #22 tokenización; #23 BM25; #24 comando
+  `search`; #25 fuentes reales en `search_dataset` (el RAG recupera para las
+  200 preguntas; lo compartido vive en `src/application/retrieval.py`).
+- **Slice en revisión:** #26 "Report recall@k with evaluate". Nace
+  `src/domain/recall.py` (`iou`, `is_match`, `recall_at_k`, umbral 0.05
+  estricto y `RECALL_KS = (1, 3, 5, 10)`), el lector `load_search_results`
+  en `src/adapters/json_results.py` y el caso de uso `run_evaluate` en
+  `src/application/evaluate.py`, que rechaza datasets sin preguntas o sin
+  fuentes de referencia y cruza preguntas y resultados por `question_id`.
+  **Nuestro `evaluate` da las mismas cuatro cifras que la moulinette.**
+- **Verificado (2026-10-08, slice #26):**
+  - `make lint` → flake8 sin salida; mypy `Success: no issues found in 33 source files`.
+  - `make test` → `181 passed` (15 de `recall`, 12 de `evaluate`, 2 de la CLI).
+  - **Mismas cifras que la moulinette** con `search_dataset --k 10` sobre los públicos: docs `Recall@1: 0.650 Recall@3: 0.790 Recall@5: 0.840 Recall@10: 0.880`; code `Recall@1: 0.263 Recall@3: 0.424 Recall@5: 0.485 Recall@10: 0.576`.
+  - **Los once criterios del issue por la CLI real:** fichero de resultados o dataset inexistente, JSON roto en cualquiera de los dos, dataset `UnansweredQuestions` y dataset sin preguntas terminan en `ERROR: ...` con salida 1 y sin traceback.
+  - **`recall_at_k` se llama 400 veces** (100 preguntas × 4 valores de k), medido con un contador; una primera versión con un bucle de más hacía 40.000.
+  - **Diagnóstico para M4 (code, top 5, 99 preguntas):** 48 encontradas, 12 en el fichero correcto pero en otra zona (IoU ≤ 0,05) y 39 sin el fichero correcto en el top 5. El IoU mediano de los aciertos es 0,49: el umbral no es el cuello de botella, lo es el ranking. Faltan 2 preguntas (50/99) para pasar; hay 9 con la fuente en las posiciones 6-10.
 - **Verificado (2026-10-06, slice #25):**
   - `make lint` → flake8 sin salida; mypy `Success: no issues found in 29 source files`.
   - `make test` → `153 passed`.
@@ -50,17 +59,19 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** slice #26 "Report recall@k with evaluate",
-  el último comando obligatorio de M3 que no existe. Después #27 (registrar
-  la línea base con los scripts de examen) y M3 cierra.
-- **Pendiente de una palabra (2026-10-06):** en
-  `src/application/search_dataset.py:54` el `tqdm` dice `desc="Indexing"`
-  cuando está buscando; debe decir `"Searching"`. Lo escribe Jose.
+- **Siguiente paso propuesto:** slice #27 "Measure the retrieval
+  baseline": registrar la línea base y confirmar con los scripts de examen la
+  estructura de `data/output/search_results/<DatasetScope>/` (ABIERTO de
+  `docs/SPEC_NOTES.md`). Con eso M3 cierra y se crean los issues de M4, el
+  primero el troceado de clases de Python por métodos.
 - **Pendiente apuntado (2026-10-06):** la ruta por defecto del índice está
   ahora en **tres** sitios (`cli.py` en `index`, `search` y
   `search_dataset`), que era el disparador acordado para sacarla a una
   constante compartida. No se hizo en este slice para no mezclar dos cosas en
   el mismo diff.
+- **Pendiente apuntado (2026-10-08):** `load_dataset` y `load_search_results`
+  son casi idénticas. Con dos copias no compensa una función común; el
+  lector de `answer_dataset` (M5) será la tercera y el momento de unificar.
 
 ## Decisiones
 
@@ -115,6 +126,8 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-06 | La ruta del índice la valida el adaptador, no el caso de uso | Cada comprobación vive donde está el conocimiento: `k` y la query son reglas del problema (aplicación), que el índice exista es un hecho del mundo exterior y solo el adaptador sabe qué es un índice válido. Duplicarla se desincronizaría al cambiar el esquema |
 | 2026-10-06 | **Medido antes de implementar:** `sqlite3.connect` crea el fichero que no encuentra | Sin comprobarlo antes, un `search` sin índice dejaría un `index.db` de 0 bytes y fallaría con `no such table: chunks`, jerga interna. La guarda va antes de conectar |
 | 2026-10-06 | El material de estudio pasa a un único `docs/conceptos/index.html` con pestañas; se borran `bases-de-datos.html` y `busqueda-lexica-bm25.html` | Petición de Jose: todo en un sitio, con una pestaña por bloque. Los identificadores llevan prefijo (`db-`, `lex-`, `pipe-`) porque `glosario` y `defensa` colisionaban. Autocontenido, sin red ni dependencias, y la URL recuerda la pestaña |
+| 2026-10-07 | Rango de ancho 0: guarda en `iou`, no regla `first < last` en `MinimalSource` (opción A) | La moulinette acepta fuentes de referencia vacías; endurecer el modelo rechazaría un dataset entero por una. Detalle en `docs/SPEC_NOTES.md` |
+| 2026-10-07 | Idea para M4: medir MRR junto a recall@k | Recall@k no distingue la posición 1 de la 5; MRR sí, y reutiliza `is_match` |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
 | 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
@@ -152,12 +165,11 @@ M3 antes de optimizar nada.
 | 2026-09-23 | Tiempo de indexado | **3,65 s** (1.969 ficheros, 18.942 chunks) | ≤ 300 s | `uv run python -m src index` |
 | 2026-10-06 | **Recall@5 docs (públicos)** | **0,840** | ≥ 0,80 | `search_dataset --k 5` + `./moulinette-ubuntu evaluate_student_search_results` |
 | 2026-10-06 | **Recall@5 code (públicos)** | **0,485** | ≥ 0,50 | ídem; **falla por 0,015**, objetivo de M4 |
+| 2026-10-08 | Recall@1/3/5/10 docs (públicos, `--k 10`) | 0,650 / 0,790 / **0,840** / 0,880 | @5 ≥ 0,80 | `search_dataset --k 10` + `uv run python -m src evaluate`; idéntico a la moulinette |
+| 2026-10-08 | Recall@1/3/5/10 code (públicos, `--k 10`) | 0,263 / 0,424 / **0,485** / 0,576 | @5 ≥ 0,50 | ídem; @5 falla por 0,015 (2 preguntas) |
 | 2026-10-06 | 199 preguntas (docs + code) | **7,86 s** (3,79 + 4,07), 115 MB | ≤ 90 s | `uv run python -m src search_dataset --dataset_path ... --k 5` |
 | 2026-10-06 | `search` de una consulta | **1,12 s** (1,10-1,15 s en tres consultas seguidas), 115 MB | — | `uv run python -m src search "How to configure OpenAI server?" --k 5` |
 | 2026-09-23 | Tamaño del índice | 25 MB (26.075.136 bytes), 0 páginas libres | — | `uv run python -m src index` + `ls -l data/processed/index.db` |
-| — | 200 preguntas (docs + code) | — | ≤ 90 s | pendiente (M3) |
-| — | Recall@5 docs (públicos) | — | ≥ 0.80 | pendiente (M3) |
-| — | Recall@5 code (públicos) | — | ≥ 0.50 | pendiente (M3) |
 
 ## Preguntas abiertas
 
