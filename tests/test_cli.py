@@ -5,6 +5,7 @@ The CLI is run in a subprocess, exactly as the subject invokes it
 real stdout/stderr instead of calling Python functions directly.
 """
 
+import json
 import re
 import subprocess
 import sys
@@ -64,13 +65,6 @@ def test_help_lists_required_commands() -> None:
             "results.json",
             "--save_directory",
             "answers",
-        ),
-        (
-            "evaluate",
-            "--student_search_results_path",
-            "results.json",
-            "--dataset_path",
-            "dataset.json",
         ),
     ],
     ids=lambda args: args[0],
@@ -314,3 +308,76 @@ def test_index_writes_the_index_file(tmp_path: Path) -> None:
         f"Ingestion complete! Indices saved under {index_path.parent}/\n"
     )
     assert index_path.is_file()
+
+
+def test_evaluate_prints_recall_in_the_subject_format(tmp_path: Path) -> None:
+    """One line with Recall@1/3/5/10 and three decimals, as in the subject."""
+    correct = {
+        "file_path": "data/raw/vllm-0.10.1/docs/features/lora.md",
+        "first_character_index": 4695,
+        "last_character_index": 6098,
+    }
+    wrong = dict(correct, first_character_index=0, last_character_index=10)
+    dataset = tmp_path / "dataset.json"
+    dataset.write_text(
+        json.dumps({
+            "rag_questions": [
+                {
+                    "question_id": question_id,
+                    "question": "How to load a lora adapter?",
+                    "sources": [correct],
+                    "answer": "With the endpoint.",
+                }
+                for question_id in ("q1", "q2")
+            ]
+        }),
+        encoding="utf-8",
+    )
+    results = tmp_path / "results.json"
+    results.write_text(
+        json.dumps({
+            "search_results": [
+                {
+                    "question_id": "q1",
+                    "question": "How to load a lora adapter?",
+                    "retrieved_sources": [correct],
+                },
+                {
+                    "question_id": "q2",
+                    "question": "How to load a lora adapter?",
+                    "retrieved_sources": [wrong, wrong, wrong, correct],
+                },
+            ],
+            "k": 10,
+        }),
+        encoding="utf-8",
+    )
+
+    result = run_cli(
+        "evaluate",
+        "--student_search_results_path",
+        str(results),
+        "--dataset_path",
+        str(dataset),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (
+        "Recall@1: 0.500 Recall@3: 0.500 Recall@5: 1.000 Recall@10: 1.000\n"
+    )
+
+
+def test_evaluate_reports_missing_search_results(tmp_path: Path) -> None:
+    """A missing results file ends in a one-line error and exit code 1."""
+    missing = tmp_path / "nope.json"
+
+    result = run_cli(
+        "evaluate",
+        "--student_search_results_path",
+        str(missing),
+        "--dataset_path",
+        "data/datasets/AnsweredQuestions/dataset_docs_public.json",
+    )
+
+    assert result.returncode == 1
+    assert result.stderr == f"ERROR: search results not found: {missing}\n"
