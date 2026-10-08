@@ -4,22 +4,26 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M3 — Recuperación BM25 y línea base (en curso). M0 cerrado
+- **Milestone:** M3 — Recuperación BM25 y línea base (último slice en
+  revisión; cierra con el merge del #27). M0 cerrado
   el 2026-09-16; M1 el 2026-09-18; **M2 el 2026-09-29**.
 - **M2 cerrado (5 slices):** #17 descubrir los 1.969 ficheros indexables;
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
 - **Slices cerrados en M3:** #22 tokenización; #23 BM25; #24 comando
-  `search`; #25 fuentes reales en `search_dataset` (el RAG recupera para las
-  200 preguntas; lo compartido vive en `src/application/retrieval.py`).
-- **Slice en revisión:** #26 "Report recall@k with evaluate". Nace
-  `src/domain/recall.py` (`iou`, `is_match`, `recall_at_k`, umbral 0.05
-  estricto y `RECALL_KS = (1, 3, 5, 10)`), el lector `load_search_results`
-  en `src/adapters/json_results.py` y el caso de uso `run_evaluate` en
-  `src/application/evaluate.py`, que rechaza datasets sin preguntas o sin
-  fuentes de referencia y cruza preguntas y resultados por `question_id`.
-  **Nuestro `evaluate` da las mismas cuatro cifras que la moulinette.**
+  `search`; #25 fuentes reales en `search_dataset`; #26 comando `evaluate`
+  (mismas cifras que la moulinette).
+- **Slice en revisión:** #27 "Measure the retrieval baseline". Línea base de
+  M3 medida como los scripts de examen (`--k 10`, `time uv run`) y
+  registrada en la sección «Línea base M3» de las métricas. Cierra el ABIERTO
+  de `<DatasetScope>` leyendo `exams/scripts/exam_retrieval.sh`: el
+  evaluador elige la carpeta y busca el fichero por nombre, así que no se
+  cambia nada. Sin cambios en `src/`.
+- **Verificado (2026-10-08, slice #27):**
+  - `make lint` → mypy `Success: no issues found in 33 source files`; `make test` → `181 passed`.
+  - Indexado **4,51 s**; 199 preguntas **5,51 s** (115 MB); Recall@5 docs **0,840** (OK) y code **0,485** (falla por 0,015). Moulinette y `evaluate` coinciden en los cuatro valores de k.
+  - Se borraron con OK de Jose las dos carpetas `evaluations/retrieval/2026-10-07_*` que había dejado una ejecución de `exam_retrieval.sh` (que usa los datasets privados); sus logs de recall no se abrieron.
 - **Verificado (2026-10-08, slice #26):**
   - `make lint` → flake8 sin salida; mypy `Success: no issues found in 33 source files`.
   - `make test` → `181 passed` (15 de `recall`, 12 de `evaluate`, 2 de la CLI).
@@ -59,11 +63,11 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** slice #27 "Measure the retrieval
-  baseline": registrar la línea base y confirmar con los scripts de examen la
-  estructura de `data/output/search_results/<DatasetScope>/` (ABIERTO de
-  `docs/SPEC_NOTES.md`). Con eso M3 cierra y se crean los issues de M4, el
-  primero el troceado de clases de Python por métodos.
+- **Siguiente paso propuesto:** tras el merge, cerrar M3 en GitHub y crear
+  los issues de M4. Primero el troceado de clases de Python por métodos con
+  `ast` (hipótesis: 12 de los fallos de code están en el fichero correcto pero
+  en otra zona), medido contra la línea base. Después partir identificadores
+  y el peso de la ruta, y MRR como métrica de apoyo.
 - **Pendiente apuntado (2026-10-06):** la ruta por defecto del índice está
   ahora en **tres** sitios (`cli.py` en `index`, `search` y
   `search_dataset`), que era el disparador acordado para sacarla a una
@@ -128,6 +132,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-06 | El material de estudio pasa a un único `docs/conceptos/index.html` con pestañas; se borran `bases-de-datos.html` y `busqueda-lexica-bm25.html` | Petición de Jose: todo en un sitio, con una pestaña por bloque. Los identificadores llevan prefijo (`db-`, `lex-`, `pipe-`) porque `glosario` y `defensa` colisionaban. Autocontenido, sin red ni dependencias, y la URL recuerda la pestaña |
 | 2026-10-07 | Rango de ancho 0: guarda en `iou`, no regla `first < last` en `MinimalSource` (opción A) | La moulinette acepta fuentes de referencia vacías; endurecer el modelo rechazaría un dataset entero por una. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-07 | Idea para M4: medir MRR junto a recall@k | Recall@k no distingue la posición 1 de la 5; MRR sí, y reutiliza `is_match` |
+| 2026-10-08 | La línea base se mide como los scripts de examen: `--k 10` y `time uv run` | Medir igual que nos van a medir. Leído en `exams/scripts/exam_retrieval.sh`; los scripts se leen, no se ejecutan (usan los datasets privados) |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
 | 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
@@ -156,6 +161,26 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
 
 ## Métricas
+
+### Línea base M3 (2026-10-08, commit `69c3281`, slice #27)
+
+La foto del «antes» de M4. Medida como los scripts de examen: `--k 10`,
+tiempo de pared con `uv run` incluido (`time`), datasets públicos. Nada se
+ajustó para obtenerla.
+
+| Métrica | Valor | Umbral | Estado | Comando |
+|---|---|---|---|---|
+| Indexado (1.969 ficheros) | **4,51 s** | ≤ 300 s | OK | `time uv run python -m src index --max_chunk_size 2000` |
+| 199 preguntas (100 docs + 99 code) | **5,51 s** (2,64 + 2,87), 115 MB | ≤ 90 s | OK | `time uv run python -m src search_dataset --dataset_path data/datasets/UnansweredQuestions/dataset_{docs,code}_public.json --k 10 --save_directory data/output/search_results/UnansweredQuestions` |
+| Recall@1/3/5/10 docs | 0,650 / 0,790 / **0,840** / 0,880 | @5 ≥ 0,80 | OK | `./moulinette-ubuntu evaluate_student_search_results data/output/search_results/UnansweredQuestions/dataset_docs_public.json data/datasets/AnsweredQuestions/dataset_docs_public.json --k 10 --max_context_length 2000`; `uv run python -m src evaluate` da lo mismo |
+| Recall@1/3/5/10 code | 0,263 / 0,424 / **0,485** / 0,576 | @5 ≥ 0,50 | **FALLA** por 0,015 (2 de 99) | ídem con `dataset_code_public.json` |
+
+Diferencia con la medición anterior: el recall es idéntico; las 199
+preguntas bajan de 7,86 s a 5,51 s aunque ahora se piden 10 fuentes en vez
+de 5. El código no ha cambiado, así que la diferencia es del entorno (caché
+de disco caliente); ponytail: se toma como ruido y se medirá siempre igual.
+
+### Historial
 
 Gates de métrica locales (necesitan corpus y modelo). La línea base se mide en
 M3 antes de optimizar nada.
