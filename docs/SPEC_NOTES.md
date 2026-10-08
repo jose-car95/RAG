@@ -120,12 +120,17 @@ justificar), **ABIERTO** (pendiente, con límite).
   de testear y de razonar. Una clase se crea cuando haya estado compartido que
   lo justifique, y la discusión del slice #25 (`load_index` + `search_index`
   frente a una clase `Retriever`) es exactamente ese debate.
-- **ABIERTO** — `data/output/search_results/<DatasetScope>/`: entendemos que
-  el `<DatasetScope>` lo pone el evaluador dentro de `--save_directory`, no
-  nosotros, porque el enunciado dice que *«the evaluator points them at the
-  datasets and at dedicated output directories»*. Añadir la carpeta por
-  nuestra cuenta duplicaría el nivel. **Confirmar con los scripts de examen en
-  el slice #27**; si no coincidiera, es un cambio de una línea.
+- **FACT (leído 2026-10-08 en `exams/scripts/exam_retrieval.sh`, líneas
+  81-92, 183-200 y 228)** — `data/output/search_results/<DatasetScope>/`: el
+  `<DatasetScope>` lo elige el evaluador. El script crea su propia carpeta
+  (`evaluations/retrieval/<fecha>/search_results`), nos la pasa con
+  `--save_directory` y después busca el fichero por nombre
+  (`find ... -name "*docs*"`). Escribir `<save_directory>/<nombre del
+  dataset>.json` sin añadir niveles es lo correcto; añadirlo nosotros lo
+  duplicaría. Lo fija `tests/test_search_dataset.py`. Cierra el ABIERTO.
+- **FACT (mismo script)** — El examen cronometra con `date +%s` alrededor de
+  `uv run python -m src ...` (tiempo de pared, arranque incluido) y usa
+  `--k 10` tanto para buscar como para evaluar.
 
 ## El comando `search`
 
