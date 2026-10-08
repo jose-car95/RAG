@@ -284,6 +284,21 @@ justificar), **ABIERTO** (pendiente, con límite).
   resultado está en el mismo fichero y solapa su rango con IoU > 0.05 (VII.1).
   Nuestro `evaluate` reimplementa ese criterio; nunca importa ni llama a la
   moulinette (VI.6).
+- **FACT (medido 2026-10-06, moulinette local)** — El umbral es
+  **estrictamente mayor**: un IoU de exactamente 0,05 (28/560) no cuenta y
+  29/560 sí. Una pregunta del dataset que falta en los resultados cuenta como
+  0: la media es sobre las preguntas de referencia.
+- **FACT (medido 2026-10-06, moulinette local)** — Con dos rangos de ancho 0
+  (`[5, 5)` frente a `[5, 5)`) la moulinette se rompe con
+  `ZeroDivisionError`. Con una fuente de referencia de ancho 0 frente a un
+  resultado normal la acepta (`valid: True`, recall 0). Los datasets
+  públicos y nuestro índice tienen 0 rangos de ancho 0.
+- **DECISIÓN (2026-10-07, Jose, opción A)** — El rango de ancho 0 se trata
+  con una guarda en `iou` (si la unión es 0, devuelve un valor fijo), no
+  endureciendo `MinimalSource` a `first < last`. Motivo: el modelo también
+  carga los datasets del evaluador, y la moulinette acepta una fuente de
+  referencia vacía; un molde más estricto rechazaría el dataset entero por
+  una sola fuente. `iou` es el único sitio que divide por una longitud.
 - **DECISIÓN** — Los datasets privados (`docs/eval/datasets_private.zip`) y
   la moulinette no se usan jamás desde el código, ni para medir ni para
   ajustar. Los datasets públicos sirven para medir; los parámetros (p. ej.
