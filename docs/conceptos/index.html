@@ -678,6 +678,18 @@ de letras, números y guion bajo):</p>
 <tr><td>Chunk más corto / más largo</td><td class="num">0 / 404 tokens</td></tr>
 </table>
 
+<div class="ok">
+<strong>Cambio del slice #44 (2026-10-13): los identificadores se guardan
+enteros y además por partes.</strong> <code>lm_eval</code> da tres tokens:
+<code>lm_eval</code>, <code>lm</code> y <code>eval</code>. Así una pregunta que
+<em>cita</em> el identificador encuentra el token entero (rarísimo, IDF alta) y
+una que lo <em>parafrasea</em> («the lm eval harness») encuentra las partes.
+Una palabra sin guion bajo sale igual que antes. Con esta regla el índice pasa
+a tener 2.803.792 tokens (antes 1.827.646), un vocabulario de 56.938 palabras
+y una longitud media de 148 tokens por chunk (el más largo, 490). Las cifras
+de la tabla de arriba y de las cuentas siguientes son de antes del cambio.
+</div>
+
 <div class="warn">
 <strong>Ojo al chunk de 0 tokens.</strong> Existe de verdad en nuestro índice: un
 fragmento que solo tiene símbolos y espacios. Cuando programes la puntuación,
