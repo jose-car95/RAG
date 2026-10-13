@@ -5,6 +5,14 @@ RAG system for querying codebases using retrieval, local LLM generation, and rec
 
 Retrieval is lexical and uses **Okapi BM25**, implemented in
 `src/domain/bm25.py` (SQLite only stores the chunks; it does not rank them).
+Text is lowercased and split into runs of letters, digits and underscores.
+An identifier with underscores is kept **whole and followed by its parts**
+(`lm_eval` gives `lm_eval`, `lm`, `eval`): a question may quote an identifier
+verbatim, which the whole token matches with a high IDF, or paraphrase it,
+which only the parts can match. This raised code Recall@5 on the public
+datasets from 0.535 to 0.636, with docs Recall@5 unchanged at 0.830 (docs
+Recall@1 went from 0.650 to 0.610). `CamelCase` is not split.
+
 We follow the **original Okapi BM25 definition**, with the classic
 **Robertson/Spärck Jones IDF**:
 
