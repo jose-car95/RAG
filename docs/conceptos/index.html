@@ -842,7 +842,19 @@ casi cero y se anula sola.</p>
 <code>df</code> = en cuántos aparece la palabra:</p>
 
 <div class="formula">
-IDF(palabra) = ln( 1 + (N - df + 0.5) / (df + 0.5) )
+IDF(palabra) = ln( (N - df + 0.5) / (df + 0.5) )
+</div>
+
+<div class="ok">
+<strong>Cambio del slice #48 (2026-10-13): usamos la IDF original de
+Robertson.</strong> Antes llevábamos un <code>1 +</code> dentro del
+logaritmo, que es la variante de Lucene. Con la original, una palabra que está
+en <strong>la mitad o más</strong> de los chunks daría 0 o un número
+negativo, y entonces un chunk bajaría por contener una palabra de la pregunta.
+Solo le pasa a <code>def</code> (en 11.369 de 18.942 chunks: daría −0,41).
+Por eso, si el resultado no es positivo, usamos un <strong>suelo</strong>
+diminuto, <code>IDF_FLOOR = 1e-6</code> (una millonésima, el mismo que usa
+SQLite): la palabra casi no cuenta, pero sigue desempatando.
 </div>
 
 <p>El <code>ln</code> es el <strong>logaritmo natural</strong>: aplasta las
@@ -858,16 +870,16 @@ el resultado se vaya al infinito con palabras rarísimas.</p>
 <tr><td><code>dynamically</code></td><td class="num">34</td><td class="num">0,18%</td><td class="num">6,31</td></tr>
 <tr><td><code>adapter</code></td><td class="num">79</td><td class="num">0,42%</td><td class="num">5,47</td></tr>
 <tr><td><code>endpoint</code></td><td class="num">107</td><td class="num">0,56%</td><td class="num">5,17</td></tr>
-<tr><td><code>http</code></td><td class="num">295</td><td class="num">1,56%</td><td class="num">4,16</td></tr>
-<tr><td><code>load</code></td><td class="num">595</td><td class="num">3,14%</td><td class="num">3,46</td></tr>
-<tr><td><code>lora</code></td><td class="num">617</td><td class="num">3,26%</td><td class="num">3,42</td></tr>
-<tr><td><code>vllm</code></td><td class="num">3.985</td><td class="num">21,04%</td><td class="num">1,56</td></tr>
+<tr><td><code>http</code></td><td class="num">295</td><td class="num">1,56%</td><td class="num">4,14</td></tr>
+<tr><td><code>load</code></td><td class="num">595</td><td class="num">3,14%</td><td class="num">3,43</td></tr>
+<tr><td><code>lora</code></td><td class="num">617</td><td class="num">3,26%</td><td class="num">3,39</td></tr>
+<tr><td><code>vllm</code></td><td class="num">3.985</td><td class="num">21,04%</td><td class="num">1,32</td></tr>
 </table>
 
 <div class="ok">
 <strong>Lee esa tabla de abajo arriba y tienes la idea entera.</strong>
 <code>vllm</code> está en 1 de cada 5 chunks del corpus (es un repositorio de
-vLLM, claro), así que aporta cuatro veces menos que <code>dynamically</code>.
+vLLM, claro), así que aporta cinco veces menos que <code>dynamically</code>.
 La palabra que parecía más importante de la pregunta es casi la más inútil
 para <em>distinguir</em> un chunk de otro.
 </div>
@@ -919,7 +931,7 @@ BM25(palabra, chunk) = IDF(palabra) × [ tf × (k1 + 1) ] / [ tf + k1 × (1 - b 
 <tr><td><code>IDF</code></td><td>Peso de la palabra, lo de la sección anterior</td><td>Sale de <code>df</code> y <code>N=18.942</code></td></tr>
 <tr><td><code>dl</code></td><td><em>document length</em>: longitud del chunk en tokens</td><td>Entre 0 y 404</td></tr>
 <tr><td><code>avgdl</code></td><td><em>average document length</em>: longitud media</td><td><strong>96,5 tokens</strong></td></tr>
-<tr><td><code>k1</code>, <code>b</code></td><td>Los dos mandos que ajustan la fórmula</td><td>Valores habituales: <code>k1=1.5</code>, <code>b=0.75</code></td></tr>
+<tr><td><code>k1</code>, <code>b</code></td><td>Los dos mandos que ajustan la fórmula</td><td>Los de la definición original de Okapi BM25: <code>k1=1.2</code>, <code>b=0.75</code> (hasta el slice #48 usábamos <code>k1=1.5</code>)</td></tr>
 </table>
 
 <h3>El mando <code>k1</code>: saturación</h3>
@@ -1003,6 +1015,13 @@ real, más del doble de la media.</figcaption>
 </figure>
 
 <h2 id="lex-cuenta">8. La cuenta completa con datos reales</h2>
+
+<div class="ok">
+<strong>Ojo: esta cuenta se hizo en el slice #23</strong>, con la versión
+anterior (<code>k1=1.5</code> e IDF con <code>1 +</code>). Desde el slice #48
+usamos la original, así que los números exactos cambian un poco, pero el
+razonamiento es el mismo: la palabra rara aporta más y el chunk corto gana.
+</div>
 
 <p>Aquí está la fórmula aplicada de verdad a los dos chunks de la sección 4, con
 <code>k1=1.5</code>, <code>b=0.75</code>, <code>N=18.942</code> y
