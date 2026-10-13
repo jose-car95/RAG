@@ -1,4 +1,4 @@
-"""Decide whether a retrieved source counts as found, and score recall@k.
+"""Decide whether a retrieved source counts as found; score recall@k and MRR.
 
 The rules follow the subject (VII.1): a correct source is found when a
 result in the top k is in the same file and overlaps its character range
@@ -89,3 +89,26 @@ def recall_at_k(
         if any(is_match(source, candidate) for candidate in top_k):
             found += 1
     return found / len(correct)
+
+
+def reciprocal_rank(
+    correct: list[MinimalSource],
+    retrieved: list[MinimalSource]
+) -> float:
+    """Score how high the first correct source appears: 1 / its position.
+
+    Unlike ``recall_at_k``, it looks at every retrieved source, so it tells
+    position 1 from position 5. With several correct sources, the first one
+    found counts.
+
+    Args:
+        correct: Correct sources of one question.
+        retrieved: Retrieved sources, best first.
+
+    Returns:
+        1.0 for a hit at the top, 0.25 at position 4, 0.0 if none is found.
+    """
+    for position, candidate in enumerate(retrieved, start=1):
+        if any(is_match(source, candidate) for source in correct):
+            return 1 / position
+    return 0.0
