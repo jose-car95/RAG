@@ -91,6 +91,20 @@ justificar), **ABIERTO** (pendiente, con límite).
   es negativo, así que **se revierte**; el código queda en la rama local
   `experiment/43-method-chunks` como referencia. No se prueban variantes para
   no ajustar contra los datasets públicos.
+- **FACT (medido 2026-10-13, por curiosidad, fuera de `src/`)** — Con los
+  mismos 18.942 chunks de nuestro índice copiados a una tabla FTS5 temporal,
+  la misma pregunta tokenizada con nuestro `tokenize` (términos unidos por
+  `OR`) y top 10 por `bm25()` de SQLite: con identificadores enteros (como
+  nosotros, `tokenchars '_'`) code Recall@5 = 0,535 y docs 0,830; con el
+  tokenizador por defecto, que parte los identificadores por `_`, code
+  Recall@5 = **0,596** y docs 0,830 (nuestra línea base: 0,485 y 0,840). Dos
+  efectos: partir identificadores (+6 preguntas con el mismo ranking, apoya
+  el #44) y la variante de BM25 de FTS5 (`k1` 1,2 e IDF clásica de Robertson
+  sin el `1 +`, +5 preguntas con los mismos tokens). `bm25()` devuelve la
+  puntuación en negativo y se ordena de menor a mayor. **No se adopta nada
+  por estos números**: FTS5 no cuenta como implementar BM25 (VI.1 y contrato)
+  y elegir parámetros porque puntúan mejor en los públicos sería ajustar
+  contra ellos. Cada cambio irá en su slice con un motivo previo.
 - **FACT (medido 2026-09-22)** — Un fichero que no es Python válido lanza
   `SyntaxError` al parsearlo; en ese caso se trocea como texto.
 
