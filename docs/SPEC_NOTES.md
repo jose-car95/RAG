@@ -227,6 +227,23 @@ justificar), **ABIERTO** (pendiente, con límite).
 - **INTERPRETACIÓN** — No se quitan stop words: IDF ya las reduce a casi cero.
   Partir `snake_case` y hacer stemming quedan como experimentos medibles de M4,
   con recall antes y después.
+- **DECISIÓN (2026-10-13, Jose, opción B, slice #44)** — Cada token con
+  guion bajo se emite **entero y seguido de sus partes** (`lm_eval` →
+  `lm_eval`, `lm`, `eval`); las partes vacías se descartan (`__init__` →
+  `__init__`, `init`). Motivo, decidido antes de medir: el enunciado (VI.1)
+  dice que una pregunta puede citar un identificador o parafrasearlo y que lo
+  que se guarda al indexar decide cuál de los dos se puede encontrar; con las
+  dos formas no se pierde el identificador entero (el término más raro de 79
+  preguntas, ver arriba). Descartada la opción A (solo partes), aunque fuera
+  la variante medida con FTS5. `CamelCase` queda fuera: la prueba de FTS5 no
+  lo partía y exige tratar siglas; si hace falta, irá en su propio slice.
+- **FACT (medido 2026-10-13, slice #44)** — Con la opción B, medido contra un
+  índice de `main` en la misma sesión (`--k 10`): code Recall@5 0,535 →
+  **0,636** (R@1 0,303 → 0,354, R@10 0,576 → 0,697; entran 13 en el top 5 y
+  salen 3); docs Recall@5 se queda en **0,830** (entra 1 y sale 1), pero R@1
+  baja de 0,650 a 0,610 y R@10 de 0,880 a 0,860. El índice pasa de 1.827.646 a
+  2.803.792 tokens (media 148 por chunk) y el vocabulario de 55.397 a 56.938.
+  Se queda: se decidió antes de medir y no empeora la métrica del umbral.
 - **FACT (medido 2026-09-29)** — El corpus indexado da 1.827.646 tokens y un
   vocabulario de 55.397 palabras; las 199 preguntas dan 2.714 tokens, con una
   media de 13,6 por pregunta y ninguna vacía.
