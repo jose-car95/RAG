@@ -77,6 +77,20 @@ justificar), **ABIERTO** (pendiente, con límite).
   clases también, así que el último recurso es inevitable. Bajar a los
   métodos con `ast` (opción B) es un experimento de M4; PEP 8 deja una línea
   en blanco entre métodos, así que el fallback ya corta de hecho entre ellos.
+- **EXPERIMENTO DESCARTADO (2026-10-13, Jose, slice #43)** — Se probó
+  cortar las clases de primer nivel que no caben en el inicio de cada método
+  directo (decorador incluido) y empaquetar métodos seguidos mientras cupieran
+  (opción A; la B, un chunk por método, se descartó antes por los 34% de
+  métodos de menos de 300 caracteres). Motivo: 9 de los 12 fallos de code
+  «fichero correcto, zona equivocada» de la línea base M3 están dentro de
+  clases de más de 2000. **Resultado medido** con los dos índices construidos
+  en la misma sesión: docs sin cambios; code Recall@1 0,263 → 0,283, Recall@5
+  **0,485 → 0,465** y Recall@10 0,576 → 0,556 (18.942 → 19.169 chunks).
+  Cambian 14 preguntas de code: 5 suben y 9 bajan, y en el top 5 se pierden
+  2 sin ganar ninguna. El efecto es mixto y el saldo en la métrica del umbral
+  es negativo, así que **se revierte**; el código queda en la rama local
+  `experiment/43-method-chunks` como referencia. No se prueban variantes para
+  no ajustar contra los datasets públicos.
 - **FACT (medido 2026-09-22)** — Un fichero que no es Python válido lanza
   `SyntaxError` al parsearlo; en ese caso se trocea como texto.
 
