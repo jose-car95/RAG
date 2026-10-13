@@ -13,11 +13,19 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slice en revisión:** #43 "Chunk Python classes at method boundaries",
-  **experimento con resultado negativo**. Jose escribió `_method_starts` y el
-  empaquetado de métodos en `_chunk_with_cuts` (48 tests verdes), pero code
-  Recall@5 bajó de 0,485 a 0,465. Se revierte el código (queda en la rama
-  local `experiment/43-method-chunks`) y la PR solo lleva el resultado.
+- **Slice en revisión:** #48 "Use the original Okapi BM25 definition".
+  Jose cambió `K1` a 1,2, añadió `IDF_FLOOR = 1e-6` y quitó el `1 +` de la
+  IDF (`robertson_idf`, con suelo si no es positiva). **Code pasa el umbral
+  por primera vez: Recall@5 = 0,535.** Docs baja a 0,830 y sigue cumpliendo.
+- **Verificado (2026-10-13, slice #48):**
+  - `make lint` → `Success: no issues found in 33 source files`; `make test` → `185 passed` (22 de BM25).
+  - Antes (índice de `main` en un `git worktree`) y después, `--k 10`: docs R@5 0,840 → **0,830**; code R@1 0,263 → 0,303, R@3 0,424 → 0,475, **R@5 0,485 → 0,535**, R@10 igual (0,576).
+  - Code: 19 preguntas suben y 3 bajan; entran 5 en el top 5 y no sale ninguna (todas del tipo «what is the default value of <identificador>»). Docs: 5 suben y 3 bajan; sale 1 del top 5 (de la 3 a la 7).
+  - Mismas cifras que la prueba de FTS5 con identificadores enteros: confirma la implementación.
+  - Margen de code: 53 de 99 frente a las 50 necesarias (3 preguntas).
+- **Experimento anterior, #43 (cerrado):** clases por métodos, descartado
+  (code R@5 0,465); el código queda en la rama local
+  `experiment/43-method-chunks`.
 - **Verificado (2026-10-13, slice #43):**
   - Con el cambio: `tests/test_chunking.py` → `48 passed`; `uv run pytest` → `192 passed`; `make lint` limpio.
   - Medición con dos índices de la misma sesión (uno de `main` en un `git worktree` aparte): docs igual; code R@1 0,263 → 0,283, **R@5 0,485 → 0,465**, R@10 0,576 → 0,556. Moulinette y `evaluate` coinciden.
@@ -67,8 +75,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
 - **Siguiente paso propuesto:** slice #44 "Split identifiers into words
-  when tokenizing": ataca las 39 preguntas de code cuyo fichero correcto ni
-  aparece en el top 5, que es otro grupo distinto del de #43.
+  when tokenizing", para ganar margen en code (hoy 3 preguntas). La prueba
+  con FTS5 sugiere +6 preguntas, y el enunciado (VI.1) apunta a guardar el
+  identificador entero y sus partes.
 - **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
   `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
   `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
@@ -136,6 +145,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-08 | La línea base se mide como los scripts de examen: `--k 10` y `time uv run` | Medir igual que nos van a medir. Leído en `exams/scripts/exam_retrieval.sh`; los scripts se leen, no se ejecutan (usan los datasets privados) |
 | 2026-10-13 | **Experimento #43 descartado:** cortar clases grandes por métodos baja code Recall@5 de 0,485 a 0,465 | Medido contra un índice de `main` en la misma sesión; 5 preguntas suben y 9 bajan. Se revierte y el código queda en la rama local `experiment/43-method-chunks`. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-13 | El «antes» de cada experimento se reconstruye desde `main`, nunca se da por bueno el índice del disco | El índice del disco ya estaba reconstruido con el código nuevo y la primera comparación salió igual por eso; se detectó porque no daba el 0,485 registrado |
+| 2026-10-13 | BM25 original de Okapi (`k1` 1,2, IDF de Robertson) con suelo `1e-6` para la IDF no positiva (opción C) | Definición de referencia y más fácil de explicar; el suelo evita castigar palabras de la pregunta y conserva el desempate. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
 | 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
@@ -189,6 +199,7 @@ de disco caliente); ponytail: se toma como ruido y se medirá siempre igual.
 |---|---|---|---|---|---|
 | 2026-10-13 | Línea base (`main`, `088f538`) | 18.942 | 0,263 / 0,424 / **0,485** / 0,576 | 0,840 | — |
 | 2026-10-13 | #43 clases grandes cortadas por métodos | 19.169 | 0,283 / 0,424 / **0,465** / 0,556 | 0,840 | **Descartado** (−2 preguntas en @5) |
+| 2026-10-13 | #48 BM25 original (`k1` 1,2, IDF de Robertson con suelo `1e-6`) | 18.942 | 0,303 / 0,475 / **0,535** / 0,576 | 0,830 | **Se queda**: code pasa el umbral (+5 en @5) |
 
 ### Historial
 
