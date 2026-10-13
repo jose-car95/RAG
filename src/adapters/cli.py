@@ -129,18 +129,23 @@ class RagCli:
         student_search_results_path: str,
         dataset_path: str
     ) -> None:
-        """Print recall@1/3/5/10 of search results against a dataset.
+        """Print recall@1/3/5/10 and the MRR of search results.
 
-        The line has the format of the subject's example, so it can be
-        compared at a glance with the reference tool.
+        The recall line has the format of the subject's example, so it can be
+        compared at a glance with the reference tool; the MRR goes on a
+        second line.
 
         Args:
             student_search_results_path: Path to the search results file.
             dataset_path: Path to the dataset with the correct sources.
         """
-        recalls = run_evaluate(student_search_results_path, dataset_path)
-        parts = [f"Recall@{k}: {recall:.3f}" for k, recall in recalls.items()]
+        evaluation = run_evaluate(student_search_results_path, dataset_path)
+        parts = [
+            f"Recall@{k}: {recall:.3f}"
+            for k, recall in evaluation.recalls.items()
+        ]
         print(" ".join(parts))
+        print(f"MRR: {evaluation.mrr:.3f}")
 
 
 def run(component: object, argv: list[str] | None = None) -> int:
