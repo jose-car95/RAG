@@ -85,9 +85,25 @@ def test_reports_recall_at_one_three_five_and_ten(tmp_path: Path) -> None:
         ),
     )
 
-    recalls = run_evaluate(str(results), str(dataset))
+    evaluation = run_evaluate(str(results), str(dataset))
 
-    assert recalls == {1: 0.5, 3: 0.5, 5: 1.0, 10: 1.0}
+    assert evaluation.recalls == {1: 0.5, 3: 0.5, 5: 1.0, 10: 1.0}
+
+
+def test_reports_the_mean_reciprocal_rank(tmp_path: Path) -> None:
+    """q1 is found at position 1 and q2 at 4: (1 + 0.25) / 2."""
+    dataset = write_json(tmp_path / "dataset.json", DATASET)
+    results = write_json(
+        tmp_path / "results.json",
+        results_for(
+            ("q1", [CORRECT]),
+            ("q2", [WRONG, WRONG, WRONG, CORRECT]),
+        ),
+    )
+
+    evaluation = run_evaluate(str(results), str(dataset))
+
+    assert evaluation.mrr == 0.625
 
 
 def test_question_missing_from_results_counts_as_zero(tmp_path: Path) -> None:
@@ -97,9 +113,10 @@ def test_question_missing_from_results_counts_as_zero(tmp_path: Path) -> None:
         tmp_path / "results.json", results_for(("q1", [CORRECT]))
     )
 
-    recalls = run_evaluate(str(results), str(dataset))
+    evaluation = run_evaluate(str(results), str(dataset))
 
-    assert recalls == {1: 0.5, 3: 0.5, 5: 0.5, 10: 0.5}
+    assert evaluation.recalls == {1: 0.5, 3: 0.5, 5: 0.5, 10: 0.5}
+    assert evaluation.mrr == 0.5
 
 
 def test_dataset_without_reference_sources_is_rejected(
