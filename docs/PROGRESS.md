@@ -4,22 +4,25 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M3 — Recuperación BM25 y línea base (último slice en
-  revisión; cierra con el merge del #27). M0 cerrado
-  el 2026-09-16; M1 el 2026-09-18; **M2 el 2026-09-29**.
+- **Milestone:** M4 — Recall hasta los umbrales (en curso). M0 cerrado el
+  2026-09-16; M1 el 2026-09-18; M2 el 2026-09-29; **M3 el 2026-10-08**.
+- **M3 cerrado (7 slices):** #22 tokenización; #23 BM25; #24 `search`; #25
+  fuentes reales en `search_dataset`; #26 `evaluate`; #27 línea base (code
+  Recall@5 0,485, falla por 0,015).
 - **M2 cerrado (5 slices):** #17 descubrir los 1.969 ficheros indexables;
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slices cerrados en M3:** #22 tokenización; #23 BM25; #24 comando
-  `search`; #25 fuentes reales en `search_dataset`; #26 comando `evaluate`
-  (mismas cifras que la moulinette).
-- **Slice en revisión:** #27 "Measure the retrieval baseline". Línea base de
-  M3 medida como los scripts de examen (`--k 10`, `time uv run`) y
-  registrada en la sección «Línea base M3» de las métricas. Cierra el ABIERTO
-  de `<DatasetScope>` leyendo `exams/scripts/exam_retrieval.sh`: el
-  evaluador elige la carpeta y busca el fichero por nombre, así que no se
-  cambia nada. Sin cambios en `src/`.
+- **Slice en revisión:** #43 "Chunk Python classes at method boundaries",
+  **experimento con resultado negativo**. Jose escribió `_method_starts` y el
+  empaquetado de métodos en `_chunk_with_cuts` (48 tests verdes), pero code
+  Recall@5 bajó de 0,485 a 0,465. Se revierte el código (queda en la rama
+  local `experiment/43-method-chunks`) y la PR solo lleva el resultado.
+- **Verificado (2026-10-13, slice #43):**
+  - Con el cambio: `tests/test_chunking.py` → `48 passed`; `uv run pytest` → `192 passed`; `make lint` limpio.
+  - Medición con dos índices de la misma sesión (uno de `main` en un `git worktree` aparte): docs igual; code R@1 0,263 → 0,283, **R@5 0,485 → 0,465**, R@10 0,576 → 0,556. Moulinette y `evaluate` coinciden.
+  - 14 preguntas de code cambian de posición: 5 suben (una de la 5 a la 1) y 9 bajan (`fp8.py` sale del top 10; `cuda_communicator.py` pasa de 5 a 6).
+  - Tras revertir: índice reconstruido con 18.942 chunks y otra vez docs 0,840 / code 0,485; `make test` → `181 passed`; `make lint` limpio.
 - **Verificado (2026-10-08, slice #27):**
   - `make lint` → mypy `Success: no issues found in 33 source files`; `make test` → `181 passed`.
   - Indexado **4,51 s**; 199 preguntas **5,51 s** (115 MB); Recall@5 docs **0,840** (OK) y code **0,485** (falla por 0,015). Moulinette y `evaluate` coinciden en los cuatro valores de k.
@@ -63,16 +66,14 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** tras el merge, cerrar M3 en GitHub y crear
-  los issues de M4. Primero el troceado de clases de Python por métodos con
-  `ast` (hipótesis: 12 de los fallos de code están en el fichero correcto pero
-  en otra zona), medido contra la línea base. Después partir identificadores
-  y el peso de la ruta, y MRR como métrica de apoyo.
-- **Pendiente apuntado (2026-10-06):** la ruta por defecto del índice está
-  ahora en **tres** sitios (`cli.py` en `index`, `search` y
-  `search_dataset`), que era el disparador acordado para sacarla a una
-  constante compartida. No se hizo en este slice para no mezclar dos cosas en
-  el mismo diff.
+- **Siguiente paso propuesto:** slice #44 "Split identifiers into words
+  when tokenizing": ataca las 39 preguntas de code cuyo fichero correcto ni
+  aparece en el top 5, que es otro grupo distinto del de #43.
+- **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
+  `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
+  `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
+  reventaría. El corpus tiene 0 ficheros así y fijamos 3.12, pero el plan B
+  de la escuela es 3.10: añadir `ValueError` al `except` con su test.
 - **Pendiente apuntado (2026-10-08):** `load_dataset` y `load_search_results`
   son casi idénticas. Con dos copias no compensa una función común; el
   lector de `answer_dataset` (M5) será la tercera y el momento de unificar.
@@ -133,6 +134,8 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-07 | Rango de ancho 0: guarda en `iou`, no regla `first < last` en `MinimalSource` (opción A) | La moulinette acepta fuentes de referencia vacías; endurecer el modelo rechazaría un dataset entero por una. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-07 | Idea para M4: medir MRR junto a recall@k | Recall@k no distingue la posición 1 de la 5; MRR sí, y reutiliza `is_match` |
 | 2026-10-08 | La línea base se mide como los scripts de examen: `--k 10` y `time uv run` | Medir igual que nos van a medir. Leído en `exams/scripts/exam_retrieval.sh`; los scripts se leen, no se ejecutan (usan los datasets privados) |
+| 2026-10-13 | **Experimento #43 descartado:** cortar clases grandes por métodos baja code Recall@5 de 0,485 a 0,465 | Medido contra un índice de `main` en la misma sesión; 5 preguntas suben y 9 bajan. Se revierte y el código queda en la rama local `experiment/43-method-chunks`. Detalle en `docs/SPEC_NOTES.md` |
+| 2026-10-13 | El «antes» de cada experimento se reconstruye desde `main`, nunca se da por bueno el índice del disco | El índice del disco ya estaba reconstruido con el código nuevo y la primera comparación salió igual por eso; se detectó porque no daba el 0,485 registrado |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
 | 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
@@ -179,6 +182,13 @@ Diferencia con la medición anterior: el recall es idéntico; las 199
 preguntas bajan de 7,86 s a 5,51 s aunque ahora se piden 10 fuentes en vez
 de 5. El código no ha cambiado, así que la diferencia es del entorno (caché
 de disco caliente); ponytail: se toma como ruido y se medirá siempre igual.
+
+### Experimentos de M4
+
+| Fecha | Experimento | Chunks | code R@1 / R@3 / **R@5** / R@10 | docs R@5 | Resultado |
+|---|---|---|---|---|---|
+| 2026-10-13 | Línea base (`main`, `088f538`) | 18.942 | 0,263 / 0,424 / **0,485** / 0,576 | 0,840 | — |
+| 2026-10-13 | #43 clases grandes cortadas por métodos | 19.169 | 0,283 / 0,424 / **0,465** / 0,556 | 0,840 | **Descartado** (−2 preguntas en @5) |
 
 ### Historial
 
@@ -283,6 +293,12 @@ M3 antes de optimizar nada.
   `In review` al abrir la PR #11 y a `Done` 3 s después del merge. El agente
   solo mueve a mano `In progress` al empezar un slice (no hay workflow para
   eso) y comprueba el resto.
+  **Fallo (2026-10-08):** los issues #43-#46 no entraron solos al tablero;
+  al añadirlos con `gh project item-add` las cuatro tarjetas pasaron a
+  `Done` y #43 y #46 se cerraron solos. Se reabrieron y se pusieron en
+  `Todo`. Sospechosos: «Item added to project» (pone `Done` en vez de
+  `Todo`), «Auto-close issue» y «Auto-add to project» (desactivado). Jose
+  debe revisarlos; el agente comprueba el tablero tras crear issues.
   Excepción (2026-09-16): la tarjeta #12 no pasó sola a `Done` tras el merge
   de la PR #13 y se movió a mano. Causa desconocida; seguir comprobando.
 - **Vistas (2026-09-13):** solo existe `View 1` (tabla, sin agrupar). Faltan

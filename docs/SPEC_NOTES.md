@@ -77,6 +77,34 @@ justificar), **ABIERTO** (pendiente, con límite).
   clases también, así que el último recurso es inevitable. Bajar a los
   métodos con `ast` (opción B) es un experimento de M4; PEP 8 deja una línea
   en blanco entre métodos, así que el fallback ya corta de hecho entre ellos.
+- **EXPERIMENTO DESCARTADO (2026-10-13, Jose, slice #43)** — Se probó
+  cortar las clases de primer nivel que no caben en el inicio de cada método
+  directo (decorador incluido) y empaquetar métodos seguidos mientras cupieran
+  (opción A; la B, un chunk por método, se descartó antes por los 34% de
+  métodos de menos de 300 caracteres). Motivo: 9 de los 12 fallos de code
+  «fichero correcto, zona equivocada» de la línea base M3 están dentro de
+  clases de más de 2000. **Resultado medido** con los dos índices construidos
+  en la misma sesión: docs sin cambios; code Recall@1 0,263 → 0,283, Recall@5
+  **0,485 → 0,465** y Recall@10 0,576 → 0,556 (18.942 → 19.169 chunks).
+  Cambian 14 preguntas de code: 5 suben y 9 bajan, y en el top 5 se pierden
+  2 sin ganar ninguna. El efecto es mixto y el saldo en la métrica del umbral
+  es negativo, así que **se revierte**; el código queda en la rama local
+  `experiment/43-method-chunks` como referencia. No se prueban variantes para
+  no ajustar contra los datasets públicos.
+- **FACT (medido 2026-10-13, por curiosidad, fuera de `src/`)** — Con los
+  mismos 18.942 chunks de nuestro índice copiados a una tabla FTS5 temporal,
+  la misma pregunta tokenizada con nuestro `tokenize` (términos unidos por
+  `OR`) y top 10 por `bm25()` de SQLite: con identificadores enteros (como
+  nosotros, `tokenchars '_'`) code Recall@5 = 0,535 y docs 0,830; con el
+  tokenizador por defecto, que parte los identificadores por `_`, code
+  Recall@5 = **0,596** y docs 0,830 (nuestra línea base: 0,485 y 0,840). Dos
+  efectos: partir identificadores (+6 preguntas con el mismo ranking, apoya
+  el #44) y la variante de BM25 de FTS5 (`k1` 1,2 e IDF clásica de Robertson
+  sin el `1 +`, +5 preguntas con los mismos tokens). `bm25()` devuelve la
+  puntuación en negativo y se ordena de menor a mayor. **No se adopta nada
+  por estos números**: FTS5 no cuenta como implementar BM25 (VI.1 y contrato)
+  y elegir parámetros porque puntúan mejor en los públicos sería ajustar
+  contra ellos. Cada cambio irá en su slice con un motivo previo.
 - **FACT (medido 2026-09-22)** — Un fichero que no es Python válido lanza
   `SyntaxError` al parsearlo; en ese caso se trocea como texto.
 
