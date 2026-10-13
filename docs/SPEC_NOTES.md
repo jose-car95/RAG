@@ -332,6 +332,21 @@ justificar), **ABIERTO** (pendiente, con límite).
   carga los datasets del evaluador, y la moulinette acepta una fuente de
   referencia vacía; un molde más estricto rechazaría el dataset entero por
   una sola fuente. `iou` es el único sitio que divide por una longitud.
+- **DECISIÓN (2026-10-13, Jose, slice #48)** — BM25 pasa a la definición
+  original de Okapi BM25: `k1 = 1.2`, `b = 0.75` e IDF de Robertson/Spärck
+  Jones `log((N - df + 0.5) / (df + 0.5))`, sin el `1 +` de Lucene. Motivo:
+  es la definición de referencia y la más fácil de explicar; la versión
+  anterior mezclaba la IDF de Lucene con un `k1 = 1.5` sin justificar. Se
+  decide por la definición, no por un número; la prueba con FTS5 ya se había
+  visto y se dice en el README.
+- **DECISIÓN (2026-10-13, Jose, opción C, slice #48)** — Cuando la IDF
+  original sale `<= 0` (un término en la mitad o más de los chunks), se usa
+  un suelo diminuto positivo (`1e-6`, el mismo que SQLite FTS5) en vez del
+  valor negativo (A) o de 0 (B). Medido: en nuestro índice solo `def` (df
+  11.369 de 18.942) daría negativo, y ninguna pregunta pública la contiene.
+  Con el negativo, un chunk relevante bajaba por contener una palabra de la
+  pregunta y una pregunta con solo esa palabra salía al revés; con el suelo
+  la palabra casi no cuenta pero sigue desempatando por frecuencia.
 - **DECISIÓN** — Los datasets privados (`docs/eval/datasets_private.zip`) y
   la moulinette no se usan jamás desde el código, ni para medir ni para
   ajustar. Los datasets públicos sirven para medir; los parámetros (p. ej.
