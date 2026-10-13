@@ -7,11 +7,16 @@ from collections.abc import Iterable
 from typing import NamedTuple
 
 
-# The usual BM25 values, kept as they are on purpose: tuning them against
-# datasets whose answers we know would inflate the metric and collapse on
-# new data. Any calibration has to be measured and explained.
-K1: float = 1.5
+# The original Okapi BM25 values, chosen because they are the reference
+# definition, not tuned: tuning against datasets whose answers we know would
+# inflate the metric and collapse on new data.
+K1: float = 1.2
 B: float = 0.75
+# The original IDF is 0 or negative for a term in half or more of the chunks,
+# which would push down a chunk for holding a word of the question. A tiny
+# positive floor, the one SQLite FTS5 uses, makes the term barely count but
+# still break ties.
+IDF_FLOOR: float = 1e-6
 
 
 class Bm25Index(NamedTuple):
@@ -74,9 +79,11 @@ def build_index(documents: Iterable[tuple[int, list[str]]]) -> Bm25Index:
 def idf(index: Bm25Index, term: str) -> float:
     """Weigh a term: the fewer chunks hold it, the more it tells us.
 
-    A term absent from the corpus has ``df`` 0, which yields a high weight
-    that costs nothing: no chunk will add it to its score. The ``0.5`` terms
-    smooth the extremes and keep the denominator away from zero.
+    Uses the original Robertson/Spärck Jones IDF, without the ``1 +`` that
+    Lucene adds. A term absent from the corpus has ``df`` 0, which yields a
+    high weight that costs nothing: no chunk will add it to its score. The
+    ``0.5`` terms smooth the extremes and keep the denominator away from zero.
+    A result that is not positive is raised to ``IDF_FLOOR``.
 
     Args:
         index: The built index.
@@ -86,7 +93,10 @@ def idf(index: Bm25Index, term: str) -> float:
         The inverse document frequency of the term.
     """
     df = len(index.postings.get(term, {}))
-    return math.log(1 + (index.document_count - df + 0.5) / (df + 0.5))
+    robertson_idf = math.log((index.document_count - df + 0.5) / (df + 0.5))
+    if robertson_idf <= 0:
+        return IDF_FLOOR
+    return robertson_idf
 
 
 def rank(

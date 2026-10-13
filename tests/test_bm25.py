@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from src.domain.bm25 import build_index, idf, rank
+from src.domain.bm25 import IDF_FLOOR, K1, build_index, idf, rank
 
 # A tiny corpus, with tokens as the tokenizer would produce them, so that every
 # expected number can be checked by hand. Chunk 4 is empty on purpose: the real
@@ -64,22 +64,46 @@ def test_documents_can_arrive_as_a_generator() -> None:
     assert index.postings["lora"] == {1: 2, 2: 1}
 
 
+def test_bm25_uses_the_original_okapi_k1() -> None:
+    """The original Okapi BM25 value, not a tuned one."""
+    assert K1 == 1.2
+
+
 def test_idf_grows_as_a_term_gets_rarer() -> None:
-    """A term in fewer chunks weighs more."""
+    """A term in fewer chunks weighs more (original Robertson IDF)."""
     index = build_index(DOCUMENTS)
 
-    # N=4. "lora" is in 2 chunks: ln(1 + (4-2+0.5)/(2+0.5)) = ln(2).
-    assert idf(index, "lora") == pytest.approx(math.log(2))
-    # "adapter" is in 1: ln(1 + (4-1+0.5)/(1+0.5)) = ln(10/3).
-    assert idf(index, "adapter") == pytest.approx(math.log(10 / 3))
+    # N=4. "adapter" is in 1 chunk: ln((4-1+0.5)/(1+0.5)) = ln(7/3).
+    assert idf(index, "adapter") == pytest.approx(math.log(7 / 3))
     assert idf(index, "adapter") > idf(index, "lora")
 
 
 def test_idf_of_an_unknown_term_does_not_fail() -> None:
-    """A term absent from the corpus has df 0: ln(1 + 4.5/0.5) = ln(10)."""
+    """A term absent from the corpus has df 0: ln(4.5/0.5) = ln(9)."""
     index = build_index(DOCUMENTS)
 
-    assert idf(index, "kubernetes") == pytest.approx(math.log(10))
+    assert idf(index, "kubernetes") == pytest.approx(math.log(9))
+
+
+def test_a_term_in_half_the_chunks_gets_the_floor() -> None:
+    """ln((4-2+0.5)/(2+0.5)) = ln(1) = 0, which is raised to the floor."""
+    index = build_index(DOCUMENTS)
+
+    assert idf(index, "lora") == IDF_FLOOR
+
+
+def test_a_term_in_most_chunks_never_weighs_negative() -> None:
+    """In 3 of 4 chunks the original IDF is ln(1.5/3.5) < 0 (decision C)."""
+    index = build_index(
+        [(1, ["def"]), (2, ["def"]), (3, ["def"]), (4, ["lora"])]
+    )
+
+    assert idf(index, "def") == IDF_FLOOR
+
+
+def test_the_floor_is_tiny_but_positive() -> None:
+    """Positive so it still breaks ties, tiny so it barely counts."""
+    assert 0 < IDF_FLOOR <= 1e-6
 
 
 def test_a_rare_term_outranks_a_common_one() -> None:
