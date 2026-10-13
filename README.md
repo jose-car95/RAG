@@ -38,6 +38,11 @@ IDF(t) = ln( (N − df(t) + 0.5) / (df(t) + 0.5) )
   0.485 to 0.535 (docs: 0.840 to 0.830). For transparency: before deciding,
   we had seen a one-off probe with SQLite FTS5, which uses this same variant.
 
+Besides recall@k, our `evaluate` command reports the **MRR** (mean
+reciprocal rank: 1 / the position of the first correct source, averaged over
+the questions), because recall@5 cannot tell position 1 from position 5. On
+the public datasets it is 0.704 for docs and 0.480 for code.
+
 References:
 
 - S. E. Robertson, S. Walker, S. Jones, M. M. Hancock-Beaulieu, M. Gatford,
