@@ -3,7 +3,7 @@
 import pytest
 
 from src.domain.models import MinimalSource
-from src.domain.recall import iou, is_match, recall_at_k
+from src.domain.recall import iou, is_match, recall_at_k, reciprocal_rank
 
 FILE = "data/raw/vllm-0.10.1/vllm/model_executor/layers/fused_moe/a.py"
 OTHER_FILE = "data/raw/vllm-0.10.1/docs/features/lora.md"
@@ -119,3 +119,42 @@ def test_one_result_covering_two_sources_finds_both() -> None:
     left, right = source(0, 100), source(100, 200)
 
     assert recall_at_k([left, right], [source(0, 200)], 1) == 1.0
+
+
+def test_first_position_has_reciprocal_rank_one() -> None:
+    """A hit at the top scores 1 / 1."""
+    assert reciprocal_rank([CORRECT], [CORRECT, source(0, 10)]) == 1.0
+
+
+def test_fourth_position_has_reciprocal_rank_a_quarter() -> None:
+    """A hit at position 4 scores 1 / 4."""
+    retrieved = [source(0, 10), source(20, 30), source(40, 50), CORRECT]
+
+    assert reciprocal_rank([CORRECT], retrieved) == 0.25
+
+
+@pytest.mark.parametrize(
+    "retrieved",
+    [[], [source(0, 10), source(28416, 28975, OTHER_FILE)]],
+    ids=["no_results", "no_hit"],
+)
+def test_no_hit_has_reciprocal_rank_zero(
+    retrieved: list[MinimalSource],
+) -> None:
+    """Nothing found scores 0."""
+    assert reciprocal_rank([CORRECT], retrieved) == 0.0
+
+
+def test_the_first_correct_source_found_counts() -> None:
+    """With two correct sources at positions 3 and 2, position 2 counts."""
+    other_correct = source(0, 500)
+    retrieved = [source(9000, 9100), other_correct, CORRECT]
+
+    assert reciprocal_rank([CORRECT, other_correct], retrieved) == 0.5
+
+
+def test_every_stored_result_is_looked_at() -> None:
+    """Unlike recall@5, a hit at position 8 still counts: 1 / 8."""
+    retrieved = [source(i * 10, i * 10 + 5) for i in range(7)] + [CORRECT]
+
+    assert reciprocal_rank([CORRECT], retrieved) == 0.125

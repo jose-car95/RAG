@@ -364,6 +364,7 @@ def test_evaluate_prints_recall_in_the_subject_format(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert result.stdout == (
         "Recall@1: 0.500 Recall@3: 0.500 Recall@5: 1.000 Recall@10: 1.000\n"
+        "MRR: 0.625\n"
     )
 
 
