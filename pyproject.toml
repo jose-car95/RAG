@@ -17,6 +17,11 @@ dev = [
     "pytest>=8",
 ]
 
+[tool.uv]
+# Keep uv's package cache inside the repository: at school the home quota is
+# tiny, while the repo lives on a large disk. Commands run from the repo root.
+cache-dir = ".cache/uv"
+
 [tool.mypy]
 # The vLLM corpus under data/raw/ contains Python files that are not ours.
 exclude = ["^data/", "^docs/"]
