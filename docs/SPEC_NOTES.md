@@ -364,6 +364,22 @@ justificar), **ABIERTO** (pendiente, con límite).
   Con el negativo, un chunk relevante bajaba por contener una palabra de la
   pregunta y una pregunta con solo esa palabra salía al revés; con el suelo
   la palabra casi no cuenta pero sigue desempatando por frecuencia.
+- **EXPERIMENTO DESCARTADO (2026-10-14, Jose, opción B, slice #45)** — Se
+  probó que la ruta del fichero entrase en el ranking como tokens del chunk
+  (`tokenize(file_path)` + `tokenize(text)` al construir el índice; opción A
+  de diseño, sin parámetros nuevos, frente a una puntuación aparte con un
+  peso que habría que ajustar). Motivo: 25 de 36 fallos de code y 13 de 17 de
+  docs compartían alguna palabra con la ruta correcta. **Resultado medido**
+  contra un índice de `main`: code R@5 0,636 → 0,727 (entran 9 en el top 5,
+  no sale ninguna; MRR 0,480 → 0,568), pero docs R@5 **0,830 → 0,820** (entran
+  2 y salen 3; MRR 0,704 → 0,725). Salen preguntas genéricas cuya respuesta
+  está en ficheros de nombre genérico (`v1_guide.md`, `SECURITY.md`,
+  `quickstart.md`): la ruta empuja a todos los chunks de un fichero. Se
+  descarta por el criterio de M4 (un cambio no puede empeorar la métrica del
+  umbral en ningún dataset) y porque reduce el margen más débil, el de docs,
+  de 3 a 2 preguntas. Aplicarlo solo a `.py` se descartó por ser una variante
+  elegida tras ver los números. El código queda en la rama local
+  `experiment/45-path-tokens`.
 - **DECISIÓN** — Los datasets privados (`docs/eval/datasets_private.zip`) y
   la moulinette no se usan jamás desde el código, ni para medir ni para
   ajustar. Los datasets públicos sirven para medir; los parámetros (p. ej.
