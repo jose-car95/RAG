@@ -18,10 +18,15 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slice en revisión:** #53 "Add the CPU-only generation stack" (primer
-  slice de M5; configuración, escrita por la IA). Cachés dentro del repo,
-  `torch` desde el índice de CPU y `transformers`; Qwen3-0.6B carga y genera
-  en CPU.
+- **Slice en revisión:** #54 "Build the prompt from the retrieved sources".
+  Jose escribió `INSTRUCTION` (texto en inglés con ayuda de la IA, a partir
+  de su idea de no inventar) y `build_prompt` en `src/domain/prompt.py`:
+  instrucción, fuentes numeradas con su `file_path` hasta que la siguiente no
+  cabe (opción A) y la pregunta al final.
+- **Verificado (2026-10-14, slice #54):**
+  - `make lint` → `Success: no issues found in 35 source files`; `make test` → `203 passed` (8 del prompt, con un contador falso de palabras).
+  - Con datos reales (BM25 sobre el índice y el tokenizador de Qwen como contador), para «How do I dynamically load a LoRA adapter in vLLM?»: presupuesto 800 → 2 fuentes, 717 tokens; 2.000 → 5 fuentes, 1.801 tokens; 6.000 → las 10, 3.037 tokens. La 1ª fuente es `tests/entrypoints/openai/test_lora_adapters.py`, con `client.post("load_lora_adapter", ...)`.
+  - Ventana documentada de Qwen3-0.6B: 32.768 tokens; `float32` es ~2,7 veces más rápido que `bfloat16` en esta CPU (sin `avx512_bf16`): pendiente para el #55.
 - **Verificado (2026-10-14, slice #53):**
   - `uv cache dir` → `.cache/uv`; `uv add torch transformers` en 13,9 s; el lock no tiene paquetes NVIDIA/CUDA; `torch.cuda.is_available()` → `False`.
   - Disco: `.cache/uv` 941 MB, `.venv` 89 MB más (los paquetes se enlazan desde la caché), `.cache/huggingface` 1,5 GB.
@@ -101,9 +106,10 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** #54 "Build the prompt from the retrieved
-  sources" (función de dominio, la escribe Jose), después #55 (`answer`, con
-  la decisión de `HF_HOME`) y #56 (`answer_dataset`).
+- **Siguiente paso propuesto:** #55 "Answer a single query with Qwen": el
+  adaptador del modelo (`float32`, `HF_HOME` dentro del repo, presupuesto de
+  tokens fijado por tiempo) y el caso de uso `answer`; si BM25 no devuelve
+  fuentes, no se llama al modelo. Después #56 (`answer_dataset`).
 - **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
   `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
   `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
@@ -179,6 +185,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-14 | M5 en 4 issues: stack de CPU (#53, IA), prompt (#54), `answer` (#55) y `answer_dataset` (#56) | Aprobado por Jose; los tres últimos los escribe él |
 | 2026-10-14 | Todas las descargas dentro del repo: caché de uv en `.cache/uv` (`pyproject.toml`) y pesos en `.cache/huggingface/` | Propuesta de Jose: el home de la escuela tiene 5 GB casi llenos y el repo vive en `sgoinfree`. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-14 | `torch` desde el índice de CPU de PyTorch (`explicit = true`) | La versión por defecto incluye CUDA (varios GB) y las máquinas de la escuela no tienen GPU |
+| 2026-10-14 | El prompt añade fuentes en orden hasta que la siguiente no cabe (opción A); pide responder solo con las fuentes o decir que no se puede | Lo más simple y respeta el orden de BM25; la instrucción de no inventar es idea de Jose. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
 | 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
@@ -377,3 +384,8 @@ M3 antes de optimizar nada.
   repo: `.cache/` (uv ~1 GB, modelo ~1,5 GB) y `.venv/` suman ~2,5 GB dentro
   del repo. Python 3.12: `export UV_PYTHON_INSTALL_DIR="$PWD/.cache/python"`
   antes de `uv sync`, o bajar `.python-version` a 3.10.
+- [ ] En la escuela, antes de presentar: `lscpu | grep -m1 "Model name"`,
+  `grep -o -w -E "avx512_bf16|amx_bf16|avx2" /proc/cpuinfo | sort -u` y
+  `free -h`. Cargamos Qwen en `float32` (2,2 GB de RAM), rápido en cualquier
+  CPU x86; comprobar que hay RAM libre y cronometrar una respuesta de
+  `answer`.
