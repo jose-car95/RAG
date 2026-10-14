@@ -386,6 +386,29 @@ justificar), **ABIERTO** (pendiente, con límite).
   `k1` y `b` de BM25, tamaño de chunk) se eligen con un motivo explicable, no
   por búsqueda ciega contra los públicos, y el motivo queda en el README.
 
+## Generación (M5)
+
+- **FACT (medido 2026-10-14)** — Ventana de contexto de Qwen3-0.6B: la ficha
+  oficial (`README.md` en Hugging Face) documenta **32.768 tokens**; el
+  `config.json` descargado permite técnicamente 40.960
+  (`max_position_embeddings`). Un chunk largo ocupa unos 385 tokens (`.py`) o
+  464 (`.md`), máximo 971; un prompt con 10 fuentes ronda los 5.000. La
+  ventana no es el límite: lo es el tiempo de CPU.
+- **FACT (medido 2026-10-14, 6 hilos, 60 tokens nuevos)** — Qwen se carga por
+  defecto en `bfloat16`, que en CPU es unas 2,7 veces más lento que `float32`:
+  1 fuente (544 tokens) 23,7 s frente a 13,4 s; 5 fuentes (2.322 tokens) 85,0
+  s frente a 31,1 s; 10 fuentes (5.079 tokens) 205,7 s en `bfloat16`. El
+  adaptador del #55 decide el tipo y el presupuesto de tokens, por tiempo y
+  nunca por la calidad de las respuestas de los públicos.
+- **DECISIÓN (2026-10-14, Jose, opción A, slice #54)** — El prompt se monta
+  añadiendo fuentes en el orden de BM25 hasta que la siguiente se pasaría del
+  presupuesto; ahí se deja de añadir. Descartadas: B (saltar la que no cabe y
+  probar otras más pequeñas, que podría meter una peor y dejar fuera una
+  mejor) y C (recortar la última, que deja fragmentos cortados y exige el
+  tokenizador dentro del dominio). El prompt pide responder solo con las
+  fuentes y decir que no se puede si no contienen la respuesta (idea de
+  Jose).
+
 ## Entorno
 
 - **DECISIÓN (2026-10-14, Jose, slice #53)** — Todas las descargas quedan
