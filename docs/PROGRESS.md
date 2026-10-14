@@ -13,10 +13,16 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slice en revisión:** #46 "Report MRR in evaluate". Jose escribió
-  `reciprocal_rank` (con `enumerate(..., start=1)`, `any` e `is_match`), la
-  caja `Evaluation(recalls, mrr)` y su media en `run_evaluate`, y la segunda
-  línea de la CLI. La línea de recall no cambia.
+- **Slice en revisión:** #45 "Use the file path in the ranking",
+  **experimento con resultado mixto, descartado**. Jose escribió el cambio en
+  `load_index` (una línea, 196 tests verdes); code subía mucho pero docs @5
+  bajaba una pregunta. Se revierte y queda en la rama local
+  `experiment/45-path-tokens`. Con esto **M4 queda completo**.
+- **Verificado (2026-10-14, slice #45):**
+  - Con el cambio: `uv run pytest` → `196 passed`; `make lint` limpio.
+  - Antes (índice de `main` en un `git worktree`) y después, `--k 10`: code R@5 0,636 → 0,727, MRR 0,480 → 0,568 (26 suben, 2 bajan; entran 9 en el top 5); docs R@5 0,830 → **0,820**, MRR 0,704 → 0,725 (11 suben, 9 bajan; entran 2 y salen 3). La moulinette coincide.
+  - Tras revertir: índice reconstruido, docs 0,830 / code 0,636, MRR 0,704 / 0,480; `make test` → `195 passed`; `make lint` limpio.
+- **Slice anterior, #46 (cerrado):** MRR en `evaluate`.
 - **Verificado (2026-10-13, slice #46):**
   - `make lint` → `Success: no issues found in 33 source files`; `make test` → `195 passed`.
   - Sobre los resultados actuales (`--k 10`): **docs MRR 0,704**, **code MRR 0,480**; la línea de recall es idéntica a la de la moulinette (docs 0,830 y code 0,636 en @5).
@@ -85,9 +91,10 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** #45 "Use the file path in the ranking", el
-  último issue de M4, medido con recall@k y MRR contra un índice de `main`.
-  Después, M5 (generación con Qwen).
+- **Siguiente paso propuesto:** tras el merge, cerrar M4 en GitHub y abrir
+  M5 (generación con Qwen3-0.6B en CPU): `answer` y `answer_dataset`. Antes de
+  instalar `torch`, `transformers` y los pesos, comando exacto, tamaño y
+  carpeta de destino para el OK de Jose.
 - **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
   `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
   `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
@@ -159,6 +166,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-13 | Identificadores con `_` se tokenizan enteros y además por partes (opción B); `CamelCase` fuera | Lo pide la pista del enunciado (VI.1) y conserva el identificador entero; decidido antes de medir. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-13 | M4 continúa con #46 (MRR) y #45 (peso de la ruta) antes de pasar a M5 | Decisión de Jose con los dos umbrales ya cumplidos |
 | 2026-10-13 | `run_evaluate` devuelve un `NamedTuple` `Evaluation(recalls, mrr)` (opción A) | Campos con nombre, mismo patrón que `Bm25Index`; una tupla sin nombres no se lee y otra función repetiría la carga y las guardas |
+| 2026-10-14 | **Experimento #45 descartado:** la ruta como tokens del chunk sube code R@5 a 0,727 pero baja docs R@5 a 0,820 | Criterio de M4: ningún cambio puede empeorar la métrica del umbral en un dataset; además reduce el margen de docs de 3 a 2. Código en la rama local `experiment/45-path-tokens`. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
 | 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
@@ -214,8 +222,10 @@ de disco caliente); ponytail: se toma como ruido y se medirá siempre igual.
 | 2026-10-13 | #43 clases grandes cortadas por métodos | 19.169 | 0,283 / 0,424 / **0,465** / 0,556 | 0,840 | **Descartado** (−2 preguntas en @5) |
 | 2026-10-13 | #48 BM25 original (`k1` 1,2, IDF de Robertson con suelo `1e-6`) | 18.942 | 0,303 / 0,475 / **0,535** / 0,576 | 0,830 | **Se queda**: code pasa el umbral (+5 en @5) |
 | 2026-10-13 | #44 identificadores enteros y por partes | 18.942 | 0,354 / 0,566 / **0,636** / 0,697 | 0,830 | **Se queda**: +10 en code @5; docs @5 igual, @1 0,650 → 0,610 |
+| 2026-10-14 | #45 ruta del fichero como tokens del chunk | 18.942 | 0,444 / 0,667 / **0,727** / 0,798 | **0,820** | **Descartado**: docs @5 −1 pregunta (margen de 3 a 2) |
 
 MRR (desde el slice #46) del estado actual: docs **0,704**, code **0,480**.
+**Estado final de M4:** docs R@5 0,830 (margen 3), code R@5 0,636 (margen 14).
 
 ### Historial
 
