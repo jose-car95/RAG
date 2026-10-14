@@ -388,6 +388,24 @@ justificar), **ABIERTO** (pendiente, con límite).
 
 ## Entorno
 
+- **DECISIÓN (2026-10-14, Jose, slice #53)** — Todas las descargas quedan
+  dentro del repo: `[tool.uv] cache-dir = ".cache/uv"` en `pyproject.toml` y
+  los pesos del modelo en `.cache/huggingface/`. Motivo: en la escuela el
+  home tiene 5 GB casi llenos y el repo se clona en `sgoinfree` (~30 GB, se
+  limpia cada ~15 días). `.cache/` está en `.gitignore` y fuera de `flake8`.
+  Los comandos se ejecutan desde la raíz del repo (la ruta es relativa).
+- **FACT (medido 2026-10-14, uv 0.11.2)** — `cache-dir` se acepta en
+  `[tool.uv]`; `python-install-dir` **no** (ni en `pyproject.toml` ni en
+  `uv.toml`): el intérprete solo se redirige con `UV_PYTHON_INSTALL_DIR`.
+- **FACT (medido 2026-10-14)** — `torch 2.14.1+cpu` desde el índice de CPU
+  (wheel de 187 MB, 693 MB instalado, 0 paquetes NVIDIA/CUDA en el lock) y
+  `transformers 5.19.0`. Qwen3-0.6B ocupa 1.449 MB (1.434 de
+  `model.safetensors`). `cache_dir` en `from_pretrained` redirige los pesos,
+  pero `huggingface_hub` escribe ficheros auxiliares pequeños en `HF_HOME`
+  (por defecto `~/.cache/huggingface`): `.agent_harnesses.json` y logs de
+  `xet`. **ABIERTO hasta el #55**: fijar `HF_HOME` dentro del repo en el
+  adaptador del modelo.
+
 - **DECISIÓN** — Solo CPU. `torch` se instalará desde el índice de wheels de
   CPU y la inferencia usa `device="cpu"` (Jose, 2026-09-13: las máquinas de la
   escuela no tienen GPU).
