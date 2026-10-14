@@ -43,6 +43,13 @@ reciprocal rank: 1 / the position of the first correct source, averaged over
 the questions), because recall@5 cannot tell position 1 from position 5. On
 the public datasets it is 0.704 for docs and 0.480 for code.
 
+Two experiments were measured and **discarded** because they lowered
+Recall@5 on one dataset: cutting large Python classes at their methods (code
+0.485 → 0.465) and adding the words of the file path to every chunk (code
+0.636 → 0.727, but docs 0.830 → 0.820). The rule was the same for both: a
+change stays only if it does not lower the thresholded metric on any dataset,
+and no variant is tried after seeing the numbers.
+
 References:
 
 - S. E. Robertson, S. Walker, S. Jones, M. M. Hancock-Beaulieu, M. Gatford,
