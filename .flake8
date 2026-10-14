@@ -1,3 +1,4 @@
 [flake8]
-# The vLLM corpus under data/raw/ contains Python files that are not ours.
-extend-exclude = .venv,data,docs,.mypy_cache,.pytest_cache
+# The vLLM corpus under data/raw/ and the packages unpacked in .cache/ hold
+# Python files that are not ours.
+extend-exclude = .venv,.cache,data,docs,.mypy_cache,.pytest_cache

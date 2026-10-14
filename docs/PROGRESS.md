@@ -4,8 +4,13 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M4 — Recall hasta los umbrales (en curso). M0 cerrado el
-  2026-09-16; M1 el 2026-09-18; M2 el 2026-09-29; **M3 el 2026-10-08**.
+- **Milestone:** M5 — Generación con Qwen3-0.6B en CPU (en curso). M0 cerrado
+  el 2026-09-16; M1 el 2026-09-18; M2 el 2026-09-29; M3 el 2026-10-08;
+  **M4 el 2026-10-14**.
+- **M4 cerrado (5 issues):** #48 BM25 original de Okapi y #44 identificadores
+  por partes se quedan; #43 clases por métodos y #45 ruta como tokens se
+  descartan; #46 añade el MRR. Final: docs R@5 0,830 (margen 3), code 0,636
+  (margen 14).
 - **M3 cerrado (7 slices):** #22 tokenización; #23 BM25; #24 `search`; #25
   fuentes reales en `search_dataset`; #26 `evaluate`; #27 línea base (code
   Recall@5 0,485, falla por 0,015).
@@ -13,11 +18,16 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slice en revisión:** #45 "Use the file path in the ranking",
-  **experimento con resultado mixto, descartado**. Jose escribió el cambio en
-  `load_index` (una línea, 196 tests verdes); code subía mucho pero docs @5
-  bajaba una pregunta. Se revierte y queda en la rama local
-  `experiment/45-path-tokens`. Con esto **M4 queda completo**.
+- **Slice en revisión:** #53 "Add the CPU-only generation stack" (primer
+  slice de M5; configuración, escrita por la IA). Cachés dentro del repo,
+  `torch` desde el índice de CPU y `transformers`; Qwen3-0.6B carga y genera
+  en CPU.
+- **Verificado (2026-10-14, slice #53):**
+  - `uv cache dir` → `.cache/uv`; `uv add torch transformers` en 13,9 s; el lock no tiene paquetes NVIDIA/CUDA; `torch.cuda.is_available()` → `False`.
+  - Disco: `.cache/uv` 941 MB, `.venv` 89 MB más (los paquetes se enlazan desde la caché), `.cache/huggingface` 1,5 GB.
+  - Prueba de humo en CPU: carga en 50,2 s (incluye la descarga), 21 tokens en 2,4 s. Sin fuentes, Qwen respondió que vLLM «is a large language model»: una alucinación, el motivo de un RAG.
+  - `huggingface_hub` escribió 2 ficheros pequeños en `~/.cache/huggingface` (`.agent_harnesses.json`, un log de `xet`); se resuelve en el #55 fijando `HF_HOME`.
+  - `make lint` y `make test` en verde.
 - **Verificado (2026-10-14, slice #45):**
   - Con el cambio: `uv run pytest` → `196 passed`; `make lint` limpio.
   - Antes (índice de `main` en un `git worktree`) y después, `--k 10`: code R@5 0,636 → 0,727, MRR 0,480 → 0,568 (26 suben, 2 bajan; entran 9 en el top 5); docs R@5 0,830 → **0,820**, MRR 0,704 → 0,725 (11 suben, 9 bajan; entran 2 y salen 3). La moulinette coincide.
@@ -91,10 +101,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** tras el merge, cerrar M4 en GitHub y abrir
-  M5 (generación con Qwen3-0.6B en CPU): `answer` y `answer_dataset`. Antes de
-  instalar `torch`, `transformers` y los pesos, comando exacto, tamaño y
-  carpeta de destino para el OK de Jose.
+- **Siguiente paso propuesto:** #54 "Build the prompt from the retrieved
+  sources" (función de dominio, la escribe Jose), después #55 (`answer`, con
+  la decisión de `HF_HOME`) y #56 (`answer_dataset`).
 - **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
   `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
   `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
@@ -167,6 +176,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-13 | M4 continúa con #46 (MRR) y #45 (peso de la ruta) antes de pasar a M5 | Decisión de Jose con los dos umbrales ya cumplidos |
 | 2026-10-13 | `run_evaluate` devuelve un `NamedTuple` `Evaluation(recalls, mrr)` (opción A) | Campos con nombre, mismo patrón que `Bm25Index`; una tupla sin nombres no se lee y otra función repetiría la carga y las guardas |
 | 2026-10-14 | **Experimento #45 descartado:** la ruta como tokens del chunk sube code R@5 a 0,727 pero baja docs R@5 a 0,820 | Criterio de M4: ningún cambio puede empeorar la métrica del umbral en un dataset; además reduce el margen de docs de 3 a 2. Código en la rama local `experiment/45-path-tokens`. Detalle en `docs/SPEC_NOTES.md` |
+| 2026-10-14 | M5 en 4 issues: stack de CPU (#53, IA), prompt (#54), `answer` (#55) y `answer_dataset` (#56) | Aprobado por Jose; los tres últimos los escribe él |
+| 2026-10-14 | Todas las descargas dentro del repo: caché de uv en `.cache/uv` (`pyproject.toml`) y pesos en `.cache/huggingface/` | Propuesta de Jose: el home de la escuela tiene 5 GB casi llenos y el repo vive en `sgoinfree`. Detalle en `docs/SPEC_NOTES.md` |
+| 2026-10-14 | `torch` desde el índice de CPU de PyTorch (`explicit = true`) | La versión por defecto incluye CUDA (varios GB) y las máquinas de la escuela no tienen GPU |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
 | 2026-10-01 | `idf` es una función aparte, no una expresión dentro de `rank` | Es lo que un evaluador pedirá explicar o cambiar en el recode; con función propia y test propio, «cámbiame la variante de IDF» toca un solo sitio |
@@ -361,3 +373,7 @@ M3 antes de optimizar nada.
   Python 3.12 (red), dónde lo guarda (`uv python dir`) y cuánto ocupa; si
   falta cuota, usar `UV_PYTHON_INSTALL_DIR`. Plan B: `.python-version` =
   `3.10`.
+- [ ] En la escuela, clonar en `sgoinfree` y ejecutar todo desde la raíz del
+  repo: `.cache/` (uv ~1 GB, modelo ~1,5 GB) y `.venv/` suman ~2,5 GB dentro
+  del repo. Python 3.12: `export UV_PYTHON_INSTALL_DIR="$PWD/.cache/python"`
+  antes de `uv sync`, o bajar `.python-version` a 3.10.

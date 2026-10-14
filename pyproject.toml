@@ -7,7 +7,9 @@ requires-python = ">=3.10"
 dependencies = [
     "fire>=0.7.1",
     "pydantic>=2.13,<3",
+    "torch>=2.14.1",
     "tqdm>=4.70.1",
+    "transformers>=5.19.0",
 ]
 
 [dependency-groups]
@@ -16,6 +18,21 @@ dev = [
     "mypy>=1.11",
     "pytest>=8",
 ]
+
+[tool.uv]
+# Keep uv's package cache inside the repository: at school the home quota is
+# tiny, while the repo lives on a large disk. Commands run from the repo root.
+cache-dir = ".cache/uv"
+
+# torch from the CPU-only index: the default wheel bundles CUDA (several GB)
+# and the school machines have no GPU.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu" }]
 
 [tool.mypy]
 # The vLLM corpus under data/raw/ contains Python files that are not ours.
