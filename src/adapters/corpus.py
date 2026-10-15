@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from src.domain.models import MinimalSource
+
 
 # Matches the two chunking strategies of the subject: Python code and
 # Markdown/plain text.
@@ -37,3 +39,25 @@ def find_corpus_files(raw_directory: str) -> list[Path]:
         raise ValueError(f"no indexable files in {raw_directory}")
 
     return sorted(files)
+
+
+def read_source_text(source: MinimalSource) -> str:
+    """Read the text a source points to, from its corpus file.
+
+    The file is read exactly as ``run_index`` reads it, so the character
+    range stored in the index cuts the same text.
+
+    Args:
+        source: A file path and a character range, end excluded.
+
+    Returns:
+        The text inside that range.
+
+    Raises:
+        ValueError: If the file cannot be read.
+    """
+    try:
+        text = Path(source.file_path).read_text(encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"cannot read {source.file_path}") from error
+    return text[source.first_character_index:source.last_character_index]
