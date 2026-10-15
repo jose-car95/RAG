@@ -5,7 +5,11 @@ from pathlib import Path
 
 import pytest
 
-from src.adapters.corpus import find_corpus_files
+from src.adapters.corpus import find_corpus_files, read_source_text
+from src.adapters.sqlite_index import load_chunks
+from src.domain.models import MinimalSource
+
+INDEX_PATH = Path("data/processed/index.db")
 
 
 def make_files(root: Path, *relative_paths: str) -> None:
@@ -90,3 +94,55 @@ def test_folder_without_indexable_files_is_reported(
         match=f"^{re.escape(f'no indexable files in {tmp_path}')}$",
     ):
         find_corpus_files(str(tmp_path))
+
+
+def source_of(path: Path, first: int, last: int) -> MinimalSource:
+    """Build a source over a file and a character range.
+
+    Args:
+        path: File the source points to.
+        first: First character index, inclusive.
+        last: Last character index, exclusive.
+
+    Returns:
+        The source.
+    """
+    return MinimalSource(
+        file_path=str(path),
+        first_character_index=first,
+        last_character_index=last,
+    )
+
+
+def test_source_text_is_its_character_range(tmp_path: Path) -> None:
+    """The text is the file sliced by the source's range, end excluded."""
+    path = tmp_path / "lora.md"
+    path.write_text("# LoRA\nSend a POST request.\n", encoding="utf-8")
+    assert read_source_text(source_of(path, 7, 26)) == "Send a POST request"
+
+
+def test_ranges_count_characters_not_bytes(tmp_path: Path) -> None:
+    """``ñ`` and ``é`` are two bytes each but one character each."""
+    path = tmp_path / "notes.txt"
+    path.write_text("año café vLLM", encoding="utf-8")
+    assert read_source_text(source_of(path, 9, 13)) == "vLLM"
+
+
+def test_missing_source_file_is_reported(tmp_path: Path) -> None:
+    """A source whose file is gone ends in a clear error, not a traceback."""
+    missing = tmp_path / "gone.py"
+    with pytest.raises(ValueError, match=re.escape(f"cannot read {missing}")):
+        read_source_text(source_of(missing, 0, 10))
+
+
+@pytest.mark.skipif(not INDEX_PATH.is_file(), reason="index not built")
+def test_text_matches_the_stored_chunks() -> None:
+    """Reading the corpus gives back exactly the text the index stored.
+
+    Checked on a sample spread over the whole real index: if the corpus were
+    read differently here than when indexing, the ranges would drift.
+    """
+    rows = load_chunks(str(INDEX_PATH))
+    for _, file_path, first, last, text in rows[::500]:
+        source = source_of(Path(file_path), first, last)
+        assert read_source_text(source) == text

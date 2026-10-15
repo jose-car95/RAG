@@ -55,26 +55,18 @@ def test_help_lists_required_commands() -> None:
         assert re.search(rf"^\s+{command}$", output, re.MULTILINE), output
 
 
-@pytest.mark.parametrize(
-    "args",
-    [
-        ("answer", "What is vLLM?", "--k", "10"),
-        (
-            "answer_dataset",
-            "--student_search_results_path",
-            "results.json",
-            "--save_directory",
-            "answers",
-        ),
-    ],
-    ids=lambda args: args[0],
-)
-def test_stub_reports_not_implemented(args: tuple[str, ...]) -> None:
-    """Each command accepts its subject flags and reports it is a stub."""
-    result = run_cli(*args)
+def test_answer_dataset_reports_not_implemented() -> None:
+    """``answer_dataset`` takes its subject flags and reports it is a stub."""
+    result = run_cli(
+        "answer_dataset",
+        "--student_search_results_path",
+        "results.json",
+        "--save_directory",
+        "answers",
+    )
 
     assert result.returncode == 0, result.stderr
-    assert f"{args[0]}: not implemented yet" in result.stdout
+    assert "answer_dataset: not implemented yet" in result.stdout
     assert "Traceback" not in result.stderr
 
 
@@ -382,3 +374,87 @@ def test_evaluate_reports_missing_search_results(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert result.stderr == f"ERROR: search results not found: {missing}\n"
+
+
+def test_cli_import_does_not_load_torch() -> None:
+    """``--help``, ``index`` and ``search`` must not pay for torch's import.
+
+    Only ``answer`` needs the model, so torch is imported inside
+    ``load_generator``; importing the CLI module must leave it out.
+    """
+    code = (
+        "import sys\n"
+        "import src.adapters.cli\n"
+        "print('torch' in sys.modules, 'transformers' in sys.modules)\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "False False"
+
+
+@pytest.mark.parametrize(
+    ("query", "k", "message"),
+    [
+        ("", "10", "query must not be empty"),
+        ("What is vLLM?", "0", "k must be a positive integer"),
+    ],
+)
+def test_answer_rejects_bad_arguments(
+    tmp_path: Path, query: str, k: str, message: str
+) -> None:
+    """A one-line error and exit code 1, as for ``search``."""
+    index_path = make_tiny_index(tmp_path)
+
+    result = run_cli(
+        "answer", query, "--k", k, "--index_path", str(index_path)
+    )
+
+    assert result.returncode == 1
+    assert result.stderr == f"ERROR: {message}\n"
+
+
+def test_answer_without_sources_says_so(tmp_path: Path) -> None:
+    """Nothing retrieved: the user is told, and it is not an error."""
+    index_path = make_tiny_index(tmp_path)
+
+    result = run_cli(
+        "answer", "asdfghjkl", "--k", "10", "--index_path", str(index_path)
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout == (
+        "No sources found, so the question cannot be answered.\n"
+    )
+
+
+def test_answer_reports_missing_index(tmp_path: Path) -> None:
+    """A missing index ends in the same error as ``search``."""
+    missing = tmp_path / "missing.db"
+
+    result = run_cli("answer", "lora", "--index_path", str(missing))
+
+    assert result.returncode == 1
+    assert result.stderr.startswith(f"ERROR: index not found: {missing}")
+
+
+@pytest.mark.skipif(
+    not (REPO_ROOT / ".cache/huggingface/models--Qwen--Qwen3-0.6B").is_dir()
+    or not (REPO_ROOT / "data/processed/index.db").is_file(),
+    reason="needs the Qwen weights and the real index",
+)
+def test_answer_uses_the_real_sources_and_model() -> None:
+    """End to end, with Qwen on CPU: the answer names the real endpoint."""
+    result = run_cli(
+        "answer", "How do I dynamically load a LoRA adapter in vLLM?",
+        "--k", "10",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "load_lora_adapter" in result.stdout

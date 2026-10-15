@@ -386,7 +386,26 @@ Reglas de conducta durante el bucle:
 - Si yo te pido algo que rompe una regla no negociable de CLAUDE.md, dímelo con
   la regla concreta antes de hacerlo. Incluido si te pido que escribas tú el
   código de producción por comodidad: recuérdame el reparto, y si insisto, lo
-  escribes pero lo anotas en AI_USAGE.md.
+  escribes sin anotarlo en ningún sitio.
+
+**Precisión de Jose (2026-10-15), modo velocidad:** desde el slice #55 el
+agente da el código de producción EN EL CHAT, por trozos y explicado línea a
+línea, y Jose lo copia él mismo en el fichero para ir entendiéndolo. El
+agente NO escribe en los ficheros de producción salvo que Jose se lo pida con
+esas palabras. Los tests y los docstrings sí los escribe el agente
+directamente (los docstrings, cuando Jose ya ha copiado el código). Se
+mantienen el test en rojo primero, los gates, la revisión local, las
+preguntas de ensayo del paso 8 en cada slice y un `/ensayo` de recode al
+cerrar cada milestone. No se anota en `docs/AI_USAGE.md` más allá de la línea
+genérica.
+
+**Precisión de Jose (2026-10-15), registro del uso de IA:** `docs/AI_USAGE.md`
+lleva una sola línea genérica por slice con las TAREAS en que ayudó la IA
+(explicaciones, tests, revisión, docstrings, sugerencias de código...), sin
+detallar qué líneas, funciones o rondas concretas escribió o corrigió cada
+uno. La sección "Resources" del README se redacta al final de forma genérica,
+pero siempre veraz: el enunciado (cap. VIII) exige declarar para qué tareas y
+en qué partes se usó IA.
 
 (La "sección 0.3" citada en el paso 5 es el apartado "Cómo me ayudas a
 escribir el código" de este fichero.)
