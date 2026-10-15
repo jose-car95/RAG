@@ -426,8 +426,10 @@ justificar), **ABIERTO** (pendiente, con límite).
   `model.safetensors`). `cache_dir` en `from_pretrained` redirige los pesos,
   pero `huggingface_hub` escribe ficheros auxiliares pequeños en `HF_HOME`
   (por defecto `~/.cache/huggingface`): `.agent_harnesses.json` y logs de
-  `xet`. **ABIERTO hasta el #55**: fijar `HF_HOME` dentro del repo en el
-  adaptador del modelo.
+  `xet`. **Resuelto en el #55 (2026-10-15):** `load_generator` hace
+  `os.environ.setdefault("HF_HOME", cache_dir)` antes de importar
+  transformers; medido: 0 ficheros nuevos en `~/.cache/huggingface` tras un
+  `answer` real.
 
 - **DECISIÓN** — Solo CPU. `torch` se instalará desde el índice de wheels de
   CPU y la inferencia usa `device="cpu"` (Jose, 2026-09-13: las máquinas de la
