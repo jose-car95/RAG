@@ -18,11 +18,25 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slice en revisión:** #54 "Build the prompt from the retrieved sources".
-  Jose escribió `INSTRUCTION` (texto en inglés con ayuda de la IA, a partir
-  de su idea de no inventar) y `build_prompt` en `src/domain/prompt.py`:
-  instrucción, fuentes numeradas con su `file_path` hasta que la siguiente no
-  cabe (opción A) y la pregunta al final.
+- **Slice en revisión:** #55 "Answer a single query with Qwen". Adaptador
+  `src/adapters/qwen_generator.py` (`QwenGenerator` con `count_tokens` y
+  `generate`; `load_generator` con import tardío de torch, `HF_HOME` con
+  `setdefault`, `float32` y `.to("cpu")`), `read_source_text` en
+  `src/adapters/corpus.py`, caso de uso `src/application/answer.py` (puerto
+  `Generator`, presupuesto 2.000, el modelo solo se carga si hay fuentes) y
+  `answer --index_path` en la CLI. Primer slice en modo velocidad: el código
+  lo dio la IA en el chat y Jose lo copió.
+- **Verificado (2026-10-15, slice #55):**
+  - `make lint` → `Success: no issues found in 39 source files`; `make test` → `224 passed` (4 del adaptador, 2 de ellos con Qwen real si están los pesos; 4 de `read_source_text`; 8 del caso de uso con un generador falso; 6 de la CLI, 1 con Qwen real).
+  - `answer "How do I dynamically load a LoRA adapter in vLLM?" --k 10` → «...use the `/v1/load_lora_adapter` endpoint or configure a LoRAResolver plugin...», **24,3 s** y **4,9 GB de RAM máxima** (a vigilar en las máquinas de la escuela).
+  - `answer "" --k 10` y `--k 0` → `ERROR: ...`, salida 1, **0,22 s**; `"asdfghjkl"` → `No sources found, so the question cannot be answered.`, salida 0, 1,7 s sin cargar el modelo; índice inexistente → `ERROR: index not found: ...`.
+  - **0 ficheros nuevos** en `~/.cache/huggingface` tras un `answer` real (cierra el ABIERTO del #53).
+  - Con `load_generator()` (con paréntesis) en la CLI, `answer ""` pasaría de 0,22 a **6,52 s** y mypy da `arg-type`: medido en una copia aparte.
+  - `device_map="cpu"` exige el paquete `accelerate`; se usa `.to("cpu")`. Los tipos de `transformers` fallan en mypy incluso con su propio tipo de retorno (`generate`, `to`), por eso el modelo y el tokenizador son `Any`.
+  - Qwen solo, sin RAG: acierta «blue» y «144», pero dice que el Mundial de 2010 lo ganó Estados Unidos y se inventa `vllm.from_pretrained` para cargar LoRA. Con RAG responde «The answer is not provided in the available sources.» a lo del Mundial.
+  - **Límite conocido (para «qué mejoraría» del README):** con «What is your name?», la fuente nº 1 (`examples/offline_inference/automatic_prefix_caching.py`) contiene otra pregunta con nuestro mismo formato (`Question: what is the age of John Doe?`) y el modelo respondió sobre John Doe. Mejora posible, a medir: delimitar mejor las fuentes o repetir la pregunta antes de ellas.
+- **Slice anterior, #54 (cerrado):** `build_prompt` e `INSTRUCTION` en
+  `src/domain/prompt.py`.
 - **Verificado (2026-10-14, slice #54):**
   - `make lint` → `Success: no issues found in 35 source files`; `make test` → `203 passed` (8 del prompt, con un contador falso de palabras).
   - Con datos reales (BM25 sobre el índice y el tokenizador de Qwen como contador), para «How do I dynamically load a LoRA adapter in vLLM?»: presupuesto 800 → 2 fuentes, 717 tokens; 2.000 → 5 fuentes, 1.801 tokens; 6.000 → las 10, 3.037 tokens. La 1ª fuente es `tests/entrypoints/openai/test_lora_adapters.py`, con `client.post("load_lora_adapter", ...)`.
@@ -106,10 +120,11 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** #55 "Answer a single query with Qwen": el
-  adaptador del modelo (`float32`, `HF_HOME` dentro del repo, presupuesto de
-  tokens fijado por tiempo) y el caso de uso `answer`; si BM25 no devuelve
-  fuentes, no se llama al modelo. Después #56 (`answer_dataset`).
+- **Siguiente paso propuesto:** #56 "Answer a whole dataset": leer los
+  resultados de `search_dataset`, responder cada pregunta reutilizando el
+  modelo cargado una sola vez y guardar `StudentSearchResultsAndAnswer`. Es el
+  momento apuntado de unificar `load_dataset` y `load_search_results`. Con
+  ~20 s por pregunta, 100 preguntas son ~30 min: medir antes de fijar nada.
 - **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
   `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
   `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
@@ -185,6 +200,10 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-14 | M5 en 4 issues: stack de CPU (#53, IA), prompt (#54), `answer` (#55) y `answer_dataset` (#56) | Aprobado por Jose; los tres últimos los escribe él |
 | 2026-10-14 | Todas las descargas dentro del repo: caché de uv en `.cache/uv` (`pyproject.toml`) y pesos en `.cache/huggingface/` | Propuesta de Jose: el home de la escuela tiene 5 GB casi llenos y el repo vive en `sgoinfree`. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-14 | `torch` desde el índice de CPU de PyTorch (`explicit = true`) | La versión por defecto incluye CUDA (varios GB) y las máquinas de la escuela no tienen GPU |
+| 2026-10-15 | Presupuesto del prompt 2.000 tokens; el texto de cada fuente se lee del fichero del corpus por su rango (opción A) | Caben ~5 fuentes, el mismo top 5 que mide Recall@5, en ~15 s por respuesta; leer el fichero no toca `retrieval.py` ni ocupa RAM en las búsquedas |
+| 2026-10-15 | `run_answer` recibe el cargador del modelo (`load_generator`), no el modelo cargado; puerto `Protocol` `Generator` | El caso de uso decide cuándo pagar la carga (nunca si la pregunta se rechaza o no hay fuentes); el puerto tiene dos implementaciones reales: Qwen y el falso de los tests |
+| 2026-10-15 | Modo velocidad: la IA da el código de producción en el chat, explicado línea a línea, y Jose lo copia; la IA escribe tests y docstrings | Decisión de Jose por ir atrasado; se mantienen test en rojo, gates, revisión local y ensayo. Detalle en `CLAUDE.md` |
+| 2026-10-15 | `docs/AI_USAGE.md` pasa a una línea genérica por slice (opción A) | Decisión de Jose; la sección del README se redacta al final, genérica pero veraz (cap. VIII) |
 | 2026-10-14 | El prompt añade fuentes en orden hasta que la siguiente no cabe (opción A); pide responder solo con las fuentes o decir que no se puede | Lo más simple y respeta el orden de BM25; la instrucción de no inventar es idea de Jose. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-01 | BM25 y no TF-IDF | Medido en los dos chunks reales: la ventaja del correcto pasa de ×1,78 (TF-IDF) a ×4,79 (BM25). El motivo decisivo no es ese ejemplo, es que TF-IDF no normaliza por longitud y nuestros chunks van de 0 a 404 tokens |
 | 2026-10-01 | El índice invertido vive en memoria, no en SQLite (opción A) | Medido: construirlo cuesta 0,88-1,22 s por proceso y las 199 preguntas 1,75 s, o sea ~3 s de los 90 permitidos. Persistirlo añadiría 957.148 filas y dos tablas a una base de datos que queremos de una sola tabla. Para el bonus de la API HTTP, un proceso largo lo construye una vez al arrancar, así que en memoria es lo natural. Primer candidato de optimización si M4 aprieta |
