@@ -17,7 +17,8 @@ Cierra el slice en curso. $ARGUMENTS
    debe salir vacío.
 4. Actualiza `docs/PROGRESS.md` (estado actual, verificado con qué comandos,
    siguiente paso, decisiones nuevas) y añade la fila del slice en
-   `docs/AI_USAGE.md` (qué hizo la IA, qué escribió Jose). Actualiza
+   `docs/AI_USAGE.md`: una frase genérica con las tareas en que ayudó la IA,
+   sin detallar líneas ni funciones concretas (ver `CLAUDE.md`). Actualiza
    `docs/EVALUATION.md` si el slice aporta evidencia.
 5. PAUSA DE REVISIÓN: enseña `git status --short` y `git diff --stat`, di a
    Jose que revise los cambios resaltados en VS Code y ESPERA su OK. No hagas
