@@ -9,6 +9,8 @@ from pathlib import Path
 
 import fire
 
+from src.adapters.qwen_generator import load_generator
+from src.application.answer import run_answer
 from src.application.evaluate import run_evaluate
 from src.application.index_corpus import run_index, MAX_CHUNK_SIZE
 from src.application.search import run_search
@@ -25,8 +27,8 @@ EXIT_INTERRUPTED = 130
 class RagCli:
     """Commands required by the subject, exposed through Fire.
 
-    ``answer`` and ``answer_dataset`` are still placeholders that only report
-    they are not implemented yet.
+    ``answer_dataset`` is still a placeholder that only reports it is not
+    implemented yet.
     """
     def index(
         self,
@@ -102,14 +104,23 @@ class RagCli:
         )
         print(f"Saved student_search_results to {output_path}")
 
-    def answer(self, query: str, k: int = 10) -> None:
+    def answer(
+        self,
+        query: str,
+        k: int = 10,
+        index_path: str = "data/processed/index.db"
+    ) -> None:
         """Answer a single question using the retrieved sources.
 
+        Qwen is loaded only when sources are found, so a rejected question
+        or an empty search ends in under a second.
+
         Args:
-            query: Question to answer.
-            k: Number of sources given to the model as context.
+            query: Question to answer; it cannot be empty.
+            k: Number of sources retrieved for the model.
+            index_path: SQLite index to search, built by ``index``.
         """
-        print("answer: not implemented yet")
+        print(run_answer(query, k, index_path, load_generator))
 
     def answer_dataset(
         self,
