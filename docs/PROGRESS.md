@@ -18,7 +18,19 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slice en revisión:** #55 "Answer a single query with Qwen". Adaptador
+- **Slice en revisión:** #56 "Answer a whole dataset". `answer_from_sources`
+  sale de `run_answer` y la comparten `answer` y `answer_dataset`;
+  `src/application/answer_dataset.py` (`run_answer_dataset`) lee el fichero de
+  `search_dataset`, carga Qwen una vez, responde con las fuentes que ya trae
+  (sin buscar otra vez; sin fuentes, el mensaje fijo sin llamar al modelo) y
+  escribe `StudentSearchResultsAndAnswer` con el nombre del fichero de
+  entrada. `write_search_results` acepta los dos tipos de resultados.
+- **Verificado (2026-10-16, slice #56):**
+  - `make lint` → `Success: no issues found in 42 source files`; `make test` → `230 passed` (5 de `answer_dataset` y 1 de `answer_from_sources`, con el generador falso; `tests/__init__.py` nuevo para que mypy no vea `test_answer` con dos nombres).
+  - Real, las 3 primeras preguntas de `data/output/search_results/UnansweredQuestions/dataset_docs_public.json`: `Answering: 3/3 [00:37, 12.35s/question]` y `Saved student_search_results_and_answer to ...`, salida 0. Estimación: ~21 min por dataset de 100 preguntas.
+  - Calidad de esas 3: `/v1/load_lora_adapter` correcto; `lm_eval` correcto pero pobre; `llm.generate` para embeddings es incorrecto (es `llm.embed`).
+  - Fichero inexistente → `ERROR: search results not found: /nope.json`, salida 1, 0,21 s sin cargar el modelo; JSON roto → `ERROR: search results are not valid JSON: ...`, salida 1.
+- **Slice anterior, #55 (cerrado):** `answer` con Qwen. Adaptador
   `src/adapters/qwen_generator.py` (`QwenGenerator` con `count_tokens` y
   `generate`; `load_generator` con import tardío de torch, `HF_HOME` con
   `setdefault`, `float32` y `.to("cpu")`), `read_source_text` en
@@ -120,19 +132,19 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** #56 "Answer a whole dataset": leer los
-  resultados de `search_dataset`, responder cada pregunta reutilizando el
-  modelo cargado una sola vez y guardar `StudentSearchResultsAndAnswer`. Es el
-  momento apuntado de unificar `load_dataset` y `load_search_results`. Con
-  ~20 s por pregunta, 100 preguntas son ~30 min: medir antes de fijar nada.
+- **Siguiente paso propuesto:** cierre de M5. (1) `answer_dataset` completo
+  sobre los dos públicos, ~21 min cada uno, con OK previo de Jose; (2)
+  revisión a mano de una muestra de respuestas (el enunciado pide 2 de 3
+  satisfactorias); (3) `/ensayo` de recode de M5.
 - **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
   `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
   `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
   reventaría. El corpus tiene 0 ficheros así y fijamos 3.12, pero el plan B
   de la escuela es 3.10: añadir `ValueError` al `except` con su test.
-- **Pendiente apuntado (2026-10-08):** `load_dataset` y `load_search_results`
-  son casi idénticas. Con dos copias no compensa una función común; el
-  lector de `answer_dataset` (M5) será la tercera y el momento de unificar.
+- **Pendiente apuntado (2026-10-08), resuelto (2026-10-16):** `load_dataset`
+  y `load_search_results` son casi idénticas. `answer_dataset` reutiliza
+  `load_search_results` tal cual, así que no hubo tercera copia y siguen sin
+  unificar (dos copias no compensan una función común).
 
 ## Decisiones
 
@@ -200,6 +212,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-10-14 | M5 en 4 issues: stack de CPU (#53, IA), prompt (#54), `answer` (#55) y `answer_dataset` (#56) | Aprobado por Jose; los tres últimos los escribe él |
 | 2026-10-14 | Todas las descargas dentro del repo: caché de uv en `.cache/uv` (`pyproject.toml`) y pesos en `.cache/huggingface/` | Propuesta de Jose: el home de la escuela tiene 5 GB casi llenos y el repo vive en `sgoinfree`. Detalle en `docs/SPEC_NOTES.md` |
 | 2026-10-14 | `torch` desde el índice de CPU de PyTorch (`explicit = true`) | La versión por defecto incluye CUDA (varios GB) y las máquinas de la escuela no tienen GPU |
+| 2026-10-16 | `answer_dataset` responde con las fuentes que ya trae el fichero de `search_dataset`, mediante `answer_from_sources` compartida con `answer`; el modelo se carga una vez después de leer el fichero | Una sola receta para responder (un cambio toca un sitio); no repetir la búsqueda; cargar 100 veces costaría ~8 min más con el mismo resultado |
 | 2026-10-15 | Presupuesto del prompt 2.000 tokens; el texto de cada fuente se lee del fichero del corpus por su rango (opción A) | Caben ~5 fuentes, el mismo top 5 que mide Recall@5, en ~15 s por respuesta; leer el fichero no toca `retrieval.py` ni ocupa RAM en las búsquedas |
 | 2026-10-15 | `run_answer` recibe el cargador del modelo (`load_generator`), no el modelo cargado; puerto `Protocol` `Generator` | El caso de uso decide cuándo pagar la carga (nunca si la pregunta se rechaza o no hay fuentes); el puerto tiene dos implementaciones reales: Qwen y el falso de los tests |
 | 2026-10-15 | Modo velocidad: la IA da el código de producción en el chat, explicado línea a línea, y Jose lo copia; la IA escribe tests y docstrings | Decisión de Jose por ir atrasado; se mantienen test en rojo, gates, revisión local y ensayo. Detalle en `CLAUDE.md` |
