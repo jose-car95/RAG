@@ -9,6 +9,7 @@ from src.application.retrieval import (
     search_index,
     validate_query_and_k
 )
+from src.domain.models import MinimalSource
 from src.domain.prompt import build_prompt
 
 # About the top 5 sources fit, the same top 5 that Recall@5 measures; about
@@ -79,12 +80,36 @@ def run_answer(
     results = search_index(corpus, clean_query, k)
     if not results:
         return NO_SOURCES_ANSWER
-    sources = [
+    sources = [source for source, _ in results]
+    return answer_from_sources(clean_query, sources, load_generator())
+
+
+def answer_from_sources(
+    question: str,
+    sources: list[MinimalSource],
+    generator: Generator
+) -> str:
+    """Answer a question from sources already retrieved.
+
+    Takes the model already loaded, so a whole dataset loads it once and
+    reuses it for every question.
+
+    Args:
+        question: The question, already validated.
+        sources: Where to read the context, best first.
+        generator: A loaded model.
+
+    Returns:
+        The model's answer.
+
+    Raises:
+        ValueError: If a source file cannot be read.
+    """
+    texts = [
         (source.file_path, read_source_text(source))
-        for source, _ in results
+        for source in sources
     ]
-    generator = load_generator()
     prompt = build_prompt(
-        clean_query, sources, generator.count_tokens, PROMPT_BUDGET
+        question, texts, generator.count_tokens, PROMPT_BUDGET
     )
     return generator.generate(prompt)
