@@ -55,19 +55,20 @@ def test_help_lists_required_commands() -> None:
         assert re.search(rf"^\s+{command}$", output, re.MULTILINE), output
 
 
-def test_answer_dataset_reports_not_implemented() -> None:
-    """``answer_dataset`` takes its subject flags and reports it is a stub."""
+def test_answer_dataset_reports_missing_results(tmp_path: Path) -> None:
+    """A missing input file ends in a one-line error, without the model."""
+    missing = tmp_path / "results.json"
+
     result = run_cli(
         "answer_dataset",
         "--student_search_results_path",
-        "results.json",
+        str(missing),
         "--save_directory",
-        "answers",
+        str(tmp_path / "answers"),
     )
 
-    assert result.returncode == 0, result.stderr
-    assert "answer_dataset: not implemented yet" in result.stdout
-    assert "Traceback" not in result.stderr
+    assert result.returncode == 1
+    assert result.stderr == f"ERROR: search results not found: {missing}\n"
 
 
 def test_usage_error_names_the_program() -> None:
