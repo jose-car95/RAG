@@ -5,17 +5,20 @@ from pathlib import Path
 
 from pydantic import ValidationError
 
-from src.domain.models import StudentSearchResults
+from src.domain.models import (
+    StudentSearchResults,
+    StudentSearchResultsAndAnswer
+)
 
 
 def write_search_results(
-    results: StudentSearchResults,
+    results: StudentSearchResults | StudentSearchResultsAndAnswer,
     output_path: Path
 ) -> None:
     """Write search results as indented JSON, creating missing folders.
 
     Args:
-        results: Search results to write.
+        results: Search results to write, with or without answers.
         output_path: File to create or overwrite.
 
     Raises:

@@ -11,6 +11,7 @@ import fire
 
 from src.adapters.qwen_generator import load_generator
 from src.application.answer import run_answer
+from src.application.answer_dataset import run_answer_dataset
 from src.application.evaluate import run_evaluate
 from src.application.index_corpus import run_index, MAX_CHUNK_SIZE
 from src.application.search import run_search
@@ -25,11 +26,7 @@ EXIT_INTERRUPTED = 130
 
 
 class RagCli:
-    """Commands required by the subject, exposed through Fire.
-
-    ``answer_dataset`` is still a placeholder that only reports it is not
-    implemented yet.
-    """
+    """Commands required by the subject, exposed through Fire."""
     def index(
         self,
         max_chunk_size: int = MAX_CHUNK_SIZE,
@@ -129,11 +126,18 @@ class RagCli:
     ) -> None:
         """Generate answers for saved search results and save them.
 
+        The model is loaded once for the whole file.
+
         Args:
             student_search_results_path: Path to the search results file.
             save_directory: Directory where the answers file is written.
         """
-        print("answer_dataset: not implemented yet")
+        output_path = run_answer_dataset(
+            student_search_results_path,
+            save_directory,
+            load_generator
+        )
+        print(f"Saved student_search_results_and_answer to {output_path}")
 
     def evaluate(
         self,

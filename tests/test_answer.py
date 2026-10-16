@@ -13,9 +13,11 @@ import pytest
 from src.application.answer import (
     NO_SOURCES_ANSWER,
     PROMPT_BUDGET,
+    answer_from_sources,
     run_answer,
 )
 from src.application.index_corpus import run_index
+from src.domain.models import MinimalSource
 
 MD_FILE = "# Endpoints\nThe http endpoint loads a lora adapter.\n"
 
@@ -152,3 +154,25 @@ def test_missing_index_is_reported_without_the_model(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="index not found"):
         run_answer("lora", 5, str(tmp_path / "missing.db"), loader)
     assert loader.loads == 0
+
+
+def test_answer_from_sources_reads_them_and_asks_the_model(
+    tmp_path: Path
+) -> None:
+    """Given sources, no search: their text goes into the prompt."""
+    path = tmp_path / "lora.md"
+    path.write_text(MD_FILE, encoding="utf-8")
+    source = MinimalSource(
+        file_path=str(path),
+        first_character_index=12,
+        last_character_index=51,
+    )
+    generator = FakeGenerator()
+
+    answer = answer_from_sources("lora endpoint", [source], generator)
+
+    assert answer == "Use the load_lora_adapter endpoint."
+    [prompt] = generator.prompts
+    assert "The http endpoint loads a lora adapter." in prompt
+    assert str(path) in prompt
+    assert prompt.endswith("Question: lora endpoint")
