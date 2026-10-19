@@ -132,10 +132,12 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **Siguiente paso propuesto:** cierre de M5. (1) `answer_dataset` completo
-  sobre los dos públicos, ~21 min cada uno, con OK previo de Jose; (2)
-  revisión a mano de una muestra de respuestas (el enunciado pide 2 de 3
-  satisfactorias); (3) `/ensayo` de recode de M5.
+- **M6 abierto (2026-10-19):** issues #61-#68. En curso #61
+  (arquitectura hexagonal pura). Orden: #61 → #62 prompt por roles → #63 Python 3.10 →
+  #64 mensajes con línea y campo → #65 `--save_directory` → #66 guía de
+  ejecución → #67 README → #68 escuela y repo de entrega.
+- **Pendiente de M5:** nota de Jose de la muestra de 6 respuestas y recode
+  del `/ensayo` (rama `ensayo/<fecha>`).
 - **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
   `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
   `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
@@ -244,6 +246,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Se mantiene `.flake8` en vez de pasar las exclusiones al `Makefile` | El enunciado da el comando literal `flake8 .`; el fichero aplica a quien ejecute flake8 (corrector, VS Code, CI). Sin él: 49.694 errores ajenos (40.788 de `.venv`, 8.906 de `data/`) |
 | 2026-09-17 | Se desarrolla con Python 3.12 (`.python-version`); en la escuela (Python 3.10) `uv sync` descargará 3.12 automáticamente | Misma versión en casa, CI y escuela. Plan B si la descarga falla: `.python-version` = `3.10` (el código pasa `mypy --python-version 3.10`) |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
+| 2026-10-19 | Arquitectura hexagonal pura (issue #61): `application/ports/` (4 `Protocol`: `Generator`, `IndexStore`, `CorpusReader`, `DatasetStore`), `application/use_cases/`, `adapters/inbound/` (CLI) y `adapters/outbound/` (corpus, JSON, SQLite, Qwen; nombres de Jose: de entrada y de salida, `in` es palabra reservada), `bootstrap.py` como raíz de composición; tests en espejo y `tests/test_architecture.py` | Los casos de uso importaban SQLite, JSON y el corpus directamente: no era hexagonal aunque lo llamáramos así. Se descartó la capa `infrastructure/` (vocabulario de DDD) para no mezclar escuelas; `outbound` es la misma pieza con el nombre de la hexagonal. Sustituye a la decisión del 2026-09-15 de no separar entrada y salida: entonces había 2 adaptadores, ahora 6, y los bonus (API, caché, embeddings) encajan como adaptadores nuevos |
+| 2026-10-19 | Prompt por roles: reglas en `system`, fuentes etiquetadas y pregunta en `user` (opción A, issue #62) | Para que quede más limpio y la información le llegue mejor al modelo, no para subir una nota; las etiquetas separan una fuente que contiene su propio `Question:` |
+| 2026-10-19 | Todo debe funcionar en Python 3.10 (issue #63) | Es el Python instalado en la escuela y no se puede cambiar |
 
 ## Métricas
 

@@ -1333,7 +1333,7 @@ recorrido que tienes que poder contar en voz alta en la defensa.</p>
   <strong>Contenido</strong>
   <ol>
     <li><a href="#pipe-cadena">La cadena completa de <code>search</code></a></li>
-    <li><a href="#pipe-adaptador">Por qué el adaptador comprueba el fichero antes de conectar</a></li>
+    <li><a href="#pipe-adaptador">Por qué el adaptador de salida comprueba el fichero antes de conectar</a></li>
     <li><a href="#pipe-validar">Quién valida qué, y por qué no todo en el mismo sitio</a></li>
     <li><a href="#pipe-defensa">Preguntas de defensa</a></li>
   </ol>
@@ -1390,7 +1390,7 @@ recorrido que tienes que poder contar en voz alta en la defensa.</p>
   <text x="86" y="300" text-anchor="middle">MinimalSource</text>
   <text x="166" y="300" class="lbl">no toca disco jamás</text>
 
-  <text x="350" y="232" class="lbl">ADAPTADOR DE SALIDA</text>
+  <text x="350" y="232" class="lbl">ADAPTADOR DE SALIDA (outbound)</text>
   <rect class="soft" x="350" y="240" width="306" height="80" rx="6"></rect>
   <rect class="box" x="350" y="240" width="306" height="80" rx="6"></rect>
   <rect class="box" x="362" y="250" width="130" height="24" rx="4"></rect>
@@ -1398,9 +1398,10 @@ recorrido que tienes que poder contar en voz alta en la defensa.</p>
   <text x="362" y="292" class="lbl">SELECT ... FROM chunks</text>
   <text x="362" y="306" class="lbl">ORDER BY id  ->  SQLite</text>
 </svg>
-<figcaption>Figura. Las flechas apuntan siempre hacia dentro: los adaptadores
-conocen la aplicación, la aplicación conoce el dominio, y el dominio no conoce a
-nadie.</figcaption>
+<figcaption>Figura. Las llamadas van hacia fuera (la aplicación pide los chunks
+a SQLite), pero los imports apuntan siempre hacia dentro: el caso de uso solo
+conoce el puerto <code>IndexStore</code>, y <code>bootstrap.py</code> le enchufa
+<code>SqliteIndexStore</code>. El dominio no conoce a nadie.</figcaption>
 </figure>
 
 <ol>
@@ -1409,8 +1410,11 @@ nadie.</figcaption>
       programa ejecutable.</li>
   <li><code>__main__.py</code> llama a <code>sys.exit(main())</code>: el número
       que devuelva <code>main</code> será el código de salida del proceso.</li>
-  <li><code>main()</code> devuelve <code>run(RagCli())</code>, pasándole una
-      <strong>instancia</strong> ya creada, no la clase.</li>
+  <li><code>main()</code>, en <code>src/bootstrap.py</code>, crea
+      <code>RagCli</code> con los adaptadores de salida reales
+      (<code>SqliteIndexStore</code>, <code>FileCorpus</code>,
+      <code>JsonDatasetStore</code>, <code>load_generator</code>) y devuelve
+      <code>run(...)</code> con esa <strong>instancia</strong> ya montada.</li>
   <li><code>run()</code> es la <strong>frontera de errores</strong>: envuelve la
       llamada a Fire en un <code>try</code>. Aquí se decide que ninguna
       excepción salga como traceback y que un fallo valga salida 1.</li>
@@ -1419,11 +1423,11 @@ nadie.</figcaption>
       por posición y <code>--k 5</code> a <code>k</code>, adivinando el tipo.
       Traduce, no valida.</li>
   <li><code>RagCli.search</code> llama a
-      <code>run_search(query, k, index_path)</code>. Es lo único que hace,
+      <code>run_search(query, k, index_path, self._index_store)</code>. Es lo único que hace,
       además de imprimir.</li>
   <li><code>run_search</code> (aplicación) valida <code>k</code> y la query, y
       entonces pide las filas a <code>load_chunks</code>.</li>
-  <li><code>load_chunks</code> (adaptador de salida) comprueba que el fichero
+  <li><code>load_chunks</code> (adaptador de salida <code>SqliteIndexStore</code>, a través del puerto <code>IndexStore</code>) comprueba que el fichero
       existe, abre SQLite, lanza el <code>SELECT</code> y devuelve las filas.</li>
   <li><code>run_search</code> tokeniza el texto de cada chunk con
       <code>tokenize</code>, construye el índice invertido con
@@ -1444,10 +1448,10 @@ nadie.</figcaption>
 <div class="note">
 <strong>La frase corta para la defensa:</strong> <em>«la CLI traduce e imprime,
 la aplicación coordina y valida las reglas del enunciado, el dominio calcula sin
-tocar disco, y un único adaptador sabe de SQLite»</em>.
+tocar disco, y un solo adaptador de salida sabe de SQLite»</em>.
 </div>
 
-<h2 id="pipe-adaptador">2. Por qué el adaptador comprueba el fichero antes de conectar</h2>
+<h2 id="pipe-adaptador">2. Por qué el adaptador de salida comprueba el fichero antes de conectar</h2>
 
 <p>Porque <code>sqlite3.connect</code> <strong>crea el fichero si no
 existe</strong>. Medido:</p>
@@ -1495,7 +1499,7 @@ comprobación vive donde está el conocimiento para hacerla.</p>
 </tr>
 <tr>
   <td>Que el índice exista y se pueda leer</td>
-  <td><strong>adaptador</strong> (<code>load_chunks</code>)</td>
+  <td><strong>adaptador de salida</strong> (<code>load_chunks</code>)</td>
   <td>Es un <em>hecho del mundo exterior</em>. Solo el adaptador sabe qué es un
       índice válido: un fichero con una tabla <code>chunks</code>. La
       aplicación no puede tocar disco, así que tampoco puede comprobarlo</td>
@@ -1532,7 +1536,7 @@ habría que acordarse de los dos. Una comprobación, un sitio.
       Da los dos motivos.</li>
   <li>¿Por qué devuelve una lista y no el cursor?</li>
   <li>¿Por qué <code>k</code> se valida en la aplicación y la ruta del índice en
-      el adaptador?</li>
+      el adaptador de salida?</li>
   <li>Si añadiéramos una API HTTP, ¿qué habría que reescribir y qué no?</li>
 </ol>
 
