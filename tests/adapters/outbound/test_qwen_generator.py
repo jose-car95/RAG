@@ -1,4 +1,4 @@
-"""Tests for the Qwen adapter that counts tokens and generates answers.
+"""Tests for the Qwen generator that counts tokens and generates answers.
 
 The import test runs everywhere. The model tests need the weights in
 ``.cache/huggingface/`` (1.5 GB, not in the repo), so they are skipped in CI
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from src.adapters.qwen_generator import (
+from src.adapters.outbound.qwen_generator import (
     MAX_NEW_TOKENS,
     MODEL_NAME,
     QwenGenerator,
@@ -28,14 +28,14 @@ needs_model = pytest.mark.skipif(
 
 
 def test_import_does_not_load_torch() -> None:
-    """Importing the adapter must stay cheap: torch costs seconds to import.
+    """Importing the module must stay cheap: torch costs seconds to import.
 
     Run in a fresh interpreter, because this test process may already have
     torch loaded by the model tests.
     """
     code = (
         "import sys\n"
-        "import src.adapters.qwen_generator\n"
+        "import src.adapters.outbound.qwen_generator\n"
         "print('torch' in sys.modules, 'transformers' in sys.modules)\n"
     )
     completed = subprocess.run(

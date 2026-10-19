@@ -7,9 +7,46 @@ from typing import cast
 
 import pytest
 
-from src.application import search_dataset as module
-from src.application.index_corpus import run_index
-from src.application.search_dataset import run_search_dataset
+from src.adapters.outbound.corpus import FileCorpus
+from src.adapters.outbound.json_files import JsonDatasetStore
+from src.adapters.outbound.sqlite_index import SqliteIndexStore
+from src.application.ports.index_store import NewChunk, StoredChunk
+from src.application.use_cases.index_corpus import run_index
+from src.application.use_cases.search_dataset import run_search_dataset
+
+CORPUS = FileCorpus()
+STORE = SqliteIndexStore()
+DATASETS = JsonDatasetStore()
+
+
+class CountingStore:
+    """The real SQLite store, counting how often the index is loaded."""
+
+    def __init__(self) -> None:
+        """Start with no loads."""
+        self.loads = 0
+
+    def save_chunks(self, chunks: list[NewChunk], index_path: str) -> None:
+        """Store the chunks with SQLite.
+
+        Args:
+            chunks: The chunks to store.
+            index_path: Where the index lives.
+        """
+        STORE.save_chunks(chunks, index_path)
+
+    def load_chunks(self, index_path: str) -> list[StoredChunk]:
+        """Count the load and read the chunks with SQLite.
+
+        Args:
+            index_path: Where the index lives.
+
+        Returns:
+            The stored chunks.
+        """
+        self.loads += 1
+        return STORE.load_chunks(index_path)
+
 
 PUBLIC_DATASET = Path(
     "data/datasets/UnansweredQuestions/dataset_docs_public.json"
@@ -43,7 +80,7 @@ def make_index(tmp_path: Path) -> Path:
     corpus.mkdir()
     (corpus / "notes.md").write_text(CORPUS_FILE, encoding="utf-8")
     index_path = tmp_path / "processed" / "index.db"
-    run_index(str(corpus), 2000, str(index_path))
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
     return index_path
 
 
@@ -81,7 +118,12 @@ def test_results_file_is_written_with_one_entry_per_question(
     index_path = make_index(tmp_path)
 
     output_path = run_search_dataset(
-        str(PUBLIC_DATASET), 10, str(tmp_path), str(index_path)
+        str(PUBLIC_DATASET),
+        10,
+        str(tmp_path),
+        str(index_path),
+        STORE,
+        DATASETS
     )
 
     assert output_path == tmp_path / "dataset_docs_public.json"
@@ -105,7 +147,12 @@ def test_sources_come_from_the_index(tmp_path: Path) -> None:
     dataset_path = make_own_dataset(tmp_path)
 
     output_path = run_search_dataset(
-        str(dataset_path), 5, str(tmp_path / "out"), str(index_path)
+        str(dataset_path),
+        5,
+        str(tmp_path / "out"),
+        str(index_path),
+        STORE,
+        DATASETS
     )
 
     entries = cast(
@@ -126,7 +173,12 @@ def test_every_source_respects_the_subject_limits(tmp_path: Path) -> None:
     dataset_path = make_own_dataset(tmp_path)
 
     output_path = run_search_dataset(
-        str(dataset_path), 2, str(tmp_path / "out"), str(index_path)
+        str(dataset_path),
+        2,
+        str(tmp_path / "out"),
+        str(index_path),
+        STORE,
+        DATASETS
     )
 
     entries = cast(
@@ -144,31 +196,25 @@ def test_every_source_respects_the_subject_limits(tmp_path: Path) -> None:
             assert cast(str, source["file_path"]).endswith("notes.md")
 
 
-def test_the_index_is_built_only_once(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_the_index_is_built_only_once(tmp_path: Path) -> None:
     """Rebuilding the index per question would blow the 90 s budget.
 
-    Args:
-        tmp_path: Temporary folder provided by pytest.
-        monkeypatch: Fixture used to count the calls.
+    A counting store plugged into the port sees every load: no patching.
     """
     index_path = make_index(tmp_path)
     dataset_path = make_own_dataset(tmp_path)
-    calls = []
-    original = module.load_index
-
-    def counted(path: str) -> object:
-        calls.append(path)
-        return original(path)
-
-    monkeypatch.setattr(module, "load_index", counted)
+    store = CountingStore()
 
     run_search_dataset(
-        str(dataset_path), 5, str(tmp_path / "out"), str(index_path)
+        str(dataset_path),
+        5,
+        str(tmp_path / "out"),
+        str(index_path),
+        store,
+        DATASETS
     )
 
-    assert len(calls) == 1
+    assert store.loads == 1
 
 
 def test_missing_save_directories_are_created(tmp_path: Path) -> None:
@@ -177,7 +223,12 @@ def test_missing_save_directories_are_created(tmp_path: Path) -> None:
     save_directory = tmp_path / "new" / "nested"
 
     output_path = run_search_dataset(
-        str(PUBLIC_DATASET), 5, str(save_directory), str(index_path)
+        str(PUBLIC_DATASET),
+        5,
+        str(save_directory),
+        str(index_path),
+        STORE,
+        DATASETS
     )
 
     assert output_path.is_file()
@@ -202,6 +253,8 @@ def test_invalid_k_is_rejected_before_writing(
             cast(int, k),
             str(save_directory),
             str(index_path),
+            STORE,
+            DATASETS
         )
 
     assert not save_directory.exists()
@@ -215,7 +268,12 @@ def test_a_missing_index_is_reported(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match=message):
         run_search_dataset(
-            str(PUBLIC_DATASET), 10, str(save_directory), str(index_path)
+            str(PUBLIC_DATASET),
+            10,
+            str(save_directory),
+            str(index_path),
+            STORE,
+            DATASETS
         )
 
     assert not index_path.exists()
@@ -233,7 +291,12 @@ def test_unwritable_save_directory_is_reported(tmp_path: Path) -> None:
         match=f"^{re.escape(f'cannot write search results: {output_path}')}$",
     ):
         run_search_dataset(
-            str(PUBLIC_DATASET), 10, str(not_a_directory), str(index_path)
+            str(PUBLIC_DATASET),
+            10,
+            str(not_a_directory),
+            str(index_path),
+            STORE,
+            DATASETS
         )
 
 
@@ -243,5 +306,10 @@ def test_missing_dataset_is_still_reported(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="^dataset not found: "):
         run_search_dataset(
-            "/nonexistent/dataset.json", 10, str(tmp_path), str(index_path)
+            "/nonexistent/dataset.json",
+            10,
+            str(tmp_path),
+            str(index_path),
+            STORE,
+            DATASETS
         )

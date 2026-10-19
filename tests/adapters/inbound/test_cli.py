@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 
 REQUIRED_COMMANDS = (
     "index",
@@ -381,11 +381,12 @@ def test_cli_import_does_not_load_torch() -> None:
     """``--help``, ``index`` and ``search`` must not pay for torch's import.
 
     Only ``answer`` needs the model, so torch is imported inside
-    ``load_generator``; importing the CLI module must leave it out.
+    ``load_generator``; importing the whole wiring, which plugs in the Qwen
+    adapter, must leave it out.
     """
     code = (
         "import sys\n"
-        "import src.adapters.cli\n"
+        "import src.bootstrap\n"
         "print('torch' in sys.modules, 'transformers' in sys.modules)\n"
     )
     result = subprocess.run(

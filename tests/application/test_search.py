@@ -5,9 +5,13 @@ from typing import cast
 
 import pytest
 
-from src.application.index_corpus import run_index
-from src.application.search import run_search
+from src.adapters.outbound.corpus import FileCorpus
+from src.adapters.outbound.sqlite_index import SqliteIndexStore
+from src.application.use_cases.index_corpus import run_index
+from src.application.use_cases.search import run_search
 
+CORPUS = FileCorpus()
+STORE = SqliteIndexStore()
 PY_FILE = (
     "def load_lora_adapter() -> None:\n"
     "    \"\"\"Load a lora adapter dynamically.\"\"\"\n"
@@ -30,7 +34,7 @@ def make_index(tmp_path: Path) -> tuple[Path, Path]:
     (corpus / "a.py").write_text(PY_FILE, encoding="utf-8")
     (corpus / "b.md").write_text(MD_FILE, encoding="utf-8")
     index_path = tmp_path / "processed" / "index.db"
-    run_index(str(corpus), 2000, str(index_path))
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
     return corpus, index_path
 
 
@@ -40,7 +44,7 @@ def test_search_returns_the_chunk_holding_the_query_terms(
     """The best source points at the file that talks about endpoints."""
     _, index_path = make_index(tmp_path)
 
-    results = run_search("http endpoint", 5, str(index_path))
+    results = run_search("http endpoint", 5, str(index_path), STORE)
 
     assert results, "the corpus holds those terms"
     best_source, best_score = results[0]
@@ -53,7 +57,7 @@ def test_results_are_sorted_by_descending_score(tmp_path: Path) -> None:
     """The best source comes first."""
     _, index_path = make_index(tmp_path)
 
-    results = run_search("lora adapter", 5, str(index_path))
+    results = run_search("lora adapter", 5, str(index_path), STORE)
     scores = [score for _, score in results]
 
     assert scores == sorted(scores, reverse=True)
@@ -63,14 +67,14 @@ def test_at_most_k_sources_are_returned(tmp_path: Path) -> None:
     """``k`` caps the number of sources."""
     _, index_path = make_index(tmp_path)
 
-    assert len(run_search("lora adapter", 1, str(index_path))) == 1
+    assert len(run_search("lora adapter", 1, str(index_path), STORE)) == 1
 
 
 def test_a_query_without_known_terms_finds_nothing(tmp_path: Path) -> None:
     """A legitimate query with no match is not an error."""
     _, index_path = make_index(tmp_path)
 
-    assert run_search("kubernetes terraform", 5, str(index_path)) == []
+    assert run_search("kubernetes terraform", 5, str(index_path), STORE) == []
 
 
 @pytest.mark.parametrize(
@@ -86,7 +90,7 @@ def test_an_empty_query_is_rejected(tmp_path: Path, query: str) -> None:
     _, index_path = make_index(tmp_path)
 
     with pytest.raises(ValueError, match="^query must not be empty$"):
-        run_search(query, 5, str(index_path))
+        run_search(query, 5, str(index_path), STORE)
 
 
 @pytest.mark.parametrize(
@@ -104,7 +108,7 @@ def test_an_invalid_k_is_rejected(tmp_path: Path, k: object) -> None:
     _, index_path = make_index(tmp_path)
 
     with pytest.raises(ValueError, match="^k must be a positive integer$"):
-        run_search("lora", cast(int, k), str(index_path))
+        run_search("lora", cast(int, k), str(index_path), STORE)
 
 
 def test_a_missing_index_is_reported_and_creates_no_file(
@@ -112,13 +116,13 @@ def test_a_missing_index_is_reported_and_creates_no_file(
 ) -> None:
     """Searching without an index explains what to do and leaves no file.
 
-    ``sqlite3.connect`` creates the file it cannot find, so the adapter has
+    ``sqlite3.connect`` creates the file it cannot find, so ``load_chunks`` has
     to check for it beforehand instead of leaving an empty database behind.
     """
     index_path = tmp_path / "processed" / "index.db"
     message = f"^index not found: {index_path}; run index first$"
 
     with pytest.raises(ValueError, match=message):
-        run_search("lora", 5, str(index_path))
+        run_search("lora", 5, str(index_path), STORE)
 
     assert not index_path.exists()

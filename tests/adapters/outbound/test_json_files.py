@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from src.adapters.json_dataset import load_dataset
+from src.adapters.outbound.json_files import JsonDatasetStore
 
 PUBLIC_DATASET = Path(
     "data/datasets/UnansweredQuestions/dataset_docs_public.json"
@@ -25,13 +25,13 @@ def expect_error(
         Information about the raised error, for further checks.
     """
     with pytest.raises(ValueError, match=f"^{re.escape(message)}$") as info:
-        load_dataset(Path(path))
+        JsonDatasetStore().load_dataset(Path(path))
     return info
 
 
 def test_valid_dataset_is_loaded() -> None:
     """A public dataset is read and validated as a ``RagDataset``."""
-    dataset = load_dataset(PUBLIC_DATASET)
+    dataset = JsonDatasetStore().load_dataset(PUBLIC_DATASET)
 
     assert len(dataset.rag_questions) == 100
 

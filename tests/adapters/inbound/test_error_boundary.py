@@ -6,7 +6,7 @@ to the boundary instead of ``RagCli``.
 
 import pytest
 
-from src.adapters.cli import run
+from src.adapters.inbound.cli import run
 
 
 class FailingCommands:

@@ -18,7 +18,7 @@ from src.domain.models import (
     UnansweredQuestion,
 )
 
-DATASETS = Path(__file__).resolve().parents[1] / "data" / "datasets"
+DATASETS = Path(__file__).resolve().parents[2] / "data" / "datasets"
 
 
 def load_dataset(relative_path: str) -> RagDataset:

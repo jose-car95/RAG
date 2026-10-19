@@ -7,8 +7,12 @@ from typing import cast
 
 import pytest
 
-from src.adapters.sqlite_index import load_chunks, save_chunks
-from src.application.index_corpus import run_index
+from src.adapters.outbound.corpus import FileCorpus
+from src.adapters.outbound.sqlite_index import SqliteIndexStore
+from src.application.use_cases.index_corpus import run_index
+
+CORPUS = FileCorpus()
+STORE = SqliteIndexStore()
 
 PY_FILE = (
     "import os\n"
@@ -63,7 +67,7 @@ def test_chunks_are_stored_with_their_text(tmp_path: Path) -> None:
     make_corpus(corpus)
     index_path = tmp_path / "index.db"
 
-    chunk_count = run_index(str(corpus), 2000, str(index_path))
+    chunk_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
 
     rows = read_rows(index_path)
     assert chunk_count == len(rows)
@@ -80,7 +84,7 @@ def test_each_file_uses_the_strategy_of_its_extension(tmp_path: Path) -> None:
     make_corpus(corpus)
     index_path = tmp_path / "index.db"
 
-    run_index(str(corpus), 2000, str(index_path))
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
 
     rows = read_rows(index_path)
     python_rows = [row for row in rows if row[0].endswith("a.py")]
@@ -98,8 +102,8 @@ def test_reindexing_does_not_duplicate_chunks(tmp_path: Path) -> None:
     make_corpus(corpus)
     index_path = tmp_path / "index.db"
 
-    first_count = run_index(str(corpus), 2000, str(index_path))
-    second_count = run_index(str(corpus), 2000, str(index_path))
+    first_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+    second_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
 
     assert first_count == second_count == len(read_rows(index_path))
 
@@ -111,7 +115,7 @@ def test_missing_index_folders_are_created(tmp_path: Path) -> None:
     make_corpus(corpus)
     index_path = tmp_path / "new" / "nested" / "index.db"
 
-    run_index(str(corpus), 2000, str(index_path))
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
 
     assert index_path.is_file()
 
@@ -121,7 +125,7 @@ def test_missing_corpus_leaves_no_index(tmp_path: Path) -> None:
     index_path = tmp_path / "index.db"
 
     with pytest.raises(ValueError, match="^corpus folder not found: "):
-        run_index(str(tmp_path / "nope"), 2000, str(index_path))
+        run_index(str(tmp_path / "nope"), 2000, str(index_path), CORPUS, STORE)
 
     assert not index_path.exists()
 
@@ -138,7 +142,7 @@ def test_unwritable_index_path_is_reported(tmp_path: Path) -> None:
     with pytest.raises(
         ValueError, match=f"^cannot write index: {index_path}$"
     ):
-        run_index(str(corpus), 2000, str(index_path))
+        run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
 
 
 def test_index_file_matches_its_current_content(tmp_path: Path) -> None:
@@ -155,9 +159,9 @@ def test_index_file_matches_its_current_content(tmp_path: Path) -> None:
     ]
     few = [("data/raw/file_0.py", 0, 10, "x" * 10)]
 
-    save_chunks(many, str(index_path))
+    STORE.save_chunks(many, str(index_path))
     big_size = index_path.stat().st_size
-    save_chunks(few, str(index_path))
+    STORE.save_chunks(few, str(index_path))
 
     assert index_path.stat().st_size < big_size
     with closing(sqlite3.connect(index_path)) as connection:
@@ -186,7 +190,13 @@ def test_invalid_max_chunk_size_is_rejected(
 
     with pytest.raises(ValueError, match=INVALID_SIZE_MESSAGE):
         # Fire can pass text, a float or a bool; mypy cannot see that.
-        run_index(str(corpus), cast(int, max_chunk_size), str(index_path))
+        run_index(
+            str(corpus),
+            cast(int, max_chunk_size),
+            str(index_path),
+            CORPUS,
+            STORE
+        )
 
     assert not index_path.exists()
 
@@ -204,11 +214,11 @@ def test_a_rejected_size_keeps_the_previous_index(tmp_path: Path) -> None:
     corpus.mkdir()
     make_corpus(corpus)
     index_path = tmp_path / "index.db"
-    run_index(str(corpus), 2000, str(index_path))
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
     stored = read_rows(index_path)
 
     with pytest.raises(ValueError, match=INVALID_SIZE_MESSAGE):
-        run_index(str(corpus), 0, str(index_path))
+        run_index(str(corpus), 0, str(index_path), CORPUS, STORE)
 
     assert read_rows(index_path) == stored
 
@@ -224,7 +234,7 @@ def test_chunks_respect_a_smaller_size(tmp_path: Path) -> None:
     make_corpus(corpus)
     index_path = tmp_path / "index.db"
 
-    run_index(str(corpus), 20, str(index_path))
+    run_index(str(corpus), 20, str(index_path), CORPUS, STORE)
 
     widths = [last - first for _, first, last, _ in read_rows(index_path)]
     assert widths and max(widths) <= 20
@@ -240,9 +250,9 @@ def test_stored_chunks_are_read_back_with_their_location() -> None:
             ("data/raw/a.py", 0, 5, "alpha"),
             ("data/raw/b.md", 5, 9, "beta"),
         ]
-        save_chunks(chunks, index_path)
+        STORE.save_chunks(chunks, index_path)
 
-        rows = load_chunks(index_path)
+        rows = STORE.load_chunks(index_path)
 
     stored = [(path, first, last, text)
               for _, path, first, last, text in rows]
@@ -256,6 +266,6 @@ def test_loading_a_missing_index_creates_no_file(tmp_path: Path) -> None:
     message = f"^index not found: {index_path}; run index first$"
 
     with pytest.raises(ValueError, match=message):
-        load_chunks(str(index_path))
+        STORE.load_chunks(str(index_path))
 
     assert not index_path.exists()

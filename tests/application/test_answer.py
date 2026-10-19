@@ -10,15 +10,19 @@ from pathlib import Path
 
 import pytest
 
-from src.application.answer import (
+from src.adapters.outbound.corpus import FileCorpus
+from src.adapters.outbound.sqlite_index import SqliteIndexStore
+from src.application.use_cases.answer import (
     NO_SOURCES_ANSWER,
     PROMPT_BUDGET,
     answer_from_sources,
     run_answer,
 )
-from src.application.index_corpus import run_index
+from src.application.use_cases.index_corpus import run_index
 from src.domain.models import MinimalSource
 
+CORPUS = FileCorpus()
+STORE = SqliteIndexStore()
 MD_FILE = "# Endpoints\nThe http endpoint loads a lora adapter.\n"
 
 
@@ -86,7 +90,7 @@ def make_index(tmp_path: Path) -> Path:
     corpus.mkdir()
     (corpus / "lora.md").write_text(MD_FILE, encoding="utf-8")
     index_path = tmp_path / "processed" / "index.db"
-    run_index(str(corpus), 2000, str(index_path))
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
     return index_path
 
 
@@ -95,7 +99,9 @@ def test_answer_comes_from_the_model(tmp_path: Path) -> None:
     index_path = make_index(tmp_path)
     loader = FakeLoader()
 
-    answer = run_answer("lora endpoint", 5, str(index_path), loader)
+    answer = run_answer(
+        "lora endpoint", 5, str(index_path), STORE, CORPUS, loader
+    )
 
     assert answer == "Use the load_lora_adapter endpoint."
     assert loader.loads == 1
@@ -110,7 +116,7 @@ def test_prompt_is_measured_with_the_model_tokenizer(tmp_path: Path) -> None:
     index_path = make_index(tmp_path)
     loader = FakeLoader()
 
-    run_answer("lora endpoint", 5, str(index_path), loader)
+    run_answer("lora endpoint", 5, str(index_path), STORE, CORPUS, loader)
 
     assert loader.generator.counted > 0
     assert PROMPT_BUDGET == 2000
@@ -121,7 +127,7 @@ def test_no_sources_means_no_model(tmp_path: Path) -> None:
     index_path = make_index(tmp_path)
     loader = FakeLoader()
 
-    answer = run_answer("asdfghjkl", 5, str(index_path), loader)
+    answer = run_answer("asdfghjkl", 5, str(index_path), STORE, CORPUS, loader)
 
     assert answer == NO_SOURCES_ANSWER
     assert loader.loads == 0
@@ -143,7 +149,9 @@ def test_bad_arguments_fail_before_loading_anything(
     loader = FakeLoader()
 
     with pytest.raises(ValueError, match=re.escape(message)):
-        run_answer(query, k, str(tmp_path / "missing.db"), loader)
+        run_answer(
+            query, k, str(tmp_path / "missing.db"), STORE, CORPUS, loader
+        )
     assert loader.loads == 0
 
 
@@ -152,7 +160,9 @@ def test_missing_index_is_reported_without_the_model(tmp_path: Path) -> None:
     loader = FakeLoader()
 
     with pytest.raises(ValueError, match="index not found"):
-        run_answer("lora", 5, str(tmp_path / "missing.db"), loader)
+        run_answer(
+            "lora", 5, str(tmp_path / "missing.db"), STORE, CORPUS, loader
+        )
     assert loader.loads == 0
 
 
@@ -169,7 +179,7 @@ def test_answer_from_sources_reads_them_and_asks_the_model(
     )
     generator = FakeGenerator()
 
-    answer = answer_from_sources("lora endpoint", [source], generator)
+    answer = answer_from_sources("lora endpoint", [source], CORPUS, generator)
 
     assert answer == "Use the load_lora_adapter endpoint."
     [prompt] = generator.prompts

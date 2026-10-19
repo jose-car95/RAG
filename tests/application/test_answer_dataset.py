@@ -9,10 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from src.application.answer import NO_SOURCES_ANSWER
-from src.application.answer_dataset import run_answer_dataset
+from src.adapters.outbound.json_files import JsonDatasetStore
+from src.application.use_cases.answer import NO_SOURCES_ANSWER
+from src.application.use_cases.answer_dataset import run_answer_dataset
 from src.domain.models import StudentSearchResultsAndAnswer
-from tests.test_answer import MD_FILE, FakeLoader
+from tests.application.test_answer import CORPUS, MD_FILE, FakeLoader
+
+DATASETS = JsonDatasetStore()
 
 
 def write_results(tmp_path: Path) -> Path:
@@ -66,7 +69,11 @@ def test_every_question_gets_an_answer(tmp_path: Path) -> None:
     loader = FakeLoader()
 
     output_path = run_answer_dataset(
-        str(input_path), str(save_directory), loader
+        str(input_path),
+        str(save_directory),
+        DATASETS,
+        CORPUS,
+        loader
     )
 
     assert output_path == save_directory / "dataset_docs_public.json"
@@ -91,7 +98,11 @@ def test_model_is_loaded_once_for_the_whole_file(tmp_path: Path) -> None:
     loader = FakeLoader()
 
     run_answer_dataset(
-        str(write_results(tmp_path)), str(tmp_path / "answers"), loader
+        str(write_results(tmp_path)),
+        str(tmp_path / "answers"),
+        DATASETS,
+        CORPUS,
+        loader
     )
 
     assert loader.loads == 1
@@ -105,7 +116,11 @@ def test_question_without_sources_is_not_sent_to_the_model(
     loader = FakeLoader()
 
     output_path = run_answer_dataset(
-        str(write_results(tmp_path)), str(tmp_path / "answers"), loader
+        str(write_results(tmp_path)),
+        str(tmp_path / "answers"),
+        DATASETS,
+        CORPUS,
+        loader
     )
 
     written = StudentSearchResultsAndAnswer.model_validate_json(
@@ -121,7 +136,11 @@ def test_missing_file_is_reported_without_the_model(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="search results not found"):
         run_answer_dataset(
-            str(tmp_path / "missing.json"), str(tmp_path / "answers"), loader
+            str(tmp_path / "missing.json"),
+            str(tmp_path / "answers"),
+            DATASETS,
+            CORPUS,
+            loader
         )
     assert loader.loads == 0
 
@@ -133,5 +152,7 @@ def test_malformed_file_is_reported_without_the_model(tmp_path: Path) -> None:
     loader = FakeLoader()
 
     with pytest.raises(ValueError, match="broken.json"):
-        run_answer_dataset(str(broken), str(tmp_path / "answers"), loader)
+        run_answer_dataset(
+            str(broken), str(tmp_path / "answers"), DATASETS, CORPUS, loader
+        )
     assert loader.loads == 0
