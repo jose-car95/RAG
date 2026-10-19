@@ -3,6 +3,8 @@
 import os
 from typing import Any
 
+from src.application.ports.generator import Generator
+
 MODEL_NAME: str = "Qwen/Qwen3-0.6B"
 # Real answers take 35-43 tokens (measured in #54): the cap only stops a
 # runaway answer from running for minutes on the CPU.
@@ -11,7 +13,7 @@ MAX_NEW_TOKENS: int = 256
 MODEL_CACHE_DIR: str = ".cache/huggingface"
 
 
-class QwenGenerator:
+class QwenGenerator(Generator):
     """A loaded tokenizer and model, shared by counting and generating.
 
     Both are typed ``Any`` because transformers' own type hints reject its

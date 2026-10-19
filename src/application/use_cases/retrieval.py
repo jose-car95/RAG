@@ -11,7 +11,7 @@ This module holds what both use cases share, so that neither
 
 from typing import NamedTuple
 
-from src.adapters.sqlite_index import load_chunks
+from src.application.ports.index_store import IndexStore
 from src.domain.bm25 import Bm25Index, build_index, rank
 from src.domain.models import MinimalSource
 from src.domain.tokenizer import tokenize
@@ -32,11 +32,12 @@ class CorpusIndex(NamedTuple):
     locations: dict[int, tuple[str, int, int]]
 
 
-def load_index(index_path: str) -> CorpusIndex:
+def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
     """Read the stored index once and prepare it for searching.
 
     Args:
-        index_path: Path of the SQLite index built by ``index``.
+        index_path: Where the index built by ``index`` lives.
+        index_store: Reads the stored chunks.
 
     Returns:
         The corpus, ready for any number of searches.
@@ -44,7 +45,7 @@ def load_index(index_path: str) -> CorpusIndex:
     Raises:
         ValueError: If the index does not exist or cannot be read.
     """
-    rows = load_chunks(index_path)
+    rows = index_store.load_chunks(index_path)
     index = build_index(
         (chunk_id, tokenize(text)) for chunk_id, _, _, _, text in rows
     )

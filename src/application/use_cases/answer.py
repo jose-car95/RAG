@@ -1,10 +1,9 @@
 """Use case: answer one question with the sources found for it."""
 
-from collections.abc import Callable
-from typing import Protocol
-
-from src.adapters.corpus import read_source_text
-from src.application.retrieval import (
+from src.application.ports.corpus_reader import CorpusReader
+from src.application.ports.generator import Generator, GeneratorLoader
+from src.application.ports.index_store import IndexStore
+from src.application.use_cases.retrieval import (
     load_index,
     search_index,
     validate_query_and_k
@@ -20,41 +19,13 @@ NO_SOURCES_ANSWER: str = (
 )
 
 
-class Generator(Protocol):
-    """What the use case needs from a model: count tokens and answer.
-
-    A port with two real reasons: Qwen in production and a fake in the
-    tests, so no test has to load 1.5 GB of weights.
-    """
-
-    def count_tokens(self, text: str) -> int:
-        """Count the tokens of a text.
-
-        Args:
-            text: Any text.
-
-        Returns:
-            The number of tokens.
-        """
-        ...
-
-    def generate(self, prompt: str) -> str:
-        """Answer a prompt.
-
-        Args:
-            prompt: The full prompt.
-
-        Returns:
-            The answer.
-        """
-        ...
-
-
 def run_answer(
     query: str,
     k: int,
     index_path: str,
-    load_generator: Callable[[], Generator]
+    index_store: IndexStore,
+    corpus: CorpusReader,
+    load_generator: GeneratorLoader
 ) -> str:
     """Retrieve the sources of a question and let the model answer it.
 
@@ -65,7 +36,9 @@ def run_answer(
     Args:
         query: Question to answer.
         k: Number of sources to retrieve.
-        index_path: Path of the SQLite index.
+        index_path: Where the index lives.
+        index_store: Reads the stored chunks.
+        corpus: Reads the text of each source.
         load_generator: Loads the model when it is called.
 
     Returns:
@@ -76,17 +49,20 @@ def run_answer(
             file cannot be read.
     """
     clean_query = validate_query_and_k(query, k)
-    corpus = load_index(index_path)
-    results = search_index(corpus, clean_query, k)
+    index = load_index(index_path, index_store)
+    results = search_index(index, clean_query, k)
     if not results:
         return NO_SOURCES_ANSWER
     sources = [source for source, _ in results]
-    return answer_from_sources(clean_query, sources, load_generator())
+    return answer_from_sources(
+        clean_query, sources, corpus, load_generator()
+    )
 
 
 def answer_from_sources(
     question: str,
     sources: list[MinimalSource],
+    corpus: CorpusReader,
     generator: Generator
 ) -> str:
     """Answer a question from sources already retrieved.
@@ -97,6 +73,7 @@ def answer_from_sources(
     Args:
         question: The question, already validated.
         sources: Where to read the context, best first.
+        corpus: Reads the text of each source.
         generator: A loaded model.
 
     Returns:
@@ -106,7 +83,7 @@ def answer_from_sources(
         ValueError: If a source file cannot be read.
     """
     texts = [
-        (source.file_path, read_source_text(source))
+        (source.file_path, corpus.read_source(source))
         for source in sources
     ]
     prompt = build_prompt(

@@ -2,7 +2,7 @@
 
 import sys
 
-from src.adapters.cli import main
+from src.bootstrap import main
 
 
 if __name__ == "__main__":

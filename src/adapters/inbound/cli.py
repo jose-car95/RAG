@@ -9,13 +9,16 @@ from pathlib import Path
 
 import fire
 
-from src.adapters.qwen_generator import load_generator
-from src.application.answer import run_answer
-from src.application.answer_dataset import run_answer_dataset
-from src.application.evaluate import run_evaluate
-from src.application.index_corpus import run_index, MAX_CHUNK_SIZE
-from src.application.search import run_search
-from src.application.search_dataset import run_search_dataset
+from src.application.ports.corpus_reader import CorpusReader
+from src.application.ports.dataset_store import DatasetStore
+from src.application.ports.generator import GeneratorLoader
+from src.application.ports.index_store import IndexStore
+from src.application.use_cases.answer import run_answer
+from src.application.use_cases.answer_dataset import run_answer_dataset
+from src.application.use_cases.evaluate import run_evaluate
+from src.application.use_cases.index_corpus import run_index, MAX_CHUNK_SIZE
+from src.application.use_cases.search import run_search
+from src.application.use_cases.search_dataset import run_search_dataset
 
 
 # Exit codes follow Unix conventions: 130 is 128 + SIGINT (signal 2), the
@@ -27,6 +30,31 @@ EXIT_INTERRUPTED = 130
 
 class RagCli:
     """Commands required by the subject, exposed through Fire."""
+
+    def __init__(
+        self,
+        index_store: IndexStore,
+        corpus: CorpusReader,
+        datasets: DatasetStore,
+        load_generator: GeneratorLoader
+    ) -> None:
+        """Keep the adapters every command passes to its use case.
+
+        The CLI knows the use cases and the ports, never a concrete adapter:
+        ``bootstrap`` hands it the real ones. They are kept in attributes
+        that start with ``_`` so that Fire does not list them as commands.
+
+        Args:
+            index_store: Where the chunk index is saved and loaded.
+            corpus: Finds and reads the corpus files.
+            datasets: Reads and writes the JSON files of the subject.
+            load_generator: Loads the language model when called.
+        """
+        self._index_store = index_store
+        self._corpus = corpus
+        self._datasets = datasets
+        self._load_generator = load_generator
+
     def index(
         self,
         max_chunk_size: int = MAX_CHUNK_SIZE,
@@ -41,7 +69,13 @@ class RagCli:
             raw_directory: Folder of the corpus to index.
             index_path: Where the SQLite index is written.
         """
-        run_index(raw_directory, max_chunk_size, index_path)
+        run_index(
+            raw_directory,
+            max_chunk_size,
+            index_path,
+            self._corpus,
+            self._index_store
+        )
         print(
             f"Ingestion complete! Indices saved under "
             f"{Path(index_path).parent}/"
@@ -63,7 +97,7 @@ class RagCli:
             k: Maximum number of sources to print.
             index_path: SQLite index to search, built by ``index``.
         """
-        results = run_search(query, k, index_path)
+        results = run_search(query, k, index_path, self._index_store)
         if not results:
             print("No sources found.")
         for position, (source, score) in enumerate(results, start=1):
@@ -97,7 +131,9 @@ class RagCli:
             dataset_path,
             k,
             save_directory,
-            index_path
+            index_path,
+            self._index_store,
+            self._datasets
         )
         print(f"Saved student_search_results to {output_path}")
 
@@ -117,7 +153,15 @@ class RagCli:
             k: Number of sources retrieved for the model.
             index_path: SQLite index to search, built by ``index``.
         """
-        print(run_answer(query, k, index_path, load_generator))
+        answer = run_answer(
+            query,
+            k,
+            index_path,
+            self._index_store,
+            self._corpus,
+            self._load_generator
+        )
+        print(answer)
 
     def answer_dataset(
         self,
@@ -135,7 +179,9 @@ class RagCli:
         output_path = run_answer_dataset(
             student_search_results_path,
             save_directory,
-            load_generator
+            self._datasets,
+            self._corpus,
+            self._load_generator
         )
         print(f"Saved student_search_results_and_answer to {output_path}")
 
@@ -154,7 +200,9 @@ class RagCli:
             student_search_results_path: Path to the search results file.
             dataset_path: Path to the dataset with the correct sources.
         """
-        evaluation = run_evaluate(student_search_results_path, dataset_path)
+        evaluation = run_evaluate(
+            student_search_results_path, dataset_path, self._datasets
+        )
         parts = [
             f"Recall@{k}: {recall:.3f}"
             for k, recall in evaluation.recalls.items()
@@ -190,12 +238,3 @@ def run(component: object, argv: list[str] | None = None) -> int:
     except KeyboardInterrupt:
         print("Interrupted", file=sys.stderr)
         return EXIT_INTERRUPTED
-
-
-def main() -> int:
-    """Run the RAG command-line interface.
-
-    Returns:
-        The exit code, to be passed to ``sys.exit``.
-    """
-    return run(RagCli())

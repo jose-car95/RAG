@@ -3,8 +3,7 @@
 from pathlib import Path
 from typing import NamedTuple
 
-from src.adapters.json_dataset import load_dataset
-from src.adapters.json_results import load_search_results
+from src.application.ports.dataset_store import DatasetStore
 from src.domain.models import (
     AnsweredQuestion,
     RagDataset,
@@ -27,7 +26,8 @@ class Evaluation(NamedTuple):
 
 def run_evaluate(
     student_search_results_path: str,
-    dataset_path: str
+    dataset_path: str,
+    datasets: DatasetStore
 ) -> Evaluation:
     """Compute recall@k for every k in ``RECALL_KS`` and the MRR.
 
@@ -40,6 +40,7 @@ def run_evaluate(
             ``search_dataset``.
         dataset_path: Path of a dataset whose questions carry their correct
             sources (``AnsweredQuestions``).
+        datasets: Reads both files.
 
     Returns:
         The recall of each k and the mean reciprocal rank, all from 0.0 to
@@ -50,8 +51,8 @@ def run_evaluate(
             or a question has no reference sources (dividing by zero would
             be the alternative).
     """
-    dataset: RagDataset = load_dataset(Path(dataset_path))
-    results: StudentSearchResults = load_search_results(
+    dataset: RagDataset = datasets.load_dataset(Path(dataset_path))
+    results: StudentSearchResults = datasets.load_search_results(
         Path(student_search_results_path)
     )
 

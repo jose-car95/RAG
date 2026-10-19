@@ -1,23 +1,26 @@
 """Use case: search every question of a dataset and save the results."""
 
 from pathlib import Path
+
 from tqdm import tqdm
 
-from src.adapters.json_dataset import load_dataset
-from src.adapters.json_results import write_search_results
+from src.application.ports.dataset_store import DatasetStore
+from src.application.ports.index_store import IndexStore
+from src.application.use_cases.retrieval import load_index, search_index
 from src.domain.models import (
     RagDataset,
     MinimalSearchResults,
     StudentSearchResults
 )
-from src.application.retrieval import load_index, search_index
 
 
 def run_search_dataset(
     dataset_path: str,
     k: int,
     save_directory: str,
-    index_path: str
+    index_path: str,
+    index_store: IndexStore,
+    datasets: DatasetStore
 ) -> Path:
     """Search every question of a dataset and write the results.
 
@@ -33,7 +36,9 @@ def run_search_dataset(
         dataset_path: Path of the JSON dataset of questions.
         k: Number of sources requested per question; must be at least 1.
         save_directory: Folder where the results file is written.
-        index_path: Path of the SQLite index built by ``index``.
+        index_path: Where the index built by ``index`` lives.
+        index_store: Reads the stored chunks.
+        datasets: Reads the dataset and writes the results.
 
     Returns:
         Path of the written file, named like the input dataset.
@@ -45,8 +50,8 @@ def run_search_dataset(
     if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
         raise ValueError("k must be a positive integer")
 
-    dataset: RagDataset = load_dataset(Path(dataset_path))
-    corpus = load_index(index_path)
+    dataset: RagDataset = datasets.load_dataset(Path(dataset_path))
+    corpus = load_index(index_path, index_store)
     search_results: list[MinimalSearchResults] = []
 
     for question in tqdm(
@@ -73,5 +78,5 @@ def run_search_dataset(
         k=k
     )
     output_path = Path(save_directory) / Path(dataset_path).name
-    write_search_results(results, output_path)
+    datasets.write_results(results, output_path)
     return output_path

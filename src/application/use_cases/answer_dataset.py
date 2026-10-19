@@ -1,17 +1,14 @@
 """Use case: answer every question of a search results file."""
 
-from collections.abc import Callable
 from pathlib import Path
 
 from tqdm import tqdm
 
-from src.adapters.json_results import (
-    load_search_results,
-    write_search_results
-)
-from src.application.answer import (
+from src.application.ports.corpus_reader import CorpusReader
+from src.application.ports.dataset_store import DatasetStore
+from src.application.ports.generator import GeneratorLoader
+from src.application.use_cases.answer import (
     NO_SOURCES_ANSWER,
-    Generator,
     answer_from_sources
 )
 from src.domain.models import MinimalAnswer, StudentSearchResultsAndAnswer
@@ -20,7 +17,9 @@ from src.domain.models import MinimalAnswer, StudentSearchResultsAndAnswer
 def run_answer_dataset(
     student_search_results_path: str,
     save_directory: str,
-    load_generator: Callable[[], Generator]
+    datasets: DatasetStore,
+    corpus: CorpusReader,
+    load_generator: GeneratorLoader
 ) -> Path:
     """Answer every question with the sources it already has, and save it.
 
@@ -32,6 +31,8 @@ def run_answer_dataset(
     Args:
         student_search_results_path: Path of the ``search_dataset`` output.
         save_directory: Folder where the answers file is written.
+        datasets: Reads the search results and writes the answers.
+        corpus: Reads the text of each source.
         load_generator: Loads the model when it is called.
 
     Returns:
@@ -41,7 +42,9 @@ def run_answer_dataset(
         ValueError: If the input cannot be read, a source file cannot be
             read, or the output cannot be written.
     """
-    results = load_search_results(Path(student_search_results_path))
+    results = datasets.load_search_results(
+        Path(student_search_results_path)
+    )
     generator = load_generator()
     answers: list[MinimalAnswer] = []
 
@@ -52,7 +55,10 @@ def run_answer_dataset(
     ):
         if result.retrieved_sources:
             answer = answer_from_sources(
-                result.question, result.retrieved_sources, generator
+                result.question,
+                result.retrieved_sources,
+                corpus,
+                generator
             )
         else:
             answer = NO_SOURCES_ANSWER
@@ -70,5 +76,5 @@ def run_answer_dataset(
         k=results.k
     )
     output_path = Path(save_directory) / Path(student_search_results_path).name
-    write_search_results(output, output_path)
+    datasets.write_results(output, output_path)
     return output_path

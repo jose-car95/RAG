@@ -2,8 +2,8 @@
 
 from tqdm import tqdm
 
-from src.adapters.corpus import find_corpus_files
-from src.adapters.sqlite_index import save_chunks
+from src.application.ports.corpus_reader import CorpusReader
+from src.application.ports.index_store import IndexStore, NewChunk
 from src.domain.chunking import chunker_for
 
 
@@ -12,14 +12,22 @@ from src.domain.chunking import chunker_for
 MAX_CHUNK_SIZE: int = 2000
 
 
-def run_index(raw_directory: str, max_chunk_size: int, index_path: str) -> int:
+def run_index(
+    raw_directory: str,
+    max_chunk_size: int,
+    index_path: str,
+    corpus: CorpusReader,
+    index_store: IndexStore
+) -> int:
     """Chunk every corpus file and store the chunks in the index.
 
     Args:
         raw_directory: Root directory of the corpus to read.
         max_chunk_size: Maximum width in characters of a chunk, from 1 to
             ``MAX_CHUNK_SIZE``.
-        index_path: Where the SQLite index is written.
+        index_path: Where the index is written.
+        corpus: Finds and reads the corpus files.
+        index_store: Stores the chunks.
 
     Returns:
         The number of chunks stored.
@@ -39,13 +47,13 @@ def run_index(raw_directory: str, max_chunk_size: int, index_path: str) -> int:
         raise ValueError(
             f"max_chunk_size must be an integer between 1 and {MAX_CHUNK_SIZE}"
         )
-    files = find_corpus_files(raw_directory)
-    chunks: list[tuple[str, int, int, str]] = []
+    files = corpus.find_files(raw_directory)
+    chunks: list[NewChunk] = []
     for path in tqdm(files, desc="Indexing", unit="file"):
-        text = path.read_text(encoding="utf-8")
+        text = corpus.read_text(path)
         chunker = chunker_for(path.suffix)
         for first, last in chunker(text, max_chunk_size):
             chunks.append((str(path), first, last, text[first:last]))
 
-    save_chunks(chunks, index_path)
+    index_store.save_chunks(chunks, index_path)
     return len(chunks)

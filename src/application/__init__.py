@@ -1,1 +1,1 @@
-"""Application layer: use cases that orchestrate the domain and adapters."""
+"""Application layer: the use cases and the ports they need from outside."""
