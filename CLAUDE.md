@@ -303,48 +303,51 @@ Nombre de rama derivado del issue: `<tipo>/<numero>-<slug-corto>`, p. ej.
 
 ## Arquitectura
 
-Arquitectura por capas, hexagonal pragmática (decisión de Jose, 2026-09-13).
-Una única dirección de dependencias, siempre hacia dentro:
+Arquitectura **hexagonal** (puertos y adaptadores). Decisión de Jose: capas el
+2026-09-13; hexagonal pura con puertos en toda frontera el 2026-10-19
+(issue #61). La regla de dependencia: los imports apuntan siempre hacia el
+centro.
 
-    adapters de entrada (CLI)  ->  application  ->  domain
-    adapters de salida (JSON, SQLite, modelo)  ->  domain
+    adapters/inbound (CLI; HTTP en el bonus)  ->  application  ->  domain
+    adapters/outbound (corpus, JSON, SQLite, Qwen)  ->  application/ports, domain
+    bootstrap.py  ->  todo (es el único que conoce los adaptadores concretos)
 
-- **domain**: modelos pydantic, errores del dominio y lógica pura sin E/S
-  (reglas de los chunks, cálculos). No importa nada de las otras capas ni de
-  librerías de infraestructura.
-- **application**: casos de uso (indexar, buscar, responder, evaluar).
-  Orquesta el dominio y los adaptadores; no conoce detalles de disco,
-  SQLite o el modelo.
-- **adapters**: todo lo que conecta el núcleo con el mundo real, en una sola
-  carpeta plana (decisión de Jose, 2026-09-15, opción B). Hay dos tipos:
-  - **de entrada** (*driving*): el exterior llama al programa. La CLI de Fire
-    (`adapters/cli.py`) traduce argumentos, llama a la aplicación y es la
-    frontera donde ningún error sale como traceback. La API HTTP del bonus
-    sería otro.
-  - **de salida** (*driven*): el programa llama al exterior. Leer el corpus,
-    leer y escribir JSON, SQLite, el modelo Qwen.
+```
+src/
+  domain/                lógica pura: modelos, chunking, bm25, tokenizer, recall, prompt
+  application/
+    ports/               Protocols: generator, index_store, corpus_reader, dataset_store
+    use_cases/           un módulo por comando + retrieval (lo que comparten)
+  adapters/
+    inbound/             cli.py (frontera de errores); http.py en el bonus
+    outbound/            corpus, json_files, sqlite_index, qwen_generator
+  bootstrap.py           raíz de composición: enchufa cada adaptador en su puerto
+tests/                   misma estructura + test_architecture.py
+```
+
+- **domain**: modelos pydantic y lógica pura sin E/S. No importa nada de las
+  otras capas ni librerías de infraestructura.
+- **application/ports**: lo que los casos de uso necesitan de fuera, como
+  `Protocol`. Un adaptador encaja por tener los mismos métodos.
+- **application/use_cases**: orquestan el dominio y reciben los puertos como
+  parámetros (inyección de dependencias). Nunca importan un adaptador.
+- **adapters/inbound**: el exterior llama al programa. La CLI de Fire traduce
+  argumentos, llama a los casos de uso con los adaptadores que le dio
+  `bootstrap` y es la frontera donde ningún error sale como traceback.
+- **adapters/outbound**: el programa llama al exterior a través de un puerto.
+- **bootstrap.py**: el único sitio que crea los adaptadores concretos.
+- Nombres: `inbound` = de entrada (*driving* en la literatura), `outbound` =
+  de salida (*driven*). No `in`/`out`: `in` es palabra reservada de Python.
 
 Reglas:
-- Las carpetas NACEN cuando el código las justifica, no de forma especulativa.
-- Un **puerto** (interfaz abstracta) se crea solo con una razón presente
-  (dos implementaciones reales, o un doble de test necesario) y esa razón se
-  escribe en la PR.
+- `tests/test_architecture.py` hace cumplir la regla de dependencia: si una
+  capa importa lo que no debe, falla.
+- Toda dependencia externa de un caso de uso pasa por un puerto (frontera de
+  capa). Dentro de una capa, nada de abstracciones por si acaso.
+- Las carpetas nacen cuando el código las justifica, no de forma especulativa.
 - La estructura que impone el enunciado manda sobre cualquier preferencia:
   módulo `src/` ejecutable con `python -m src`, datos en `data/raw/`,
   `data/processed/`, `data/datasets/`, `data/output/`.
-
-Roadmap de carpetas (en qué milestone nace cada una y por qué):
-
-| Carpeta / fichero | Nace en | Por qué |
-|---|---|---|
-| `src/__init__.py`, `tests/` | Fase B | Andamiaje: paquete importable y gates ejecutables |
-| `src/__main__.py`, `src/adapters/cli.py` | M0 | Punto de entrada oficial y frontera de errores (adaptador de entrada) |
-| `src/domain/` | M1 | Los 8 modelos pydantic |
-| `src/adapters/` (salida) | M1 | Lectura y escritura de datasets JSON |
-| `src/application/` | M1 | Primer caso de uso real (`search_dataset`) |
-| Chunking (dominio) y SQLite (adaptador) | M2 | Indexado |
-| BM25 y recall@k | M3 | Recuperación y evaluación |
-| Adaptador del LLM | M5 | Generación |
 
 ## Flujo de trabajo: vertical slices
 
