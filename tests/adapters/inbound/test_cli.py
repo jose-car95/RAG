@@ -13,6 +13,13 @@ from pathlib import Path
 
 import pytest
 
+from src.adapters.inbound.cli import RagCli, run
+from src.adapters.outbound.corpus import FileCorpus
+from src.adapters.outbound.json_files import JsonDatasetStore
+from src.adapters.outbound.sqlite_index import SqliteIndexStore
+from tests.application.test_answer import FakeLoader
+from tests.application.test_answer_dataset import write_results
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
 REQUIRED_COMMANDS = (
@@ -281,7 +288,7 @@ def test_index_rejects_an_invalid_max_chunk_size(tmp_path: Path) -> None:
 
 
 def test_index_writes_the_index_file(tmp_path: Path) -> None:
-    """``index`` chunks the corpus and reports where the index was saved."""
+    """``index`` reports how many chunks it stored and where (VI.1 capture)."""
     corpus = tmp_path / "corpus"
     corpus.mkdir()
     source = "def first() -> int:\n    return 1\n"
@@ -298,7 +305,7 @@ def test_index_writes_the_index_file(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == (
-        f"Ingestion complete! Indices saved under {index_path.parent}/\n"
+        f"Ingestion complete! Indexed 1 chunks under {index_path.parent}/\n"
     )
     assert index_path.is_file()
 
@@ -460,3 +467,36 @@ def test_answer_uses_the_real_sources_and_model() -> None:
 
     assert result.returncode == 0, result.stderr
     assert "load_lora_adapter" in result.stdout
+
+
+def test_answer_dataset_prints_the_subject_lines(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Loaded, processed and saved, as in VI.7.2 step 4 of the subject.
+
+    Run in-process with the fake model plugged into the port, so the output
+    is checked without loading Qwen.
+    """
+    input_path = write_results(tmp_path)
+    save_directory = tmp_path / "answers"
+    cli = RagCli(
+        SqliteIndexStore(), FileCorpus(), JsonDatasetStore(), FakeLoader()
+    )
+
+    exit_code = run(
+        cli,
+        [
+            "answer_dataset",
+            "--student_search_results_path",
+            str(input_path),
+            "--save_directory",
+            str(save_directory),
+        ],
+    )
+
+    output = save_directory / "dataset_docs_public.json"
+    assert exit_code == 0
+    assert capsys.readouterr().out == (
+        "Loaded 3 questions ... Processed 3 of 3 questions\n"
+        f"Saved student_search_results_and_answer to {output}\n"
+    )
