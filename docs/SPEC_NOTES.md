@@ -408,6 +408,13 @@ justificar), **ABIERTO** (pendiente, con límite).
   tokenizador dentro del dominio). El prompt pide responder solo con las
   fuentes y decir que no se puede si no contienen la respuesta (idea de
   Jose).
+- **DECISIÓN (2026-10-19, Jose, opción A, issue #62)** — El prompt va por
+  roles de chat: las reglas en `system`; las fuentes, cada una entre
+  `<source id="N" path="...">` y `</source>`, y la pregunta al final, en
+  `user`. El presupuesto de 2.000 tokens cuenta las dos partes juntas. El
+  corpus tiene 0 ficheros con `</source>`, así que ninguna fuente puede
+  cerrar su etiqueta por accidente. Motivo: más limpio y la información le
+  llega mejor al modelo, no subir una nota.
 
 ## Entorno
 
