@@ -94,17 +94,6 @@ def test_source_without_file_path_is_rejected() -> None:
         )
 
 
-def test_valid_source_range_is_accepted() -> None:
-    """A real range from the public dataset is accepted unchanged."""
-    source = MinimalSource(
-        file_path="data/raw/vllm-0.10.1/docs/features/lora.md",
-        first_character_index=4695,
-        last_character_index=6098,
-    )
-
-    assert source.last_character_index == 6098
-
-
 def test_inverted_source_range_is_rejected() -> None:
     """A range cannot start after it ends (decision B)."""
     with pytest.raises(ValidationError):

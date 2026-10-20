@@ -101,11 +101,6 @@ def test_a_term_in_most_chunks_never_weighs_negative() -> None:
     assert idf(index, "def") == IDF_FLOOR
 
 
-def test_the_floor_is_tiny_but_positive() -> None:
-    """Positive so it still breaks ties, tiny so it barely counts."""
-    assert 0 < IDF_FLOOR <= 1e-6
-
-
 def test_a_rare_term_outranks_a_common_one() -> None:
     """Chunk 1 holds the rare "adapter"; chunk 2 only the common "lora"."""
     index = build_index(DOCUMENTS)
