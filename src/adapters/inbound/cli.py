@@ -69,7 +69,7 @@ class RagCli:
             raw_directory: Folder of the corpus to index.
             index_path: Where the SQLite index is written.
         """
-        run_index(
+        chunk_count = run_index(
             raw_directory,
             max_chunk_size,
             index_path,
@@ -77,7 +77,7 @@ class RagCli:
             self._index_store
         )
         print(
-            f"Ingestion complete! Indices saved under "
+            f"Ingestion complete! Indexed {chunk_count} chunks under "
             f"{Path(index_path).parent}/"
         )
 
@@ -176,14 +176,21 @@ class RagCli:
             student_search_results_path: Path to the search results file.
             save_directory: Directory where the answers file is written.
         """
-        output_path = run_answer_dataset(
+        result = run_answer_dataset(
             student_search_results_path,
             save_directory,
             self._datasets,
             self._corpus,
             self._load_generator
         )
-        print(f"Saved student_search_results_and_answer to {output_path}")
+        count = result.question_count
+        print(
+            f"Loaded {count} questions ... "
+            f"Processed {count} of {count} questions"
+        )
+        print(
+            f"Saved student_search_results_and_answer to {result.output_path}"
+        )
 
     def evaluate(
         self,

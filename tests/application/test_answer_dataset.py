@@ -68,7 +68,7 @@ def test_every_question_gets_an_answer(tmp_path: Path) -> None:
     save_directory = tmp_path / "answers"
     loader = FakeLoader()
 
-    output_path = run_answer_dataset(
+    result = run_answer_dataset(
         str(input_path),
         str(save_directory),
         DATASETS,
@@ -76,9 +76,10 @@ def test_every_question_gets_an_answer(tmp_path: Path) -> None:
         loader
     )
 
-    assert output_path == save_directory / "dataset_docs_public.json"
+    assert result.output_path == save_directory / "dataset_docs_public.json"
+    assert result.question_count == 3
     written = StudentSearchResultsAndAnswer.model_validate_json(
-        output_path.read_text(encoding="utf-8")
+        result.output_path.read_text(encoding="utf-8")
     )
     assert written.k == 5
     assert [entry.question_id for entry in written.search_results] == [
@@ -115,7 +116,7 @@ def test_question_without_sources_is_not_sent_to_the_model(
     """Nothing to ground an answer on: the fixed message, no prompt."""
     loader = FakeLoader()
 
-    output_path = run_answer_dataset(
+    result = run_answer_dataset(
         str(write_results(tmp_path)),
         str(tmp_path / "answers"),
         DATASETS,
@@ -124,7 +125,7 @@ def test_question_without_sources_is_not_sent_to_the_model(
     )
 
     written = StudentSearchResultsAndAnswer.model_validate_json(
-        output_path.read_text(encoding="utf-8")
+        result.output_path.read_text(encoding="utf-8")
     )
     assert written.search_results[2].answer == NO_SOURCES_ANSWER
     assert all(

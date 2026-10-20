@@ -1,6 +1,7 @@
 """Use case: answer every question of a search results file."""
 
 from pathlib import Path
+from typing import NamedTuple
 
 from tqdm import tqdm
 
@@ -14,13 +15,26 @@ from src.application.use_cases.answer import (
 from src.domain.models import MinimalAnswer, StudentSearchResultsAndAnswer
 
 
+class AnswerDatasetResult(NamedTuple):
+    """What the CLI needs to report a finished run.
+
+    Attributes:
+        output_path: The file written, named like the input file.
+        question_count: Questions loaded, and answered: any failure stops
+            the run before a result exists.
+    """
+
+    output_path: Path
+    question_count: int
+
+
 def run_answer_dataset(
     student_search_results_path: str,
     save_directory: str,
     datasets: DatasetStore,
     corpus: CorpusReader,
     load_generator: GeneratorLoader
-) -> Path:
+) -> AnswerDatasetResult:
     """Answer every question with the sources it already has, and save it.
 
     Sources are not searched again: the file from ``search_dataset`` already
@@ -36,7 +50,7 @@ def run_answer_dataset(
         load_generator: Loads the model when it is called.
 
     Returns:
-        Path of the written file, named like the input file.
+        The path of the written file and how many questions it holds.
 
     Raises:
         ValueError: If the input cannot be read, a source file cannot be
@@ -77,4 +91,8 @@ def run_answer_dataset(
     )
     output_path = Path(save_directory) / Path(student_search_results_path).name
     datasets.write_results(output, output_path)
-    return output_path
+
+    return AnswerDatasetResult(
+        output_path=output_path,
+        question_count=len(answers)
+    )

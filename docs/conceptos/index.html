@@ -2074,7 +2074,10 @@ búsquedas lo aprovechan.</p>
 
 <p><strong>Qué mide:</strong> el umbral de <strong>indexado ≤ 300 s</strong>.</p>
 <pre><code>Indexing: 100%|██████████| 1969/1969 [00:03&lt;00:00, 562.46file/s]
-Ingestion complete! Indices saved under data/processed/</code></pre>
+Ingestion complete! Indexed 18942 chunks under data/processed/</code></pre>
+<p>Es el formato de la captura del enunciado (VI.1): dice cuántos chunks y
+dónde. El paso a paso de VI.7.2 escribe «Indices saved under», con la misma
+información salvo el número; por eso elegimos la frase de la captura (#72).</p>
 <table>
 <tr><th>Dato real</th><th>Valor</th></tr>
 <tr><td>Ficheros indexados</td><td class="num">1.969</td></tr>
@@ -2326,6 +2329,12 @@ John Doe pero tampoco se niega como debería.
 </table>
 <p>docs tarda más porque sus fuentes son texto largo: el prompt se llena más y
 el modelo tiene más que leer. El enunciado no pone límite de tiempo aquí.</p>
+<p><strong>Qué imprime</strong> (formato de VI.7.2, paso 4):</p>
+<pre><code>Answering: 100%|██████████| 100/100 [33:42&lt;00:00, 20.23s/question]
+Loaded 100 questions ... Processed 100 of 100 questions
+Saved student_search_results_and_answer to data/output/search_results_and_answer/UnansweredQuestions/dataset_docs_public.json</code></pre>
+<p>Los dos números coinciden siempre: si una sola pregunta falla, el comando
+termina con <code>ERROR:</code> antes de llegar a esta línea.</p>
 <p><strong>Qué devuelve</strong> (una entrada real del fichero de code):</p>
 <pre><code>"question": "What's the default value of min_stats_update_interval_ms in DPCoordinatorProc's __init__ method?",
 "retrieved_sources": [ {"file_path": "data/raw/vllm-0.10.1/vllm/v1/engine/coordinator.py", …}, … ],
