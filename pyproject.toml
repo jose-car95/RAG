@@ -47,3 +47,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "slow: loads the real Qwen model; skipped by make test, run by make test-all",
+]

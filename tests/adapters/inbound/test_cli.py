@@ -315,6 +315,7 @@ def test_answer_without_sources_says_so(tmp_path: Path) -> None:
     )
 
 
+@pytest.mark.slow
 @pytest.mark.skipif(
     not (REPO_ROOT / ".cache/huggingface/models--Qwen--Qwen3-0.6B").is_dir()
     or not (REPO_ROOT / "data/processed/index.db").is_file(),
