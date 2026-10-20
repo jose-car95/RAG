@@ -13,6 +13,37 @@ from src.domain.models import (
 )
 
 
+def _json_position(error: json.JSONDecodeError) -> str:
+    """Describe where a JSON text breaks.
+
+    Args:
+        error: The error raised while parsing.
+
+    Returns:
+        The line, the column and the parser's reason.
+    """
+    return f"line {error.lineno}, column {error.colno}: {error.msg}"
+
+
+def _first_problem(error: ValidationError) -> str:
+    """Describe the first field that does not match the model.
+
+    Only the first problem is shown, so the message stays on one line.
+
+    Args:
+        error: The error raised while validating.
+
+    Returns:
+        The dotted path of the field and the reason, or only the reason
+        when the whole document has the wrong type.
+    """
+    problem = error.errors()[0]
+    field = ".".join(str(part) for part in problem["loc"])
+    if not field:
+        return problem["msg"]
+    return f"{field}: {problem['msg']}"
+
+
 class JsonDatasetStore(DatasetStore):
     """The ``DatasetStore`` port on JSON files on disk.
 
@@ -45,12 +76,18 @@ class JsonDatasetStore(DatasetStore):
         except OSError as error:
             raise ValueError(f"cannot read dataset: {path}") from error
 
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"dataset is not valid JSON: {path} ({_json_position(error)})"
+            ) from error
+
+        except UnicodeDecodeError as error:
             raise ValueError(f"dataset is not valid JSON: {path}") from error
 
         except ValidationError as error:
             raise ValueError(
-                f"dataset does not match the expected format: {path}"
+                "dataset does not match the expected format: "
+                f"{path} ({_first_problem(error)})"
             ) from error
 
     def load_search_results(self, path: Path) -> StudentSearchResults:
@@ -78,14 +115,21 @@ class JsonDatasetStore(DatasetStore):
         except OSError as error:
             raise ValueError(f"cannot read search results: {path}") from error
 
-        except (json.JSONDecodeError, UnicodeDecodeError) as error:
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                "search results are not valid JSON: "
+                f"{path} ({_json_position(error)})"
+            ) from error
+
+        except UnicodeDecodeError as error:
             raise ValueError(
                 f"search results are not valid JSON: {path}"
             ) from error
 
         except ValidationError as error:
             raise ValueError(
-                f"search results do not match the expected format: {path}"
+                "search results do not match the expected format: "
+                f"{path} ({_first_problem(error)})"
             ) from error
 
     def write_results(
