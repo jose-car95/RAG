@@ -132,6 +132,13 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **Verificado (2026-10-20, issue #72, salidas como el enunciado):**
+  `make test` 238 passed. `index` real: `Ingestion complete! Indexed 18942
+  chunks under …/` (formato de la captura de VI.1, que lleva la misma
+  información que «Indices saved under» más el número). `answer_dataset`
+  real con Qwen sobre 2 preguntas en 35,7 s: `Loaded 2 questions ...
+  Processed 2 of 2 questions` y `Saved student_search_results_and_answer to
+  …`. `search` ya daba `file_path [inicio:fin]` (más posición y puntuación).
 - **Verificado (2026-10-19, issue #62, prompt por roles):** `make lint` OK,
   `make test` 237 passed. Con el modelo real, 6 preguntas con las mismas
   fuentes de la ejecución completa y el caso John Doe, en 119,6 s y 4,9 GB:
