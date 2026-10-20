@@ -3,6 +3,8 @@
 from collections.abc import Callable
 from typing import Protocol
 
+from src.domain.prompt import Prompt
+
 
 class Generator(Protocol):
     """What the use case needs from a model: count tokens and answer.
@@ -22,11 +24,12 @@ class Generator(Protocol):
         """
         ...
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: Prompt) -> str:
         """Answer a prompt.
 
         Args:
-            prompt: The full prompt.
+            prompt: The rules for the system role and the sources plus the
+                question for the user role.
 
         Returns:
             The answer.
