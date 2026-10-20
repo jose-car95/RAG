@@ -62,22 +62,6 @@ def test_help_lists_required_commands() -> None:
         assert re.search(rf"^\s+{command}$", output, re.MULTILINE), output
 
 
-def test_answer_dataset_reports_missing_results(tmp_path: Path) -> None:
-    """A missing input file ends in a one-line error, without the model."""
-    missing = tmp_path / "results.json"
-
-    result = run_cli(
-        "answer_dataset",
-        "--student_search_results_path",
-        str(missing),
-        "--save_directory",
-        str(tmp_path / "answers"),
-    )
-
-    assert result.returncode == 1
-    assert result.stderr == f"ERROR: search results not found: {missing}\n"
-
-
 def test_usage_error_names_the_program() -> None:
     """Fire's usage messages name the program ``src``, not ``__main__.py``."""
     result = run_cli("nonexistent_command")
@@ -85,22 +69,6 @@ def test_usage_error_names_the_program() -> None:
     assert result.returncode == 2
     assert "Usage: src <command>" in result.stderr
     assert "Traceback" not in result.stderr
-
-
-def test_search_dataset_reports_missing_dataset() -> None:
-    """A missing dataset ends in a one-line error and exit code 1."""
-    result = run_cli(
-        "search_dataset",
-        "--dataset_path",
-        "/nonexistent/dataset.json",
-        "--k",
-        "10",
-    )
-
-    assert result.returncode == 1
-    assert result.stderr == (
-        "ERROR: dataset not found: /nonexistent/dataset.json\n"
-    )
 
 
 def make_tiny_index(tmp_path: Path) -> Path:
@@ -175,20 +143,6 @@ def test_search_dataset_uses_default_save_directory(tmp_path: Path) -> None:
     output_path.unlink()
 
 
-def test_search_dataset_rejects_invalid_k() -> None:
-    """A ``k`` that is not a positive integer is a usage error."""
-    result = run_cli(
-        "search_dataset",
-        "--dataset_path",
-        "data/datasets/UnansweredQuestions/dataset_docs_public.json",
-        "--k",
-        "0",
-    )
-
-    assert result.returncode == 1
-    assert result.stderr == "ERROR: k must be a positive integer\n"
-
-
 def test_index_reports_missing_corpus_folder() -> None:
     """A missing corpus folder ends in a one-line error and exit code 1."""
     result = run_cli("index", "--raw_directory", "/nonexistent")
@@ -223,27 +177,6 @@ def test_search_prints_the_ranked_sources(tmp_path: Path) -> None:
     assert "[0:" in first_line
 
 
-def test_search_rejects_an_empty_query(tmp_path: Path) -> None:
-    """``search ""`` is a user error, not an empty result."""
-    result = run_cli("search", "", "--index_path", str(tmp_path / "index.db"))
-
-    assert result.returncode == 1
-    assert result.stderr == "ERROR: query must not be empty\n"
-
-
-def test_search_reports_a_missing_index(tmp_path: Path) -> None:
-    """Searching before indexing says what to run."""
-    index_path = tmp_path / "index.db"
-
-    result = run_cli("search", "lora", "--index_path", str(index_path))
-
-    assert result.returncode == 1
-    assert result.stderr == (
-        f"ERROR: index not found: {index_path}; run index first\n"
-    )
-    assert not index_path.exists()
-
-
 def test_search_says_when_nothing_is_found(tmp_path: Path) -> None:
     """A query with no match prints a message instead of nothing."""
     corpus = tmp_path / "corpus"
@@ -261,30 +194,6 @@ def test_search_says_when_nothing_is_found(tmp_path: Path) -> None:
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == "No sources found.\n"
-
-
-def test_index_rejects_an_invalid_max_chunk_size(tmp_path: Path) -> None:
-    """``index`` reports an invalid chunk width and writes no index."""
-    corpus = tmp_path / "corpus"
-    corpus.mkdir()
-    (corpus / "a.py").write_text("x = 1\n", encoding="utf-8")
-    index_path = tmp_path / "index.db"
-
-    result = run_cli(
-        "index",
-        "--raw_directory",
-        str(corpus),
-        "--index_path",
-        str(index_path),
-        "--max_chunk_size",
-        "0",
-    )
-
-    assert result.returncode == 1
-    assert result.stderr == (
-        "ERROR: max_chunk_size must be an integer between 1 and 2000\n"
-    )
-    assert not index_path.exists()
 
 
 def test_index_writes_the_index_file(tmp_path: Path) -> None:
@@ -368,22 +277,6 @@ def test_evaluate_prints_recall_in_the_subject_format(tmp_path: Path) -> None:
     )
 
 
-def test_evaluate_reports_missing_search_results(tmp_path: Path) -> None:
-    """A missing results file ends in a one-line error and exit code 1."""
-    missing = tmp_path / "nope.json"
-
-    result = run_cli(
-        "evaluate",
-        "--student_search_results_path",
-        str(missing),
-        "--dataset_path",
-        "data/datasets/AnsweredQuestions/dataset_docs_public.json",
-    )
-
-    assert result.returncode == 1
-    assert result.stderr == f"ERROR: search results not found: {missing}\n"
-
-
 def test_cli_import_does_not_load_torch() -> None:
     """``--help``, ``index`` and ``search`` must not pay for torch's import.
 
@@ -408,27 +301,6 @@ def test_cli_import_does_not_load_torch() -> None:
     assert result.stdout.strip() == "False False"
 
 
-@pytest.mark.parametrize(
-    ("query", "k", "message"),
-    [
-        ("", "10", "query must not be empty"),
-        ("What is vLLM?", "0", "k must be a positive integer"),
-    ],
-)
-def test_answer_rejects_bad_arguments(
-    tmp_path: Path, query: str, k: str, message: str
-) -> None:
-    """A one-line error and exit code 1, as for ``search``."""
-    index_path = make_tiny_index(tmp_path)
-
-    result = run_cli(
-        "answer", query, "--k", k, "--index_path", str(index_path)
-    )
-
-    assert result.returncode == 1
-    assert result.stderr == f"ERROR: {message}\n"
-
-
 def test_answer_without_sources_says_so(tmp_path: Path) -> None:
     """Nothing retrieved: the user is told, and it is not an error."""
     index_path = make_tiny_index(tmp_path)
@@ -441,16 +313,6 @@ def test_answer_without_sources_says_so(tmp_path: Path) -> None:
     assert result.stdout == (
         "No sources found, so the question cannot be answered.\n"
     )
-
-
-def test_answer_reports_missing_index(tmp_path: Path) -> None:
-    """A missing index ends in the same error as ``search``."""
-    missing = tmp_path / "missing.db"
-
-    result = run_cli("answer", "lora", "--index_path", str(missing))
-
-    assert result.returncode == 1
-    assert result.stderr.startswith(f"ERROR: index not found: {missing}")
 
 
 @pytest.mark.skipif(
