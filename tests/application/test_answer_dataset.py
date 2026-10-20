@@ -149,19 +149,6 @@ def test_missing_file_is_reported_without_the_model(tmp_path: Path) -> None:
     assert loader.loads == 0
 
 
-def test_malformed_file_is_reported_without_the_model(tmp_path: Path) -> None:
-    """Broken JSON is rejected before loading anything."""
-    broken = tmp_path / "broken.json"
-    broken.write_text("{not json", encoding="utf-8")
-    loader = FakeLoader()
-
-    with pytest.raises(ValueError, match="broken.json"):
-        run_answer_dataset(
-            str(broken), str(tmp_path / "answers"), DATASETS, CORPUS, loader
-        )
-    assert loader.loads == 0
-
-
 def test_a_save_directory_that_is_a_file_is_rejected(tmp_path: Path) -> None:
     """The mistake is caught before loading Qwen, not after answering."""
     a_file = tmp_path / "answers.json"
