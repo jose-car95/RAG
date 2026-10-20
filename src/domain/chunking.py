@@ -189,6 +189,7 @@ def _definition_starts(source: str) -> list[int]:
 
     Raises:
         SyntaxError: If the source is not valid Python.
+        ValueError: If the source holds a null byte (Python 3.10 and 3.11).
     """
     tree = ast.parse(source)
     line_starts: list[int] = [0]
@@ -227,7 +228,8 @@ def chunk_python(source: str, max_chunk_size: int) -> list[tuple[int, int]]:
     """Split Python source into chunks, cutting at top-level definitions.
 
     Source that does not parse is chunked as plain text instead of failing,
-    because the corpus may hold templates or Python 2 files.
+    because the corpus may hold templates or Python 2 files. A null byte
+    raises ValueError instead of SyntaxError before Python 3.12.
 
     Args:
         source: Python source code.
@@ -238,7 +240,7 @@ def chunk_python(source: str, max_chunk_size: int) -> list[tuple[int, int]]:
     """
     try:
         cuts = _definition_starts(source)
-    except SyntaxError:
+    except (SyntaxError, ValueError):
         return chunk_text(source, max_chunk_size)
     return _chunk_with_cuts(source, cuts, max_chunk_size)
 
