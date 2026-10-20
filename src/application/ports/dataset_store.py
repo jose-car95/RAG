@@ -61,3 +61,16 @@ class DatasetStore(Protocol):
             ValueError: If it cannot be written.
         """
         ...
+
+    def check_save_directory(self, directory: Path) -> None:
+        """Reject a save directory that is, or looks like, a file.
+
+        Called before any long work, so a typo does not cost a full run.
+
+        Args:
+            directory: The folder where results will be written.
+
+        Raises:
+            ValueError: If it is an existing file or has a file suffix.
+        """
+        ...

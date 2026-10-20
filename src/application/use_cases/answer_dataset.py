@@ -53,9 +53,12 @@ def run_answer_dataset(
         The path of the written file and how many questions it holds.
 
     Raises:
-        ValueError: If the input cannot be read, a source file cannot be
-            read, or the output cannot be written.
+        ValueError: If the save directory is a file, the input cannot be
+            read, a source file cannot be read, or the output cannot be
+            written.
     """
+    datasets.check_save_directory(Path(save_directory))
+
     results = datasets.load_search_results(
         Path(student_search_results_path)
     )
