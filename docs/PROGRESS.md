@@ -155,11 +155,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   ejecución → #67 README → #68 escuela y repo de entrega.
 - **Pendiente de M5:** nota de Jose de la muestra de 6 respuestas y recode
   del `/ensayo` (rama `ensayo/<fecha>`).
-- **Pendiente para M6 (2026-10-13):** `chunk_python` solo captura
-  `SyntaxError` al parsear. Con un byte nulo en un `.py`, Python 3.12 lanza
-  `SyntaxError`, pero 3.10 y 3.11 lanzan `ValueError` y el indexado
-  reventaría. El corpus tiene 0 ficheros así y fijamos 3.12, pero el plan B
-  de la escuela es 3.10: añadir `ValueError` al `except` con su test.
+- **Pendiente para M6 (2026-10-13), resuelto (2026-10-20, #63):**
+  `chunk_python` captura también `ValueError` (byte nulo en 3.10 y 3.11),
+  con su test, que salía en rojo en 3.10.
 - **Pendiente apuntado (2026-10-08), resuelto (2026-10-16):** `load_dataset`
   y `load_search_results` son casi idénticas. `answer_dataset` reutiliza
   `load_search_results` tal cual, así que no hubo tercera copia y siguen sin
@@ -264,6 +262,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Se desarrolla con Python 3.12 (`.python-version`); en la escuela (Python 3.10) `uv sync` descargará 3.12 automáticamente | Misma versión en casa, CI y escuela. Plan B si la descarga falla: `.python-version` = `3.10` (el código pasa `mypy --python-version 3.10`) |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
 | 2026-10-19 | Arquitectura hexagonal pura (issue #61): `application/ports/` (4 `Protocol`: `Generator`, `IndexStore`, `CorpusReader`, `DatasetStore`), `application/use_cases/`, `adapters/inbound/` (CLI) y `adapters/outbound/` (corpus, JSON, SQLite, Qwen; nombres de Jose: de entrada y de salida, `in` es palabra reservada), `bootstrap.py` como raíz de composición; tests en espejo y `tests/test_architecture.py` | Los casos de uso importaban SQLite, JSON y el corpus directamente: no era hexagonal aunque lo llamáramos así. Se descartó la capa `infrastructure/` (vocabulario de DDD) para no mezclar escuelas; `outbound` es la misma pieza con el nombre de la hexagonal. Sustituye a la decisión del 2026-09-15 de no separar entrada y salida: entonces había 2 adaptadores, ahora 6, y los bonus (API, caché, embeddings) encajan como adaptadores nuevos |
+| 2026-10-20 | `.python-version` baja a `3.10` (issue #63) | Es el Python de la escuela: se desarrolla y la CI prueba con la misma versión que el corrector, y `uv sync` no descarga otro intérprete allí. Sustituye a la decisión del 2026-09-17 (3.12). Verificado: con 3.10, `flake8` y `mypy` limpios y la suite completa en verde |
 | 2026-10-19 | Prompt por roles: reglas en `system`, fuentes etiquetadas y pregunta en `user` (opción A, issue #62) | Para que quede más limpio y la información le llegue mejor al modelo, no para subir una nota; las etiquetas separan una fuente que contiene su propio `Question:` |
 | 2026-10-19 | Todo debe funcionar en Python 3.10 (issue #63) | Es el Python instalado en la escuela y no se puede cambiar |
 
@@ -433,14 +432,11 @@ M3 antes de optimizar nada.
 - [ ] `pyproject.toml`, `uv.lock`, `.python-version`, `Makefile`, `README.md`, `src/`.
 - [ ] Primera línea del README en cursiva con el login.
 - [ ] `uv sync` y `make lint` en un clon limpio en la máquina de la escuela.
-- [ ] En la escuela (solo Python 3.10): comprobar que `uv sync` descarga
-  Python 3.12 (red), dónde lo guarda (`uv python dir`) y cuánto ocupa; si
-  falta cuota, usar `UV_PYTHON_INSTALL_DIR`. Plan B: `.python-version` =
-  `3.10`.
+- [ ] En la escuela (Python 3.10): comprobar que `uv sync` usa el Python
+  del sistema y no descarga otro (`uv run python --version` → 3.10).
 - [ ] En la escuela, clonar en `sgoinfree` y ejecutar todo desde la raíz del
   repo: `.cache/` (uv ~1 GB, modelo ~1,5 GB) y `.venv/` suman ~2,5 GB dentro
-  del repo. Python 3.12: `export UV_PYTHON_INSTALL_DIR="$PWD/.cache/python"`
-  antes de `uv sync`, o bajar `.python-version` a 3.10.
+  del repo.
 - [ ] En la escuela, antes de presentar: `lscpu | grep -m1 "Model name"`,
   `grep -o -w -E "avx512_bf16|amx_bf16|avx2" /proc/cpuinfo | sort -u` y
   `free -h`. Cargamos Qwen en `float32` (2,2 GB de RAM), rápido en cualquier
