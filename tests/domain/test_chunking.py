@@ -155,6 +155,13 @@ def test_invalid_python_falls_back_to_text_chunking() -> None:
     assert chunk_python(BROKEN_PYTHON, 2000) == chunk_text(BROKEN_PYTHON, 2000)
 
 
+def test_null_byte_python_falls_back_to_text_chunking() -> None:
+    """A null byte breaks parsing on every version without crashing."""
+    source = "x = 1\x00\n"
+
+    assert chunk_python(source, 2000) == chunk_text(source, 2000)
+
+
 def test_empty_source_has_no_chunks() -> None:
     """There is nothing to chunk in an empty source file."""
     assert chunk_python("", 2000) == []
