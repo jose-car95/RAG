@@ -132,6 +132,13 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **Verificado (2026-10-20, issue #64, dónde falla la entrada):** `make
+  lint` OK y `make test` 240 passed, ya en Python 3.10. Un JSON roto dice
+  línea, columna y motivo (`… (line 3, column 3: Expecting property name
+  enclosed in double quotes)`); un JSON con otra forma nombra solo el primer
+  campo que falla, para seguir en una línea (`evaluate` real → `ERROR: …
+  (search_results: Input should be a valid list)`, salida `1`). Un fichero
+  binario no tiene líneas y conserva el mensaje anterior.
 - **Verificado (2026-10-20, issue #72, salidas como el enunciado):**
   `make test` 238 passed. `index` real: `Ingestion complete! Indexed 18942
   chunks under …/` (formato de la captura de VI.1, que lleva la misma
