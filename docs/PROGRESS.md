@@ -132,6 +132,12 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **Verificado (2026-10-20, issue #67, README completo):** primera línea en
+  cursiva con el login y todas las secciones del capítulo VIII más las siete
+  propias del proyecto. Cifras medidas hoy con Python 3.10 y `time uv run`:
+  indexado 3,7 s (18.941 chunks), 199 preguntas en 8,9 s (4,2 + 4,7), un
+  `search` 1,8 s. Las salidas de ejemplo son reales salvo el número de
+  preguntas de `answer_dataset` (formato real, ejecutado con 2).
 - **Verificado (2026-10-20, issue #73, Makefile completo):** atajos
   `index`, `search`, `search_dataset`, `evaluate`, `answer` y
   `answer_dataset` con variables que se cambian al llamar (`DATASET`,
