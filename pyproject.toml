@@ -17,6 +17,7 @@ dev = [
     "flake8>=7,<8",
     "mypy>=1.11",
     "pytest>=8",
+    "types-tqdm>=4.70.0.20260906",
 ]
 
 [tool.uv]
