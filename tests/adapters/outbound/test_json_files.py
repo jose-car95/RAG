@@ -55,28 +55,47 @@ def test_unreadable_path_is_reported(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "content",
-    [b"", b'{"rag_questions": [', b"\xff\xfe\x00bad"],
-    ids=["empty", "truncated", "binary"],
+    ("content", "detail"),
+    [
+        (b"", " (line 1, column 1: Expecting value)"),
+        (b'{"rag_questions": [', " (line 1, column 20: Expecting value)"),
+        (
+            b'{\n  "rag_questions": [],\n  oops\n}',
+            " (line 3, column 3: Expecting property name enclosed in"
+            " double quotes)",
+        ),
+        (b"\xff\xfe\x00bad", ""),
+    ],
+    ids=["empty", "truncated", "third_line", "binary"],
 )
-def test_invalid_json_is_reported(tmp_path: Path, content: bytes) -> None:
-    """Content that is not JSON text is reported as invalid JSON."""
+def test_invalid_json_is_reported(
+    tmp_path: Path, content: bytes, detail: str
+) -> None:
+    """Invalid JSON says where it breaks; bytes that are not text cannot."""
     path = tmp_path / "dataset.json"
     path.write_bytes(content)
 
-    expect_error(path, f"dataset is not valid JSON: {path}")
+    expect_error(path, f"dataset is not valid JSON: {path}{detail}")
 
 
 @pytest.mark.parametrize(
-    "content",
-    ['{"foo": 1}', "[1, 2, 3]"],
+    ("content", "detail"),
+    [
+        ('{"foo": 1}', "rag_questions: Field required"),
+        (
+            "[1, 2, 3]",
+            "Input should be a valid dictionary or instance of RagDataset",
+        ),
+    ],
     ids=["unknown_keys", "a_list"],
 )
 def test_wrong_shape_is_reported_in_one_line(
-    tmp_path: Path, content: str
+    tmp_path: Path, content: str, detail: str
 ) -> None:
-    """Valid JSON that is not a dataset gets a one-line message."""
+    """Valid JSON that is not a dataset names the first failing field."""
     path = tmp_path / "dataset.json"
     path.write_text(content, encoding="utf-8")
 
-    expect_error(path, f"dataset does not match the expected format: {path}")
+    expect_error(
+        path, f"dataset does not match the expected format: {path} ({detail})"
+    )

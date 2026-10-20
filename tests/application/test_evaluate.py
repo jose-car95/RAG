@@ -200,12 +200,20 @@ def test_missing_search_results_are_reported(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "content",
-    [b"", b"{not json", b"\xff\xfe"],
+    ("content", "detail"),
+    [
+        (b"", " (line 1, column 1: Expecting value)"),
+        (
+            b"{not json",
+            " (line 1, column 2: Expecting property name enclosed in"
+            " double quotes)",
+        ),
+        (b"\xff\xfe", ""),
+    ],
     ids=["empty", "broken", "binary"],
 )
 def test_invalid_json_search_results_are_reported(
-    tmp_path: Path, content: bytes
+    tmp_path: Path, content: bytes, detail: str
 ) -> None:
     """Malformed JSON or bytes that are not text end in one line."""
     path = tmp_path / "results.json"
@@ -214,7 +222,9 @@ def test_invalid_json_search_results_are_reported(
     with pytest.raises(ValueError) as error:
         DATASETS.load_search_results(path)
 
-    assert str(error.value) == f"search results are not valid JSON: {path}"
+    assert str(error.value) == (
+        f"search results are not valid JSON: {path}{detail}"
+    )
 
 
 def test_wrong_shape_search_results_are_reported(tmp_path: Path) -> None:
@@ -226,4 +236,5 @@ def test_wrong_shape_search_results_are_reported(tmp_path: Path) -> None:
 
     assert str(error.value) == (
         f"search results do not match the expected format: {path}"
+        " (search_results: Field required)"
     )
