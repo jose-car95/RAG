@@ -179,7 +179,7 @@ uno en uno, cuando llega su slice, nunca todos de golpe:
 
 ## Reglas de producto no negociables
 
-- Python 3.10+ (intérprete fijado a 3.12 con `.python-version`); `uv` como
+- Python 3.10+ (intérprete fijado a 3.10 con `.python-version`, el de la escuela); `uv` como
   gestor; `pyproject.toml` y `uv.lock` en la raíz; `uv sync` debe funcionar.
 - `make lint` debe pasar: `flake8 .` y
   `mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs`.
