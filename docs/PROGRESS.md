@@ -132,6 +132,13 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **Verificado (2026-10-20, issue #65, carpeta de salida que es un
+  fichero):** `make lint` OK y `make test` 243 passed. `answer_dataset` y
+  `search_dataset` con `--save_directory …/out.json` → `ERROR: save
+  directory must be a folder, not a file: …/out.json`, salida `1`, en
+  0,47 s sin cargar Qwen ni el índice y sin crear la carpeta. Nuevo método
+  `check_save_directory` en el puerto `DatasetStore`. Límite conocido: una
+  carpeta con punto en el nombre (`results.v2`) también se rechaza.
 - **Verificado (2026-10-20, issue #64, dónde falla la entrada):** `make
   lint` OK y `make test` 240 passed, ya en Python 3.10. Un JSON roto dice
   línea, columna y motivo (`… (line 3, column 3: Expecting property name
