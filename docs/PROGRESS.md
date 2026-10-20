@@ -132,8 +132,9 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
-- **M6 abierto (2026-10-19):** issues #61-#68. En curso #61
-  (arquitectura hexagonal pura). Orden: #61 → #62 prompt por roles → #63 Python 3.10 →
+- **M6 abierto (2026-10-19):** issues #61-#68. #61 cerrado (PR #69,
+  arquitectura hexagonal pura); en curso #66 (pestañas «Arquitectura» y
+  «Casos de uso y comandos»). Orden: #61 → #62 prompt por roles → #63 Python 3.10 →
   #64 mensajes con línea y campo → #65 `--save_directory` → #66 guía de
   ejecución → #67 README → #68 escuela y repo de entrega.
 - **Pendiente de M5:** nota de Jose de la muestra de 6 respuestas y recode
@@ -298,6 +299,9 @@ M3 antes de optimizar nada.
 | 2026-10-06 | 199 preguntas (docs + code) | **7,86 s** (3,79 + 4,07), 115 MB | ≤ 90 s | `uv run python -m src search_dataset --dataset_path ... --k 5` |
 | 2026-10-06 | `search` de una consulta | **1,12 s** (1,10-1,15 s en tres consultas seguidas), 115 MB | — | `uv run python -m src search "How to configure OpenAI server?" --k 5` |
 | 2026-09-23 | Tamaño del índice | 25 MB (26.075.136 bytes), 0 páginas libres | — | `uv run python -m src index` + `ls -l data/processed/index.db` |
+| 2026-10-19 | Tiempo de indexado (tras #61, máquina más cargada) | **9,43 s**, 81 MB | ≤ 300 s | `uv run python -m src index` |
+| 2026-10-19 | 199 preguntas (`--k 10`, tras #61) | **22,6 s** (11,57 docs + 10,99 code), 126 MB | ≤ 90 s | `uv run python -m src search_dataset --dataset_path ... --k 10` |
+| 2026-10-19 | `search` de una consulta | **4,5-5,2 s**, 124 MB: 4,62 s construyendo el índice en memoria, 0,03 s buscando | — | `uv run python -m src search "How to configure OpenAI server?" --k 3` |
 
 ## Preguntas abiertas
 

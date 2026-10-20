@@ -100,6 +100,10 @@
           onclick="showTab('lex')">Búsqueda léxica y BM25</button>
   <button role="tab" id="tab-pipe" aria-controls="panel-pipe" aria-selected="false"
           onclick="showTab('pipe')">El pipeline de búsqueda</button>
+  <button role="tab" id="tab-arq" aria-controls="panel-arq" aria-selected="false"
+          onclick="showTab('arq')">Arquitectura</button>
+  <button role="tab" id="tab-run" aria-controls="panel-run" aria-selected="false"
+          onclick="showTab('run')">Casos de uso y comandos</button>
 </div>
 
 <div class="panel" id="panel-db" role="tabpanel" aria-labelledby="tab-db" hidden>
@@ -1542,8 +1546,862 @@ habría que acordarse de los dos. Una comprobación, un sitio.
 
 </div>
 
+<div class="panel" id="panel-arq" role="tabpanel" aria-labelledby="tab-arq" hidden>
+
+<h1>La arquitectura hexagonal del proyecto</h1>
+<p class="lead">Qué es cada carpeta, quién conoce a quién y por qué. Es lo que
+tienes que poder dibujar en una hoja durante la defensa (issue #61,
+2026-10-19).</p>
+
+<nav>
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#arq-idea">La idea en una frase y el restaurante</a></li>
+    <li><a href="#arq-hexagono">El hexágono dibujado</a></li>
+    <li><a href="#arq-flechas">Las dos flechas: quién llama y quién conoce</a></li>
+    <li><a href="#arq-ejemplo">Un ejemplo completo: leer el corpus</a></li>
+    <li><a href="#arq-protocol">Los puertos son <code>Protocol</code></a></li>
+    <li><a href="#arq-bootstrap"><code>bootstrap.py</code>: monta y se aparta</a></li>
+    <li><a href="#arq-donde">Dónde busco cada cosa</a></li>
+    <li><a href="#arq-escuelas">DDD, hexagonal, cebolla y limpia</a></li>
+    <li><a href="#arq-guardia">El test que vigila la regla</a></li>
+    <li><a href="#arq-glosario">Glosario</a></li>
+    <li><a href="#arq-defensa">Preguntas de defensa</a></li>
+  </ol>
+</nav>
+
+<h2 id="arq-idea">1. La idea en una frase y el restaurante</h2>
+
+<div class="note">
+<strong>La frase para la defensa:</strong> <em>«los casos de uso solo conocen
+puertos; los adaptadores de salida los implementan, los de entrada los llaman, y
+<code>bootstrap.py</code> los conecta»</em>.
+</div>
+
+<p>¿Para qué sirve? Para que la lógica del RAG (trocear, puntuar con BM25,
+montar el prompt) <strong>no dependa de la marca de los aparatos</strong>.
+Podemos cambiar SQLite por otra cosa, o la terminal por una API web, tocando un
+solo sitio.</p>
+
+<table>
+<tr><th>Capa</th><th>En el restaurante</th><th>En el proyecto</th><th>Carpeta</th></tr>
+<tr>
+  <td><strong>Dominio</strong> (<em>domain</em>)</td>
+  <td>Las <strong>recetas</strong>: el saber puro, no toca ni la nevera ni la puerta</td>
+  <td>modelos pydantic, chunking, BM25, tokenizer, recall, prompt</td>
+  <td><code>src/domain/</code></td>
+</tr>
+<tr>
+  <td><strong>Casos de uso</strong> (<em>use cases</em>)</td>
+  <td>El <strong>jefe de cocina</strong>: recibe un pedido y coordina los pasos.
+      Cada tipo de pedido es un caso de uso</td>
+  <td><code>run_index</code>, <code>run_search</code>, <code>run_search_dataset</code>,
+      <code>run_evaluate</code>, <code>run_answer</code>,
+      <code>run_answer_dataset</code> (+ <code>retrieval</code>, lo que comparten)</td>
+  <td><code>src/application/use_cases/</code></td>
+</tr>
+<tr>
+  <td><strong>Puertos</strong> (<em>ports</em>)</td>
+  <td>La <strong>forma del enchufe</strong>: «necesito algo que enfríe», sin
+      decir la marca</td>
+  <td><code>IndexStore</code>, <code>CorpusReader</code>,
+      <code>DatasetStore</code>, <code>Generator</code></td>
+  <td><code>src/application/ports/</code></td>
+</tr>
+<tr>
+  <td><strong>Adaptadores de entrada</strong> (<em>inbound</em>)</td>
+  <td>Los <strong>camareros</strong>: toman el pedido del cliente y lo llevan a cocina</td>
+  <td>la CLI de Fire (mañana, la API HTTP del bonus)</td>
+  <td><code>src/adapters/inbound/</code></td>
+</tr>
+<tr>
+  <td><strong>Adaptadores de salida</strong> (<em>outbound</em>)</td>
+  <td>Los <strong>aparatos</strong>: nevera, horno, almacén</td>
+  <td><code>SqliteIndexStore</code>, <code>FileCorpus</code>,
+      <code>JsonDatasetStore</code>, <code>QwenGenerator</code></td>
+  <td><code>src/adapters/outbound/</code></td>
+</tr>
+<tr>
+  <td><strong>Raíz de composición</strong></td>
+  <td>El <strong>electricista</strong>: enchufa cada aparato antes de abrir y se va</td>
+  <td><code>build_cli()</code> y <code>main()</code></td>
+  <td><code>src/bootstrap.py</code></td>
+</tr>
+</table>
+
+<h2 id="arq-hexagono">2. El hexágono dibujado</h2>
+
+<figure class="fig">
+<svg viewBox="0 0 660 352" role="img" aria-label="Hexágono con el dominio en el centro, la aplicación alrededor, los puertos en el borde, los adaptadores fuera y bootstrap debajo">
+  <text x="4" y="136" class="lbl">ENTRADA (inbound)</text>
+  <rect class="box" x="4" y="146" width="122" height="24" rx="4"></rect>
+  <text x="65" y="162" text-anchor="middle">cli.py (Fire)</text>
+  <rect class="dash" x="4" y="186" width="122" height="24" rx="4"></rect>
+  <text x="65" y="202" text-anchor="middle">http.py (bonus)</text>
+  <path class="arrow" d="M126 158 H 196"></path>
+  <path class="arrow" d="M190 154 l6 4 -6 4"></path>
+
+  <polygon class="soft" points="180,170 255,50 405,50 480,170 405,290 255,290"></polygon>
+  <polygon class="box" points="180,170 255,50 405,50 480,170 405,290 255,290"></polygon>
+  <text x="330" y="70" text-anchor="middle" class="lbl">APLICACIÓN · use_cases/</text>
+  <text x="330" y="86" text-anchor="middle" class="lbl">index · search · search_dataset</text>
+  <text x="330" y="100" text-anchor="middle" class="lbl">evaluate · answer · answer_dataset</text>
+
+  <polygon class="soft" points="262,170 296,114 364,114 398,170 364,226 296,226"></polygon>
+  <polygon class="box" points="262,170 296,114 364,114 398,170 364,226 296,226"></polygon>
+  <text x="330" y="150" text-anchor="middle">DOMINIO</text>
+  <text x="330" y="170" text-anchor="middle" class="lbl">models · chunking</text>
+  <text x="330" y="184" text-anchor="middle" class="lbl">bm25 · tokenizer</text>
+  <text x="330" y="198" text-anchor="middle" class="lbl">recall · prompt</text>
+
+  <text x="478" y="226" text-anchor="middle" class="lbl">puertos (ports/)</text>
+  <rect class="box" x="430" y="104" width="96" height="20" rx="3"></rect>
+  <text x="478" y="118" text-anchor="middle" class="lbl">IndexStore</text>
+  <rect class="box" x="430" y="132" width="96" height="20" rx="3"></rect>
+  <text x="478" y="146" text-anchor="middle" class="lbl">CorpusReader</text>
+  <rect class="box" x="430" y="160" width="96" height="20" rx="3"></rect>
+  <text x="478" y="174" text-anchor="middle" class="lbl">DatasetStore</text>
+  <rect class="box" x="430" y="188" width="96" height="20" rx="3"></rect>
+  <text x="478" y="202" text-anchor="middle" class="lbl">Generator</text>
+
+  <text x="548" y="96" class="lbl">SALIDA (outbound)</text>
+  <rect class="box" x="548" y="104" width="108" height="20" rx="3"></rect>
+  <text x="602" y="118" text-anchor="middle" class="lbl">SqliteIndexStore</text>
+  <rect class="box" x="548" y="132" width="108" height="20" rx="3"></rect>
+  <text x="602" y="146" text-anchor="middle" class="lbl">FileCorpus</text>
+  <rect class="box" x="548" y="160" width="108" height="20" rx="3"></rect>
+  <text x="602" y="174" text-anchor="middle" class="lbl">JsonDatasetStore</text>
+  <rect class="box" x="548" y="188" width="108" height="20" rx="3"></rect>
+  <text x="602" y="202" text-anchor="middle" class="lbl">QwenGenerator</text>
+  <path class="arrow" d="M548 114 H 527 M548 142 H 527 M548 170 H 527 M548 198 H 527"></path>
+  <path class="arrow" d="M533 110 l-6 4 6 4 M533 138 l-6 4 6 4 M533 166 l-6 4 6 4 M533 194 l-6 4 6 4"></path>
+
+  <rect class="box" x="255" y="318" width="150" height="26" rx="4"></rect>
+  <text x="330" y="335" text-anchor="middle">bootstrap.py</text>
+  <path class="dash" d="M255 331 H 136 V 164 H 126"></path>
+  <path class="dash" d="M405 331 H 602 V 208"></path>
+  <text x="142" y="324" class="lbl">crea RagCli(...)</text>
+  <text x="470" y="326" class="lbl">crea los adaptadores</text>
+</svg>
+<figcaption>Figura. Las flechas sólidas son <strong>imports</strong> y siempre
+apuntan hacia dentro. Cada adaptador de salida importa <em>su</em> puerto para
+encajar en él. Las líneas discontinuas son el montaje de <code>bootstrap.py</code>,
+que ocurre una sola vez al arrancar.</figcaption>
+</figure>
+
+<h2 id="arq-flechas">3. Las dos flechas: quién llama y quién conoce</h2>
+
+<p>Aquí se confunde casi todo el mundo. Detrás de cada dibujo de arquitectura
+hay <strong>dos tipos de flecha</strong>:</p>
+
+<table>
+<tr><th>Flecha</th><th>Pregunta que responde</th><th>Dónde se ve</th></tr>
+<tr><td><strong>De dependencia</strong></td><td>¿Quién <em>conoce</em> a quién?</td>
+    <td>En los <code>import</code> del código</td></tr>
+<tr><td><strong>De llamada</strong></td><td>¿Quién <em>llama</em> a quién al ejecutar?</td>
+    <td>En lo que pasa cuando el programa funciona</td></tr>
+</table>
+
+<pre><code>AL EJECUTAR (llamadas, hacia fuera):
+  CLI  ──►  run_search  ──►  SQLite                 la cocina abre la nevera
+
+EN EL CÓDIGO (imports, hacia dentro):
+  CLI  ──►  run_search  ──►  IndexStore (puerto)  ◄──  SqliteIndexStore
+                       └──►  dominio  ◄──────────────────────┘</code></pre>
+
+<p><code>run_search</code> <strong>llama</strong> a SQLite, pero <strong>no
+lo conoce</strong>: solo conoce el puerto. <code>SqliteIndexStore</code> conoce
+el puerto (para encajar) y el dominio (para devolver sus datos). Que la llamada
+vaya hacia fuera y el import hacia dentro tiene nombre: <strong>inversión de
+dependencias</strong> (<em>dependency inversion</em>).</p>
+
+<div class="warn">
+<strong>Lo que estaba mal antes del #61:</strong>
+<code>retrieval.py</code> hacía <code>from ...sqlite_index import load_chunks</code>.
+El libro de recetas nombraba la marca de la nevera. Eso es arquitectura por
+capas, no hexagonal, y un evaluador que sepa del tema te lo podría señalar si la
+llamabas hexagonal.
+</div>
+
+<h2 id="arq-ejemplo">4. Un ejemplo completo: leer el corpus</h2>
+
+<p>Cuatro ficheros, cuatro papeles. Sigue <code>find_files</code> de uno a otro:</p>
+
+<h3>El puerto: la forma, sin código</h3>
+<pre><code># src/application/ports/corpus_reader.py
+class CorpusReader(Protocol):
+    def find_files(self, raw_directory: str) -&gt; list[Path]: ...
+    def read_text(self, path: Path) -&gt; str: ...
+    def read_source(self, source: MinimalSource) -&gt; str: ...</code></pre>
+
+<h3>El caso de uso: lo usa sin saber quién responde</h3>
+<pre><code># src/application/use_cases/index_corpus.py
+def run_index(raw_directory, max_chunk_size, index_path,
+              corpus: CorpusReader, index_store: IndexStore) -&gt; int:
+    ...
+    files = corpus.find_files(raw_directory)
+    for path in tqdm(files, desc="Indexing", unit="file"):
+        text = corpus.read_text(path)</code></pre>
+
+<h3>El adaptador de salida: la implementación real</h3>
+<pre><code># src/adapters/outbound/corpus.py
+class FileCorpus(CorpusReader):
+    def find_files(self, raw_directory: str) -&gt; list[Path]:
+        corpus_root = Path(raw_directory)
+        ...  # rglob, filtra .py/.md/.txt, ordena</code></pre>
+
+<h3>El montaje: quién va en ese enchufe</h3>
+<pre><code># src/bootstrap.py
+RagCli(index_store=SqliteIndexStore(), corpus=FileCorpus(),
+       datasets=JsonDatasetStore(), load_generator=load_generator)</code></pre>
+
+<div class="note">
+<strong>Los nombres no coinciden, y es a propósito.</strong> El puerto se llama
+por <em>lo que hace</em> (<code>CorpusReader</code>, «lector del corpus»). El
+adaptador se llama por <em>cómo lo hace</em> (<code>FileCorpus</code>, «corpus en
+ficheros»). Mañana podría haber un <code>CachedCorpus</code>, y también sería un
+<code>CorpusReader</code>.
+</div>
+
+<h2 id="arq-protocol">5. Los puertos son <code>Protocol</code></h2>
+
+<p>Un <strong><code>Protocol</code></strong> (de <code>typing</code>) describe una
+forma: qué métodos hay y con qué firma. Un objeto encaja si <strong>tiene esos
+métodos</strong>, herede o no del puerto. Esto se llama <strong>tipado
+estructural</strong> (<em>structural typing</em>): «si camina como un pato, es un
+pato», pero comprobado por mypy.</p>
+
+<ul>
+  <li><strong>En el caso de uso, el tipo del parámetro es siempre el
+      puerto</strong> (<code>corpus: CorpusReader</code>), nunca el adaptador. Si
+      pusieras <code>FileCorpus</code>, el caso de uso volvería a conocer la marca y
+      <code>test_architecture.py</code> fallaría.</li>
+  <li><strong>En el adaptador escribimos la herencia de forma explícita</strong>
+      (<code>class FileCorpus(CorpusReader)</code>). No hace falta para que
+      funcione, pero así ves el enlace al abrir el fichero, y mypy revisa la clase
+      entera aunque nadie la use todavía.</li>
+</ul>
+
+<h3>¿Basta con implementar uno de los métodos? No.</h3>
+<p>Prueba ejecutada con un puerto <code>Aparato</code> de tres métodos y clases
+que solo tienen uno:</p>
+<table>
+<tr><th>Caso</th><th>Python al ejecutar</th><th>mypy (<code>make lint</code>)</th></tr>
+<tr><td>Sin herencia, 1 de 3 métodos</td>
+    <td>Funciona hasta que llamas al que falta</td>
+    <td>❌ <code>"SoloEnciende" is missing following "Aparato" protocol members: apagar, limpiar</code></td></tr>
+<tr><td>Con herencia, 1 de 3 métodos</td>
+    <td><strong>Peor:</strong> el método que falta devuelve <code>None</code> en
+        silencio (heredó el <code>...</code> vacío)</td>
+    <td>❌ <code>Cannot instantiate abstract class "SoloApaga" with abstract attributes "encender" and "limpiar"</code></td></tr>
+</table>
+<p>Python solo no te protege: te protege <strong>mypy</strong>. Si dos aparatos
+solo hacen una cosa cada uno, eso son <strong>dos puertos</strong>, no uno a
+medias (<strong>segregación de interfaces</strong>).</p>
+
+<h2 id="arq-bootstrap">6. <code>bootstrap.py</code>: monta y se aparta</h2>
+
+<p>No es un gestor que esté en medio mientras el programa funciona.
+<strong>Actúa una vez, al arrancar</strong>, como el electricista que instala los
+aparatos antes de abrir el restaurante y se va.</p>
+
+<pre><code>uv run python -m src search "..." --k 5
+
+1. __main__.py        sys.exit(main())                         → bootstrap.main()
+2. bootstrap.main()   build_cli(): crea SqliteIndexStore(), FileCorpus(),
+                      JsonDatasetStore() y RagCli(...)           ← aquí se enchufa todo
+                      run(cli)                                   ← y se aparta
+3. run()              frontera de errores: try alrededor de Fire
+4. Fire               "search" → RagCli.search(query, k)
+5. RagCli.search      run_search(query, k, index_path, self._index_store)
+6. run_search         index_store.load_chunks(...)  → el SqliteIndexStore real</code></pre>
+
+<ul>
+  <li>Es el <strong>único</strong> fichero que escribe <code>SqliteIndexStore()</code>
+      o <code>FileCorpus()</code>. Cambiar un aparato es cambiar una línea aquí.</li>
+  <li><code>RagCli</code> guarda los adaptadores en atributos con <code>_</code>
+      (<code>self._corpus</code>...) para que Fire <strong>no</strong> los liste
+      como comandos.</li>
+  <li><strong>Con el bonus de la API</strong> habría una segunda función,
+      <code>build_api()</code>, que montaría los mismos adaptadores de salida con
+      otro adaptador de entrada. La página web del chat hablaría con esa API por la
+      red; <code>bootstrap</code> no la llama.</li>
+</ul>
+
+<h2 id="arq-donde">7. Dónde busco cada cosa</h2>
+
+<pre><code>src/
+  domain/                lógica pura: models, chunking, bm25, tokenizer, recall, prompt
+  application/
+    ports/               generator, index_store, corpus_reader, dataset_store
+    use_cases/           index_corpus, search, search_dataset, evaluate,
+                         answer, answer_dataset, retrieval
+  adapters/
+    inbound/             cli.py
+    outbound/            corpus, json_files, sqlite_index, qwen_generator
+  bootstrap.py
+tests/                   la misma estructura + test_architecture.py</code></pre>
+
+<table>
+<tr><th>Si me piden…</th><th>Voy a…</th></tr>
+<tr><td>Cambiar la fórmula o un parámetro de BM25</td><td><code>domain/bm25.py</code></td></tr>
+<tr><td>Cambiar cómo se trocea un fichero</td><td><code>domain/chunking.py</code></td></tr>
+<tr><td>Cambiar el texto del prompt o el presupuesto de fuentes</td><td><code>domain/prompt.py</code> y <code>PROMPT_BUDGET</code> en <code>use_cases/answer.py</code></td></tr>
+<tr><td>Añadir un campo a un modelo de datos</td><td><code>domain/models.py</code></td></tr>
+<tr><td>Cambiar qué hace un comando, paso a paso</td><td><code>application/use_cases/&lt;comando&gt;.py</code></td></tr>
+<tr><td>Cambiar el texto que imprime un comando o un valor por defecto</td><td><code>adapters/inbound/cli.py</code></td></tr>
+<tr><td>Cambiar un mensaje de error de un fichero</td><td>el adaptador de salida que lo lee (<code>json_files.py</code>, <code>sqlite_index.py</code>…)</td></tr>
+<tr><td>Cambiar <code>max_new_tokens</code> o el modelo</td><td><code>adapters/outbound/qwen_generator.py</code></td></tr>
+<tr><td>Cambiar SQLite por otra cosa</td><td>un adaptador nuevo que encaje en <code>IndexStore</code> + una línea en <code>bootstrap.py</code></td></tr>
+</table>
+
+<h2 id="arq-escuelas">8. DDD, hexagonal, cebolla y limpia</h2>
+
+<p>No son rivales: son <strong>la misma idea con distintos nombres</strong>.
+Todas cumplen la <strong>regla de dependencia</strong>: los imports apuntan
+hacia el dominio y el dominio no conoce ni SQLite ni la terminal.</p>
+
+<table>
+<tr><th>Año</th><th>Nombre</th><th>Autor</th><th>Su vocabulario</th></tr>
+<tr><td class="num">2003</td><td>Capas de <strong>DDD</strong> (<em>Domain-Driven Design</em>, «diseño guiado por el dominio»)</td><td>Eric Evans</td><td>UI, application, domain, <strong>infrastructure</strong></td></tr>
+<tr><td class="num">2005</td><td><strong>Hexagonal</strong> (<em>Ports and Adapters</em>)</td><td>Alistair Cockburn</td><td>núcleo, <strong>ports</strong>, <strong>adapters</strong> de entrada y de salida</td></tr>
+<tr><td class="num">2008</td><td><strong>Cebolla</strong> (<em>Onion</em>)</td><td>Jeffrey Palermo</td><td>domain, services, infrastructure</td></tr>
+<tr><td class="num">2012</td><td><strong>Limpia</strong> (<em>Clean Architecture</em>)</td><td>Robert C. Martin</td><td>entities, <strong>use cases</strong>, interface adapters, frameworks</td></tr>
+</table>
+
+<ul>
+  <li><strong>DDD no es sobre todo una arquitectura</strong>: es diseñar el
+      software alrededor del problema real. De paso propone cuatro capas, y de ahí
+      viene la palabra «infrastructure».</li>
+  <li>«Infrastructure» (DDD, limpia) y «adaptador de salida» (hexagonal) son
+      <strong>la misma pieza</strong> con distinto nombre. Elegimos la hexagonal
+      pura para no mezclar vocabularios: si la llamas hexagonal, que lo diga la
+      carpeta.</li>
+  <li><code>inbound</code> / <code>outbound</code> = de entrada / de salida
+      (<em>driving</em> / <em>driven</em> en los libros). No <code>in</code> /
+      <code>out</code>: <code>in</code> es <strong>palabra reservada</strong> de
+      Python y <code>from src.adapters.in.cli import …</code> da
+      <code>SyntaxError</code> (probado).</li>
+</ul>
+
+<h2 id="arq-guardia">9. El test que vigila la regla</h2>
+
+<p><code>tests/test_architecture.py</code> lee los <code>import</code> de cada
+fichero de <code>src/</code> con <code>ast</code> y falla si una capa importa lo
+que no debe:</p>
+<table>
+<tr><th>Capa</th><th>Nunca puede importar</th></tr>
+<tr><td><code>domain</code></td><td>application, adapters, bootstrap</td></tr>
+<tr><td><code>application</code></td><td>adapters, bootstrap</td></tr>
+<tr><td><code>adapters/inbound</code></td><td>adapters/outbound, bootstrap</td></tr>
+<tr><td><code>adapters/outbound</code></td><td>adapters/inbound, bootstrap</td></tr>
+</table>
+<p>Probado metiendo a mano un import prohibido en <code>search.py</code>: el test
+falló con <code>application/use_cases/search.py imports src.adapters…sqlite_index</code>.
+Si alguien rompe el hexágono, salta la alarma.</p>
+
+<div class="ok">
+<strong>Un regalo de los puertos en los tests:</strong> para comprobar que
+<code>search_dataset</code> carga el índice una sola vez ya no hace falta
+«parchear» nada. Se enchufa un <code>CountingStore</code> que cuenta las
+llamadas a <code>load_chunks</code>, y el test mira que sea 1.
+</div>
+
+<h2 id="arq-glosario">10. Glosario</h2>
+<table>
+<tr><th>Término</th><th>Una frase</th></tr>
+<tr><td><strong>Dominio</strong></td><td>El problema real y sus reglas: trocear, puntuar, medir el recall.</td></tr>
+<tr><td><strong>Caso de uso</strong></td><td>Una cosa completa que pide el usuario: indexar, buscar, responder…</td></tr>
+<tr><td><strong>Puerto</strong></td><td>La forma del enchufe que define la aplicación; en Python, un <code>Protocol</code>.</td></tr>
+<tr><td><strong>Adaptador de entrada</strong> (<em>inbound</em>)</td><td>Lo que llama al programa desde fuera: la CLI, la API HTTP.</td></tr>
+<tr><td><strong>Adaptador de salida</strong> (<em>outbound</em>)</td><td>Lo que el programa usa por un puerto: SQLite, ficheros, JSON, Qwen.</td></tr>
+<tr><td><strong>Inyección de dependencias</strong></td><td>Pasarle a una función sus aparatos desde fuera, en vez de que los busque ella.</td></tr>
+<tr><td><strong>Raíz de composición</strong></td><td><code>bootstrap.py</code>: el único sitio que elige y conecta las piezas concretas.</td></tr>
+<tr><td><strong>Regla de dependencia</strong></td><td>Los imports siempre apuntan hacia el dominio.</td></tr>
+<tr><td><strong>Inversión de dependencias</strong></td><td>La llamada va hacia fuera, el import hacia dentro, gracias al puerto.</td></tr>
+<tr><td><strong>Tipado estructural</strong></td><td>Encajas en un tipo por tener sus métodos, no por heredar de él.</td></tr>
+<tr><td><strong>Segregación de interfaces</strong></td><td>Puertos pequeños: nadie depende de métodos que no usa.</td></tr>
+</table>
+
+<h2 id="arq-defensa">11. Preguntas de defensa</h2>
+<ol>
+  <li>Dibuja el hexágono y nombra qué hay en cada capa.</li>
+  <li>¿Por qué <code>run_search</code> recibe <code>index_store</code> como
+      parámetro en vez de importar SQLite?</li>
+  <li>Explica las dos flechas: ¿quién llama a SQLite y quién conoce a quién?</li>
+  <li>¿Qué hace <code>bootstrap.py</code> y en qué momento actúa?</li>
+  <li>El parámetro de un caso de uso, ¿es del tipo del puerto o del adaptador? ¿Por qué?</li>
+  <li>¿Qué pasa si un adaptador implementa solo uno de los tres métodos de su puerto?</li>
+  <li>Si añadimos la API HTTP del bonus, ¿qué ficheros se crean y cuáles no se tocan?</li>
+  <li>¿Por qué no hay carpeta <code>infrastructure/</code>?</li>
+  <li>¿Cómo sabemos que nadie rompe la regla de dependencia sin darse cuenta?</li>
+</ol>
+
+</div>
+
+<div class="panel" id="panel-run" role="tabpanel" aria-labelledby="tab-run" hidden>
+
+<h1>Casos de uso y comandos: la guía de ejecución</h1>
+<p class="lead">Todos los comandos, del corpus en bruto a las respuestas: qué
+hacen, para qué sirven, qué miden y qué devuelven. Las cifras son medidas reales
+de este proyecto, con su fecha.</p>
+
+<nav>
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#run-mapa">El mapa: cuatro pasos en orden</a></li>
+    <li><a href="#run-index"><code>index</code></a></li>
+    <li><a href="#run-search"><code>search</code></a></li>
+    <li><a href="#run-search-dataset"><code>search_dataset</code></a></li>
+    <li><a href="#run-moulinette">La moulinette</a></li>
+    <li><a href="#run-evaluate"><code>evaluate</code></a></li>
+    <li><a href="#run-answer"><code>answer</code></a></li>
+    <li><a href="#run-answer-dataset"><code>answer_dataset</code></a></li>
+    <li><a href="#run-todo">Todo seguido, listo para copiar</a></li>
+    <li><a href="#run-make">Las reglas del <code>Makefile</code></a></li>
+    <li><a href="#run-glosario">Glosario</a></li>
+    <li><a href="#run-defensa">Preguntas de defensa</a></li>
+  </ol>
+</nav>
+
+<h2 id="run-mapa">1. El mapa: cuatro pasos en orden</h2>
+
+<p>Cada comando de la CLI es un <strong>caso de uso</strong>: un método de
+<code>RagCli</code> que llama a una función <code>run_…</code> de
+<code>src/application/use_cases/</code>. La CLI solo traduce argumentos e
+imprime; el trabajo está en el caso de uso.</p>
+
+<figure class="fig">
+<svg viewBox="0 0 660 214" role="img" aria-label="Flujo: corpus, index, index.db, search_dataset, resultados, moulinette o evaluate, recall; y answer_dataset, respuestas">
+  <text x="382" y="12" class="lbl">dataset_*.json (preguntas)</text>
+  <path class="arrow" d="M442 16 V 34"></path>
+  <path class="arrow" d="M438 28 l4 6 4 -6"></path>
+
+  <rect class="box" x="4" y="36" width="112" height="28" rx="4"></rect>
+  <text x="60" y="54" text-anchor="middle">data/raw/</text>
+  <path class="arrow" d="M116 50 H 146"></path>
+  <path class="arrow" d="M140 46 l6 4 -6 4"></path>
+  <rect class="soft" x="146" y="36" width="84" height="28" rx="4"></rect>
+  <rect class="thick" x="146" y="36" width="84" height="28" rx="4"></rect>
+  <text x="188" y="54" text-anchor="middle">1 index</text>
+  <path class="arrow" d="M230 50 H 260"></path>
+  <path class="arrow" d="M254 46 l6 4 -6 4"></path>
+  <rect class="box" x="260" y="36" width="100" height="28" rx="4"></rect>
+  <text x="310" y="54" text-anchor="middle">index.db</text>
+  <text x="310" y="80" text-anchor="middle" class="lbl">search · answer</text>
+  <text x="310" y="92" text-anchor="middle" class="lbl">(una sola pregunta)</text>
+  <path class="arrow" d="M360 50 H 382"></path>
+  <path class="arrow" d="M376 46 l6 4 -6 4"></path>
+  <rect class="soft" x="382" y="36" width="120" height="28" rx="4"></rect>
+  <rect class="thick" x="382" y="36" width="120" height="28" rx="4"></rect>
+  <text x="442" y="54" text-anchor="middle">2 search_dataset</text>
+  <path class="arrow" d="M502 50 H 528"></path>
+  <path class="arrow" d="M522 46 l6 4 -6 4"></path>
+  <rect class="box" x="528" y="36" width="128" height="28" rx="4"></rect>
+  <text x="592" y="54" text-anchor="middle">resultados .json</text>
+
+  <path class="arrow" d="M592 64 V 110"></path>
+  <path class="arrow" d="M588 104 l4 6 4 -6"></path>
+  <rect class="soft" x="500" y="110" width="144" height="28" rx="4"></rect>
+  <rect class="thick" x="500" y="110" width="144" height="28" rx="4"></rect>
+  <text x="572" y="128" text-anchor="middle">3 moulinette/evaluate</text>
+  <path class="arrow" d="M500 124 H 470"></path>
+  <path class="arrow" d="M476 120 l-6 4 6 4"></path>
+  <rect class="box" x="340" y="110" width="130" height="28" rx="4"></rect>
+  <text x="405" y="128" text-anchor="middle">Recall@1/3/5/10</text>
+
+  <path class="arrow" d="M652 64 V 194 H 506"></path>
+  <path class="arrow" d="M512 190 l-6 4 6 4"></path>
+  <rect class="soft" x="382" y="180" width="124" height="28" rx="4"></rect>
+  <rect class="thick" x="382" y="180" width="124" height="28" rx="4"></rect>
+  <text x="444" y="198" text-anchor="middle">4 answer_dataset</text>
+  <path class="arrow" d="M382 194 H 352"></path>
+  <path class="arrow" d="M358 190 l-6 4 6 4"></path>
+  <rect class="box" x="212" y="180" width="140" height="28" rx="4"></rect>
+  <text x="282" y="198" text-anchor="middle">respuestas .json</text>
+</svg>
+<figcaption>Figura. Los cuatro pasos del enunciado (VI.7.2), en el orden en que
+los ejecutan los scripts de examen. <code>search</code> y <code>answer</code> hacen
+lo mismo con una sola pregunta.</figcaption>
+</figure>
+
+<table>
+<tr><th>Comando</th><th>Caso de uso</th><th>Puertos que usa</th><th>Qué devuelve</th></tr>
+<tr><td><code>index</code></td><td><code>run_index</code></td><td><code>CorpusReader</code>, <code>IndexStore</code></td><td>escribe <code>data/processed/index.db</code></td></tr>
+<tr><td><code>search</code></td><td><code>run_search</code></td><td><code>IndexStore</code></td><td>imprime las <em>k</em> mejores fuentes</td></tr>
+<tr><td><code>search_dataset</code></td><td><code>run_search_dataset</code></td><td><code>IndexStore</code>, <code>DatasetStore</code></td><td>escribe un JSON <code>StudentSearchResults</code></td></tr>
+<tr><td><code>evaluate</code></td><td><code>run_evaluate</code></td><td><code>DatasetStore</code></td><td>imprime Recall@1/3/5/10 y MRR</td></tr>
+<tr><td><code>answer</code></td><td><code>run_answer</code></td><td><code>IndexStore</code>, <code>CorpusReader</code>, <code>Generator</code></td><td>imprime la respuesta</td></tr>
+<tr><td><code>answer_dataset</code></td><td><code>run_answer_dataset</code></td><td><code>DatasetStore</code>, <code>CorpusReader</code>, <code>Generator</code></td><td>escribe un JSON <code>StudentSearchResultsAndAnswer</code></td></tr>
+</table>
+
+<div class="note">
+<strong>Regla común a todos:</strong> si algo falla, sale <strong>una
+línea</strong> <code>ERROR: …</code> por stderr y el programa termina con
+<strong>código 1</strong>, nunca con un traceback. Lo garantiza
+<code>run()</code>, la frontera de errores de <code>cli.py</code>. Ctrl+C sale
+con 130.
+</div>
+
+<h2 id="run-index">2. <code>index</code>: preparar la biblioteca</h2>
+
+<pre><code>uv run python -m src index --max_chunk_size 2000</code></pre>
+<table>
+<tr><th>Flag</th><th>Por defecto</th><th>Qué es</th></tr>
+<tr><td><code>--max_chunk_size</code></td><td>2000</td><td>ancho máximo de un chunk, de 1 a 2000 caracteres</td></tr>
+<tr><td><code>--raw_directory</code></td><td><code>data/raw</code></td><td>carpeta del corpus</td></tr>
+<tr><td><code>--index_path</code></td><td><code>data/processed/index.db</code></td><td>dónde se guarda el índice</td></tr>
+</table>
+
+<p><strong>Para qué sirve:</strong> es el paso <em>indexing</em> del RAG. Como
+hacer las fichas de una biblioteca antes de abrirla: se hace una vez y todas las
+búsquedas lo aprovechan.</p>
+
+<p><strong>Qué hace, paso a paso</strong> (<code>run_index</code>):</p>
+<ol>
+  <li>Comprueba <code>max_chunk_size</code> <strong>antes</strong> de tocar nada,
+      así una llamada rechazada no estropea el índice que ya había.</li>
+  <li><code>corpus.find_files</code>: lista los <code>.py</code>, <code>.md</code> y
+      <code>.txt</code>, ordenados y con la ruta tal cual
+      (<code>data/raw/vllm-0.10.1/…</code>), porque el corrector compara
+      <code>file_path</code> letra a letra.</li>
+  <li>Por cada fichero (con barra de tqdm), <code>chunker_for</code> elige la
+      estrategia: <code>ast</code> para Python, títulos → párrafos → corte para
+      Markdown y texto.</li>
+  <li><code>index_store.save_chunks</code>: borra el fichero viejo y guarda todos
+      los chunks en una tabla SQLite, en una sola transacción.</li>
+</ol>
+
+<p><strong>Qué mide:</strong> el umbral de <strong>indexado ≤ 300 s</strong>.</p>
+<pre><code>Indexing: 100%|██████████| 1969/1969 [00:03&lt;00:00, 562.46file/s]
+Ingestion complete! Indices saved under data/processed/</code></pre>
+<table>
+<tr><th>Dato real</th><th>Valor</th></tr>
+<tr><td>Ficheros indexados</td><td class="num">1.969</td></tr>
+<tr><td>Chunks guardados (de 1.847 ficheros con texto)</td><td class="num">18.942</td></tr>
+<tr><td>Chunk más ancho</td><td class="num">2.000 caracteres</td></tr>
+<tr><td>Tamaño del índice</td><td class="num">25 MB</td></tr>
+<tr><td>Tiempo (2026-09-23 / 2026-10-19)</td><td class="num">3,65 s / 9,43 s, 81 MB de RAM</td></tr>
+</table>
+<p class="lead">El mismo código tarda distinto según la carga de la máquina; los
+dos tiempos están a más de 30 veces del límite.</p>
+
+<p><strong>Errores reales:</strong></p>
+<pre><code>index --max_chunk_size 5000   → ERROR: max_chunk_size must be an integer between 1 and 2000
+index --raw_directory /nope    → ERROR: corpus folder not found: /nope</code></pre>
+
+<h2 id="run-search">3. <code>search</code>: buscar una pregunta</h2>
+
+<pre><code>uv run python -m src search "How to configure OpenAI server?" --k 3</code></pre>
+<p>Flags: <code>query</code> (posicional), <code>--k</code> (10 por defecto),
+<code>--index_path</code>.</p>
+
+<p><strong>Para qué sirve:</strong> el paso <em>retrieving</em> con una sola
+pregunta. Es la herramienta para depurar a mano: ver qué fuentes saca BM25 y con
+qué puntuación.</p>
+
+<p><strong>Qué hace</strong> (<code>run_search</code>):</p>
+<ol>
+  <li><code>validate_query_and_k</code>: query no vacía, <code>k</code> entero
+      positivo. Va antes de cargar nada, porque cargar cuesta.</li>
+  <li><code>load_index</code>: lee los chunks del puerto y construye en memoria el
+      índice invertido de BM25.</li>
+  <li><code>search_index</code>: tokeniza la pregunta, <code>rank</code> puntúa
+      con BM25 (<code>k1</code> = 1,2, <code>b</code> = 0,75) y devuelve las
+      <em>k</em> mejores fuentes.</li>
+</ol>
+
+<p><strong>Qué devuelve</strong> (salida real): posición, puntuación BM25,
+<code>file_path</code> y el rango de caracteres <code>[inicio:fin]</code>, fin
+excluido.</p>
+<pre><code>1.  17.53  data/raw/vllm-0.10.1/docs/deployment/frameworks/dstack.md  [1936:3170]
+2.  17.07  data/raw/vllm-0.10.1/examples/online_serving/openai_chat_completion_with_reasoning.py  [0:677]
+3.  16.28  data/raw/vllm-0.10.1/examples/online_serving/openai_transcription_client.py  [0:713]</code></pre>
+
+<table>
+<tr><th>Dato real (2026-10-19)</th><th>Valor</th></tr>
+<tr><td>Tiempo total de una consulta</td><td class="num">4,5-5,2 s, 124 MB</td></tr>
+<tr><td>… de ello, construir el índice en memoria</td><td class="num">4,62 s</td></tr>
+<tr><td>… y buscar de verdad</td><td class="num">0,03 s</td></tr>
+</table>
+<div class="note">
+<strong>Por eso existe <code>search_dataset</code>:</strong> casi todo el tiempo
+es <em>preparar</em> el índice, no buscar. Con 200 preguntas se prepara una vez
+y se busca 200 veces.
+</div>
+
+<pre><code>search "" --k 5                → ERROR: query must not be empty
+search "lora" --k 0            → ERROR: k must be a positive integer
+search "lora" --index_path x   → ERROR: index not found: x; run index first
+search "asdfghjkl qwertyuiop"  → No sources found.   (salida 0: no es un error)</code></pre>
+
+<h2 id="run-search-dataset">4. <code>search_dataset</code>: buscar un dataset entero</h2>
+
+<pre><code>uv run python -m src search_dataset \
+    --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json \
+    --k 10 \
+    --save_directory data/output/search_results/UnansweredQuestions</code></pre>
+<p>Flags: <code>--dataset_path</code>, <code>--k</code> (10),
+<code>--save_directory</code> (<code>data/output/search_results</code>),
+<code>--index_path</code>.</p>
+
+<p><strong>Para qué sirve:</strong> es el paso 2 de los scripts de examen.
+Produce el fichero que la moulinette puntúa.</p>
+
+<p><strong>Qué hace</strong> (<code>run_search_dataset</code>):</p>
+<ol>
+  <li>Comprueba <code>k</code>, lee el dataset con
+      <code>datasets.load_dataset</code> (pydantic lo valida) y carga el índice
+      <strong>una sola vez</strong>.</li>
+  <li>Por cada pregunta (barra «Searching»), <code>search_index</code> y guarda un
+      <code>MinimalSearchResults</code>.</li>
+  <li>Escribe <code>&lt;save_directory&gt;/&lt;mismo nombre que el dataset&gt;</code>
+      con <code>datasets.write_results</code>.</li>
+</ol>
+<div class="warn">
+Usa siempre una carpeta por tipo de dataset (<code>…/UnansweredQuestions</code>):
+docs y code públicos se llaman igual en las dos carpetas y se pisarían.
+</div>
+
+<p><strong>Qué mide:</strong> el umbral de <strong>200 preguntas ≤ 90 s</strong>.</p>
+<pre><code>Saved student_search_results to data/output/search_results/UnansweredQuestions/dataset_docs_public.json</code></pre>
+<table>
+<tr><th>Dato real (2026-10-19, <code>--k 10</code>)</th><th>Valor</th></tr>
+<tr><td>docs, 100 preguntas</td><td class="num">11,57 s</td></tr>
+<tr><td>code, 99 preguntas</td><td class="num">10,99 s</td></tr>
+<tr><td>Total 199 preguntas</td><td class="num"><strong>22,6 s</strong> (límite 90 s), 126 MB</td></tr>
+<tr><td>Si se recargara el índice en cada pregunta (medido en el slice #25)</td><td class="num">184 s: suspenso</td></tr>
+</table>
+<p><strong>Qué devuelve:</strong> un JSON <code>StudentSearchResults</code>:
+<code>search_results</code> (id, pregunta y <code>retrieved_sources</code> de
+cada pregunta) y <code>k</code>.</p>
+<pre><code>--dataset_path /nope.json      → ERROR: dataset not found: /nope.json
+--dataset_path roto.json       → ERROR: dataset is not valid JSON: roto.json</code></pre>
+
+<h2 id="run-moulinette">5. La moulinette: la nota oficial</h2>
+
+<pre><code>./moulinette evaluate_student_search_results \
+    data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+    data/datasets/AnsweredQuestions/dataset_docs_public.json \
+    --k 10 --max_context_length 2000</code></pre>
+
+<p><strong>Para qué sirve:</strong> es el paso 3 y <strong>la que cuenta en la
+defensa</strong>. Es un ejecutable que nos dan (se renombra
+<code>moulinette-ubuntu</code> a <code>moulinette</code>). Primero van nuestros
+resultados y después el dataset con las respuestas
+(<code>AnsweredQuestions</code>).</p>
+
+<p><strong>Qué evalúa:</strong></p>
+<ol>
+  <li><strong>Que el fichero sea válido:</strong> el formato y que
+      <strong>ninguna fuente pase de 2000 caracteres</strong>. Una sola fuente
+      demasiado larga invalida toda la salida.</li>
+  <li><strong>El recall@k</strong> con k = 1, 3, 5 y 10. Una fuente cuenta como
+      acertada si está en el <strong>mismo fichero</strong> y su rango se solapa
+      con el correcto con un <strong>IoU ≥ 0,05</strong>.</li>
+</ol>
+<p><strong>Qué devuelve</strong> (formato del enunciado):</p>
+<pre><code>Student data is valid: True
+Evaluation Results
+========================================
+Recall@1: … Recall@3: … Recall@5: … Recall@10: …</code></pre>
+<p><strong>Umbrales:</strong> docs Recall@5 ≥ 0,80, code Recall@5 ≥ 0,50.</p>
+
+<div class="warn">
+<strong>Nuestro código nunca importa ni ejecuta la moulinette</strong> (lo
+prohíbe el enunciado). La ejecutamos a mano desde la terminal. Para
+iterar tenemos nuestro propio <code>evaluate</code>.
+</div>
+
+<h2 id="run-evaluate">6. <code>evaluate</code>: nuestra propia regla de medir</h2>
+
+<pre><code>uv run python -m src evaluate \
+    --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+    --dataset_path data/datasets/AnsweredQuestions/dataset_docs_public.json</code></pre>
+
+<p><strong>Para qué sirve:</strong> medir el recall mientras desarrollamos, sin
+depender de la moulinette. El 2026-10-08 comprobamos que da <strong>las mismas
+cifras</strong> que ella.</p>
+
+<p><strong>Qué hace</strong> (<code>run_evaluate</code>): lee los dos ficheros
+con <code>DatasetStore</code>, empareja las preguntas por
+<code>question_id</code> y calcula con el dominio (<code>recall.py</code>):</p>
+<ul>
+  <li><strong>Recall@k</strong> = de las fuentes correctas de cada pregunta, qué
+      parte aparece entre nuestras <em>k</em> primeras; luego, la media de todas
+      las preguntas. Una pregunta que falte en los resultados cuenta 0.</li>
+  <li><strong>MRR</strong> (<em>Mean Reciprocal Rank</em>) = la media de 1 /
+      posición del primer acierto. Mide si el acierto sale arriba o abajo.</li>
+</ul>
+
+<p><strong>Qué devuelve</strong> (salida real, 2026-10-19):</p>
+<pre><code># docs
+Recall@1: 0.610 Recall@3: 0.810 Recall@5: 0.830 Recall@10: 0.860
+MRR: 0.704
+# code
+Recall@1: 0.354 Recall@3: 0.566 Recall@5: 0.636 Recall@10: 0.697
+MRR: 0.480</code></pre>
+<table>
+<tr><th>Dataset</th><th>Recall@5</th><th>Umbral</th><th>Margen</th></tr>
+<tr><td>docs</td><td class="num"><strong>0,830</strong></td><td class="num">0,80</td><td>3 preguntas</td></tr>
+<tr><td>code</td><td class="num"><strong>0,636</strong></td><td class="num">0,50</td><td>14 preguntas</td></tr>
+</table>
+<pre><code>con el dataset Unanswered en vez de Answered
+  → ERROR: dataset has no reference sources: …/UnansweredQuestions/dataset_docs_public.json</code></pre>
+
+<h2 id="run-answer">7. <code>answer</code>: responder una pregunta con Qwen</h2>
+
+<pre><code>uv run python -m src answer "How do I dynamically load a LoRA adapter in vLLM?" --k 10</code></pre>
+<p>Flags: <code>query</code>, <code>--k</code> (10), <code>--index_path</code>.</p>
+
+<p><strong>Para qué sirve:</strong> el RAG completo con una sola pregunta:
+<em>retrieving</em> + <em>augmenting</em> + <em>generating</em>.</p>
+
+<p><strong>Qué hace</strong> (<code>run_answer</code>):</p>
+<ol>
+  <li>Valida la query y <code>k</code>, carga el índice y busca, igual que
+      <code>search</code>.</li>
+  <li>Si no hay fuentes, devuelve el mensaje fijo <strong>sin encender el
+      modelo</strong>: <code>No sources found, so the question cannot be
+      answered.</code></li>
+  <li>Si hay fuentes, llama a <code>load_generator()</code>, que carga Qwen3-0.6B
+      en CPU (float32). Por eso recibe el <em>cargador</em> y no el modelo: decide
+      él si vale la pena pagarlo.</li>
+  <li><code>answer_from_sources</code>: <code>corpus.read_source</code> lee el texto
+      de cada fuente, <code>build_prompt</code> mete las que caben en
+      <strong>2000 tokens</strong> (contados con el tokenizador de Qwen) y
+      <code>generator.generate</code> responde: sin «pensar», sin azar
+      (<em>greedy</em>), con un máximo de 256 tokens nuevos.</li>
+</ol>
+
+<table>
+<tr><th>Dato real (2026-10-15)</th><th>Valor</th></tr>
+<tr><td>Respuesta con fuentes</td><td class="num">24,3 s, 4,9 GB de RAM máxima</td></tr>
+<tr><td>Pregunta sin fuentes (no carga el modelo)</td><td class="num">1,7 s</td></tr>
+<tr><td>Query vacía o <code>k=0</code></td><td class="num">0,22 s</td></tr>
+</table>
+<p>Respondió con el endpoint <code>load_lora_adapter</code>. Sin RAG, el mismo
+modelo se inventaba cosas (<code>vllm.from_pretrained</code>); con RAG, si la
+respuesta no está en las fuentes, lo dice.</p>
+<div class="warn">
+<strong>Límite conocido:</strong> si una fuente contiene su propia línea
+<code>Question: …</code>, el modelo se puede confundir (caso «John Doe», de
+<code>automatic_prefix_caching.py</code>). Lo ataca el issue #62: reglas en el
+mensaje <code>system</code> y fuentes entre etiquetas.
+</div>
+
+<h2 id="run-answer-dataset">8. <code>answer_dataset</code>: responder un fichero entero</h2>
+
+<pre><code>uv run python -m src answer_dataset \
+    --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+    --save_directory data/output/search_results_and_answer/UnansweredQuestions</code></pre>
+<p>Flags: <code>--student_search_results_path</code>, <code>--save_directory</code>
+(<code>data/output/search_results_and_answer</code>).</p>
+
+<p><strong>Para qué sirve:</strong> el paso 4. Toma la salida de
+<code>search_dataset</code> y añade una respuesta a cada pregunta.</p>
+
+<p><strong>Qué hace</strong> (<code>run_answer_dataset</code>):</p>
+<ol>
+  <li>Lee los resultados con <code>datasets.load_search_results</code>. Si el
+      fichero falta o está roto, falla <strong>antes</strong> de cargar el
+      modelo.</li>
+  <li><strong>Carga Qwen una sola vez</strong> para todo el fichero.</li>
+  <li>Por cada pregunta (barra «Answering»): si tiene fuentes,
+      <code>answer_from_sources</code> con <strong>esas</strong> fuentes (no vuelve
+      a buscar); si no tiene, el mensaje fijo sin llamar al modelo.</li>
+  <li>Escribe un <code>StudentSearchResultsAndAnswer</code> con el mismo nombre
+      que el fichero de entrada.</li>
+</ol>
+
+<table>
+<tr><th>Dato real (2026-10-16)</th><th>Valor</th></tr>
+<tr><td>docs, 100 preguntas</td><td class="num">33 min 42 s (20,2 s por pregunta)</td></tr>
+<tr><td>code, 99 preguntas</td><td class="num">22 min 23 s (13,6 s por pregunta)</td></tr>
+<tr><td>RAM máxima</td><td class="num">4,9 GB</td></tr>
+<tr><td>Respuestas vacías / «no está en las fuentes»</td><td class="num">0 / 1 por dataset</td></tr>
+</table>
+<p>docs tarda más porque sus fuentes son texto largo: el prompt se llena más y
+el modelo tiene más que leer. El enunciado no pone límite de tiempo aquí.</p>
+<p><strong>Qué devuelve</strong> (una entrada real del fichero de code):</p>
+<pre><code>"question": "What's the default value of min_stats_update_interval_ms in DPCoordinatorProc's __init__ method?",
+"retrieved_sources": [ {"file_path": "data/raw/vllm-0.10.1/vllm/v1/engine/coordinator.py", …}, … ],
+"answer": "The default value of min_stats_update_interval_ms in DPCoordinatorProc's __init__ method is 100."</code></pre>
+<p><strong>Qué evalúa:</strong> no hay número automático (la moulinette todavía no
+puntúa respuestas). El enunciado pide que al menos <strong>2 de cada 3</strong>
+respuestas sean satisfactorias, a juicio del evaluador. En la muestra de 6
+preguntas salieron 3 bien, 2 a medias y 1 mal (<code>max_position_embeddings</code>:
+128000 frente a 4096).</p>
+<pre><code>--student_search_results_path /nope.json  → ERROR: search results not found: /nope.json</code></pre>
+
+<h2 id="run-todo">9. Todo seguido, listo para copiar</h2>
+<pre><code>uv sync
+uv run python -m src index --max_chunk_size 2000
+
+uv run python -m src search_dataset \
+    --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json \
+    --k 10 --save_directory data/output/search_results/UnansweredQuestions
+
+./moulinette evaluate_student_search_results \
+    data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+    data/datasets/AnsweredQuestions/dataset_docs_public.json \
+    --k 10 --max_context_length 2000
+
+uv run python -m src evaluate \
+    --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+    --dataset_path data/datasets/AnsweredQuestions/dataset_docs_public.json
+
+uv run python -m src answer_dataset \
+    --student_search_results_path data/output/search_results/UnansweredQuestions/dataset_docs_public.json \
+    --save_directory data/output/search_results_and_answer/UnansweredQuestions</code></pre>
+<p>Para code, cambia <code>docs</code> por <code>code</code> en las rutas.</p>
+
+<h2 id="run-make">10. Las reglas del <code>Makefile</code></h2>
+<table>
+<tr><th>Regla</th><th>Qué ejecuta</th><th>Para qué</th></tr>
+<tr><td><code>make install</code></td><td><code>uv sync</code></td><td>instalar las dependencias</td></tr>
+<tr><td><code>make run ARGS="search 'What is vLLM?' --k 5"</code></td><td><code>uv run python -m src $(ARGS)</code></td><td>cualquier comando de la CLI</td></tr>
+<tr><td><code>make debug ARGS="…"</code></td><td>lo mismo bajo <code>pdb</code></td><td>depurar paso a paso</td></tr>
+<tr><td><code>make lint</code></td><td><code>flake8 .</code> + <code>mypy .</code> con los flags del enunciado</td><td>estilo y tipos (gate)</td></tr>
+<tr><td><code>make test</code></td><td><code>pytest</code></td><td>todos los tests (gate)</td></tr>
+<tr><td><code>make clean</code></td><td>borra <code>__pycache__</code> y cachés</td><td>dejar el árbol limpio</td></tr>
+</table>
+
+<h2 id="run-glosario">11. Glosario</h2>
+<table>
+<tr><th>Término</th><th>Una frase</th></tr>
+<tr><td><strong>Chunk</strong></td><td>Un trozo de fichero (máximo 2000 caracteres) que se indexa y se devuelve como fuente.</td></tr>
+<tr><td><strong>Fuente</strong> (<code>MinimalSource</code>)</td><td><code>file_path</code> + rango de caracteres: dónde está el trozo.</td></tr>
+<tr><td><strong>Recall@k</strong></td><td>Qué parte de las fuentes correctas aparece entre nuestras <em>k</em> primeras.</td></tr>
+<tr><td><strong>IoU</strong></td><td>Intersección entre unión de dos rangos; con ≥ 0,05 cuenta como acierto.</td></tr>
+<tr><td><strong>MRR</strong></td><td>Media de 1 / posición del primer acierto: premia acertar arriba.</td></tr>
+<tr><td><strong>Moulinette</strong></td><td>El ejecutable oficial que valida y puntúa; nuestro código nunca lo llama.</td></tr>
+<tr><td><strong>Greedy</strong></td><td>El modelo elige siempre el token más probable: misma pregunta, misma respuesta.</td></tr>
+<tr><td><strong>Presupuesto del prompt</strong></td><td>2000 tokens como máximo; entran las mejores fuentes hasta llenarlo.</td></tr>
+<tr><td><strong>Frontera de errores</strong></td><td><code>run()</code> en la CLI: convierte cualquier excepción en <code>ERROR: …</code> y salida 1.</td></tr>
+</table>
+
+<h2 id="run-defensa">12. Preguntas de defensa</h2>
+<ol>
+  <li>Di los cuatro pasos del pipeline de examen en orden y qué fichero deja cada uno.</li>
+  <li>¿Por qué <code>search</code> tarda 5 s con una pregunta y
+      <code>search_dataset</code> solo 11 s con 100?</li>
+  <li>¿Qué comprueba la moulinette antes de calcular el recall? ¿Qué pasa con una
+      fuente de 2001 caracteres?</li>
+  <li>¿En qué se diferencian <code>evaluate</code> y la moulinette, y por qué no
+      podemos llamar a la moulinette desde el código?</li>
+  <li>¿Cuándo <strong>no</strong> se carga Qwen en <code>answer</code> y en
+      <code>answer_dataset</code>? ¿Por qué importa?</li>
+  <li>¿Por qué <code>answer_dataset</code> no vuelve a buscar las fuentes?</li>
+  <li>¿Por qué hay que separar <code>--save_directory</code> por
+      <code>UnansweredQuestions</code>?</li>
+  <li>Explica Recall@5 = 0,830 en docs con tus palabras: ¿qué significa ese número?</li>
+</ol>
+
+</div>
+
 <script>
-  var TABS = ["db", "lex", "pipe"];
+  var TABS = ["db", "lex", "pipe", "arq", "run"];
 
   function showTab(name, keepHash) {
     TABS.forEach(function (one) {
