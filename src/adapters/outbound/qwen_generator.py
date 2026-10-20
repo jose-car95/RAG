@@ -4,6 +4,8 @@ import os
 from typing import Any
 
 from src.application.ports.generator import Generator
+from src.domain.prompt import Prompt
+
 
 MODEL_NAME: str = "Qwen/Qwen3-0.6B"
 # Real answers take 35-43 tokens (measured in #54): the cap only stops a
@@ -45,18 +47,22 @@ class QwenGenerator(Generator):
         """
         return len(self.tokenizer(text)["input_ids"])
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: Prompt) -> str:
         """Answer a prompt greedily and return only the new text.
 
         Args:
-            prompt: The full prompt, sources included.
+            prompt: The rules, sent as the system message, and the sources
+                plus the question, sent as the user message.
 
         Returns:
             The model's answer, without the prompt around it.
         """
         # Thinking off: on a CPU every hidden reasoning token costs time.
         chat = self.tokenizer.apply_chat_template(
-            [{"role": "user", "content": prompt}],
+            [
+                {"role": "system", "content": prompt.system},
+                {"role": "user", "content": prompt.user}
+            ],
             tokenize=False,
             add_generation_prompt=True,
             enable_thinking=False

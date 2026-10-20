@@ -127,7 +127,9 @@ def test_question_without_sources_is_not_sent_to_the_model(
         output_path.read_text(encoding="utf-8")
     )
     assert written.search_results[2].answer == NO_SOURCES_ANSWER
-    assert all("asdfghjkl" not in p for p in loader.generator.prompts)
+    assert all(
+        "asdfghjkl" not in p.user for p in loader.generator.prompts
+    )
 
 
 def test_missing_file_is_reported_without_the_model(tmp_path: Path) -> None:

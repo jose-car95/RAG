@@ -132,6 +132,15 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **Verificado (2026-10-19, issue #62, prompt por roles):** `make lint` OK,
+  `make test` 237 passed. Con el modelo real, 6 preguntas con las mismas
+  fuentes de la ejecución completa y el caso John Doe, en 119,6 s y 4,9 GB:
+  Neuron mejora (antes 3 pasos genéricos, ahora el comando exacto con
+  `VLLM_TARGET_DEVICE="neuron"`); reproducibilidad describe la variable de
+  V1 en vez de nombrarla; `max_position_embeddings` sigue en 128000 (la
+  referencia dice 4096); el resto, igual. John Doe: ya no confunde la
+  pregunta de la fuente, pero responde «The name of the model is vLLM.» en
+  vez de negarse. 13,9-18,8 s por respuesta, como antes.
 - **M6 abierto (2026-10-19):** issues #61-#68. #61 cerrado (PR #69,
   arquitectura hexagonal pura); en curso #66 (pestañas «Arquitectura» y
   «Casos de uso y comandos»). Orden: #61 → #62 prompt por roles → #63 Python 3.10 →

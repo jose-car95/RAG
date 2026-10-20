@@ -2286,8 +2286,11 @@ respuesta no está en las fuentes, lo dice.</p>
 <div class="warn">
 <strong>Límite conocido:</strong> si una fuente contiene su propia línea
 <code>Question: …</code>, el modelo se puede confundir (caso «John Doe», de
-<code>automatic_prefix_caching.py</code>). Lo ataca el issue #62: reglas en el
-mensaje <code>system</code> y fuentes entre etiquetas.
+<code>automatic_prefix_caching.py</code>). El issue #62 puso las reglas en el
+mensaje <code>system</code> y cada fuente entre etiquetas <code>&lt;source&gt;</code>.
+Medido: con <code>"What is your name?"</code> ya no habla de la edad de John Doe;
+ahora contesta <code>The name of the model is vLLM.</code>, que no se inventa a
+John Doe pero tampoco se niega como debería.
 </div>
 
 <h2 id="run-answer-dataset">8. <code>answer_dataset</code>: responder un fichero entero</h2>
