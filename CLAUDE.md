@@ -169,11 +169,12 @@ uno en uno, cuando llega su slice, nunca todos de golpe:
 - **Interpretaciones de zonas grises:** `docs/SPEC_NOTES.md`.
 - **Material de estudio de Jose:** `docs/conceptos/index.html`, **un único
   fichero HTML autocontenido** (sin red, sin dependencias) con una **pestaña por
-  bloque de conceptos**: «Bases de datos» (M2), «Búsqueda léxica y BM25» (M3) y
-  «El pipeline de búsqueda» (M3). En español, con diagramas SVG en línea,
+  bloque de conceptos**: «Bases de datos» (M2), «Búsqueda léxica y BM25» (M3),
+  «El pipeline de búsqueda» (M3), «Arquitectura» y «Casos de uso y comandos»
+  (M6, guía de ejecución de todos los comandos). En español, con diagramas SVG en línea,
   glosario y preguntas de defensa en cada pestaña. Al añadir un bloque se añade
   una pestaña, no un fichero nuevo, y sus identificadores llevan prefijo
-  (`db-`, `lex-`, `pipe-`) para que no choquen. Mantenerlo al día cuando una
+  (`db-`, `lex-`, `pipe-`, `arq-`, `run-`) para que no choquen. Mantenerlo al día cuando una
   decisión lo contradiga, y anclar los ejemplos a datos reales del proyecto.
 
 ## Reglas de producto no negociables
