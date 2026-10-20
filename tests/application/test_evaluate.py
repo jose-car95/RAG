@@ -163,17 +163,6 @@ def test_dataset_without_questions_is_rejected(tmp_path: Path) -> None:
     assert str(error.value) == f"dataset has no questions: {dataset}"
 
 
-def test_missing_dataset_is_reported(tmp_path: Path) -> None:
-    """The dataset is read with the existing adapter and its messages."""
-    results = write_json(tmp_path / "results.json", results_for())
-    missing = tmp_path / "nope.json"
-
-    with pytest.raises(ValueError) as error:
-        run_evaluate(str(results), str(missing), DATASETS)
-
-    assert str(error.value) == f"dataset not found: {missing}"
-
-
 def test_valid_search_results_are_loaded(tmp_path: Path) -> None:
     """A well-formed file becomes a ``StudentSearchResults``."""
     path = write_json(

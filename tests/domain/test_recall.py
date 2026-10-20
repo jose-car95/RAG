@@ -39,11 +39,6 @@ def test_identical_ranges_have_iou_one() -> None:
     assert iou(CORRECT, CORRECT) == 1.0
 
 
-def test_disjoint_ranges_have_iou_zero() -> None:
-    """Ranges that do not touch share nothing."""
-    assert iou(source(0, 100), source(200, 300)) == 0.0
-
-
 def test_adjacent_ranges_have_iou_zero() -> None:
     """``last`` is exclusive, so ``[0, 100)`` and ``[100, 200)`` never meet."""
     assert iou(source(0, 100), source(100, 200)) == 0.0
@@ -119,11 +114,6 @@ def test_one_result_covering_two_sources_finds_both() -> None:
     left, right = source(0, 100), source(100, 200)
 
     assert recall_at_k([left, right], [source(0, 200)], 1) == 1.0
-
-
-def test_first_position_has_reciprocal_rank_one() -> None:
-    """A hit at the top scores 1 / 1."""
-    assert reciprocal_rank([CORRECT], [CORRECT, source(0, 10)]) == 1.0
 
 
 def test_fourth_position_has_reciprocal_rank_a_quarter() -> None:

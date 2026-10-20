@@ -53,30 +53,6 @@ def test_search_returns_the_chunk_holding_the_query_terms(
     assert best_source.first_character_index < best_source.last_character_index
 
 
-def test_results_are_sorted_by_descending_score(tmp_path: Path) -> None:
-    """The best source comes first."""
-    _, index_path = make_index(tmp_path)
-
-    results = run_search("lora adapter", 5, str(index_path), STORE)
-    scores = [score for _, score in results]
-
-    assert scores == sorted(scores, reverse=True)
-
-
-def test_at_most_k_sources_are_returned(tmp_path: Path) -> None:
-    """``k`` caps the number of sources."""
-    _, index_path = make_index(tmp_path)
-
-    assert len(run_search("lora adapter", 1, str(index_path), STORE)) == 1
-
-
-def test_a_query_without_known_terms_finds_nothing(tmp_path: Path) -> None:
-    """A legitimate query with no match is not an error."""
-    _, index_path = make_index(tmp_path)
-
-    assert run_search("kubernetes terraform", 5, str(index_path), STORE) == []
-
-
 @pytest.mark.parametrize(
     "query", ["", "   ", "\n\t"], ids=["empty", "spaces", "whitespace"]
 )

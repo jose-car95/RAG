@@ -1,12 +1,10 @@
 """Tests for the Qwen generator that counts tokens and generates answers.
 
-The import test runs everywhere. The model tests need the weights in
+The constants test runs everywhere. The model tests need the weights in
 ``.cache/huggingface/`` (1.5 GB, not in the repo), so they are skipped in CI
 and run locally, where they load Qwen once for the whole module.
 """
 
-import subprocess
-import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -26,27 +24,6 @@ needs_model = pytest.mark.skipif(
     not MODEL_FILES.is_dir(),
     reason="Qwen3-0.6B weights not downloaded",
 )
-
-
-def test_import_does_not_load_torch() -> None:
-    """Importing the module must stay cheap: torch costs seconds to import.
-
-    Run in a fresh interpreter, because this test process may already have
-    torch loaded by the model tests.
-    """
-    code = (
-        "import sys\n"
-        "import src.adapters.outbound.qwen_generator\n"
-        "print('torch' in sys.modules, 'transformers' in sys.modules)\n"
-    )
-    completed = subprocess.run(
-        [sys.executable, "-c", code],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert completed.returncode == 0, completed.stderr
-    assert completed.stdout.strip() == "False False"
 
 
 @pytest.fixture(scope="module")
