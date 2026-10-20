@@ -10,7 +10,7 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | Ítem | Evidencia requerida | Evidencia planeada | Estado |
 |---|---|---|---|
 | Python 3.10+, uv, `pyproject.toml` + `uv.lock` en la raíz | `uv sync` limpio desde la raíz | `uv sync` en un clon limpio; job de CI `uv sync --locked` | IN_PROGRESS |
-| Makefile: install, run, debug, clean, lint | Cada regla ejecuta | `make <regla>` con salida pegada | IN_PROGRESS |
+| Makefile: install, run, debug, clean, lint | Cada regla ejecuta | Reglas del enunciado más `lint-strict`, `test`, `test-all` y un atajo por comando con variables cambiables; todas ejecutadas el 2026-10-20 (issue #73, salida en `docs/PROGRESS.md`) | EVIDENCED |
 | flake8 + mypy con los flags del enunciado | `make lint` sin errores | CI `lint` y `types` en verde | IN_PROGRESS |
 | Los 8 modelos pydantic | Modelos + validación de los datasets públicos | `src/domain/models.py` + `tests/domain/test_models.py` (11 tests: datasets públicos, UUID, campos extra, rangos, JSON de salida), slice #3 | EVIDENCED |
 | CLI con Python Fire y los seis comandos | `uv run python -m src --help` lista los comandos | `tests/adapters/inbound/test_cli.py` (7 tests, slice #1) | EVIDENCED |

@@ -17,6 +17,7 @@ dev = [
     "flake8>=7,<8",
     "mypy>=1.11",
     "pytest>=8",
+    "types-tqdm>=4.70.0.20260906",
 ]
 
 [tool.uv]
@@ -46,3 +47,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+markers = [
+    "slow: loads the real Qwen model; skipped by make test, run by make test-all",
+]

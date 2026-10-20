@@ -36,6 +36,7 @@ def generator() -> Iterator[QwenGenerator]:
     yield load_generator()
 
 
+@pytest.mark.slow
 @needs_model
 def test_count_tokens_uses_the_qwen_tokenizer(
     generator: QwenGenerator,
@@ -44,6 +45,7 @@ def test_count_tokens_uses_the_qwen_tokenizer(
     assert generator.count_tokens("Hello world") == 2
 
 
+@pytest.mark.slow
 @needs_model
 def test_generate_returns_only_the_new_text(generator: QwenGenerator) -> None:
     """The answer holds no prompt and no thinking tags, just the reply.
