@@ -279,11 +279,42 @@ def test_a_missing_index_is_reported(tmp_path: Path) -> None:
     assert not index_path.exists()
 
 
-def test_unwritable_save_directory_is_reported(tmp_path: Path) -> None:
-    """A save directory that is really a file ends in a clear error."""
+@pytest.mark.parametrize(
+    ("name", "exists"),
+    [("out.json", False), ("a_file", True)],
+    ids=["file_suffix", "existing_file"],
+)
+def test_a_save_directory_that_is_a_file_is_rejected(
+    tmp_path: Path, name: str, exists: bool
+) -> None:
+    """A save directory that is or looks like a file fails before searching."""
     index_path = make_index(tmp_path)
-    not_a_directory = tmp_path / "a_file.txt"
-    not_a_directory.write_text("not a folder", encoding="utf-8")
+    save_directory = tmp_path / name
+    if exists:
+        save_directory.write_text("not a folder", encoding="utf-8")
+    store = CountingStore()
+    message = f"save directory must be a folder, not a file: {save_directory}"
+
+    with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
+        run_search_dataset(
+            str(PUBLIC_DATASET),
+            10,
+            str(save_directory),
+            str(index_path),
+            store,
+            DATASETS
+        )
+
+    assert store.loads == 0
+    assert save_directory.exists() == exists
+
+
+def test_unwritable_save_directory_is_reported(tmp_path: Path) -> None:
+    """A folder that cannot be created ends in a clear error."""
+    index_path = make_index(tmp_path)
+    a_file = tmp_path / "a_file"
+    a_file.write_text("not a folder", encoding="utf-8")
+    not_a_directory = a_file / "results"
     output_path = not_a_directory / "dataset_docs_public.json"
 
     with pytest.raises(

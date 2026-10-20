@@ -44,11 +44,14 @@ def run_search_dataset(
         Path of the written file, named like the input dataset.
 
     Raises:
-        ValueError: If ``k`` is not a positive integer, or the dataset or the
-            index cannot be read, or the results cannot be written.
+        ValueError: If ``k`` is not a positive integer, the save directory
+            is a file, the dataset or the index cannot be read, or the
+            results cannot be written.
     """
     if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
         raise ValueError("k must be a positive integer")
+
+    datasets.check_save_directory(Path(save_directory))
 
     dataset: RagDataset = datasets.load_dataset(Path(dataset_path))
     corpus = load_index(index_path, index_store)

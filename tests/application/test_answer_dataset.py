@@ -5,6 +5,7 @@ and counts how often it is loaded, so no test needs the Qwen weights.
 """
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -157,5 +158,19 @@ def test_malformed_file_is_reported_without_the_model(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="broken.json"):
         run_answer_dataset(
             str(broken), str(tmp_path / "answers"), DATASETS, CORPUS, loader
+        )
+    assert loader.loads == 0
+
+
+def test_a_save_directory_that_is_a_file_is_rejected(tmp_path: Path) -> None:
+    """The mistake is caught before loading Qwen, not after answering."""
+    a_file = tmp_path / "answers.json"
+    a_file.write_text("not a folder", encoding="utf-8")
+    loader = FakeLoader()
+    message = f"save directory must be a folder, not a file: {a_file}"
+
+    with pytest.raises(ValueError, match=f"^{re.escape(message)}$"):
+        run_answer_dataset(
+            str(write_results(tmp_path)), str(a_file), DATASETS, CORPUS, loader
         )
     assert loader.loads == 0

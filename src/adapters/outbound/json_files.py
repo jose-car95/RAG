@@ -155,3 +155,20 @@ class JsonDatasetStore(DatasetStore):
             raise ValueError(
                 f"cannot write search results: {output_path}"
             ) from error
+
+    def check_save_directory(self, directory: Path) -> None:
+        """Reject a save directory that is, or looks like, a file.
+
+        A name with a suffix such as ``out.json`` is taken as a file, so a
+        folder named ``results.v2`` is refused too; the message says why.
+
+        Args:
+            directory: The folder where results will be written.
+
+        Raises:
+            ValueError: If it is an existing file or has a file suffix.
+        """
+        if directory.suffix or directory.is_file():
+            raise ValueError(
+                f"save directory must be a folder, not a file: {directory}"
+            )
