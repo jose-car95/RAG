@@ -20,6 +20,7 @@ from src.application.use_cases.answer import (
 )
 from src.application.use_cases.index_corpus import run_index
 from src.domain.models import MinimalSource
+from src.domain.prompt import Prompt
 
 CORPUS = FileCorpus()
 STORE = SqliteIndexStore()
@@ -31,7 +32,7 @@ class FakeGenerator:
 
     def __init__(self) -> None:
         """Start with no prompts and no counts."""
-        self.prompts: list[str] = []
+        self.prompts: list[Prompt] = []
         self.counted = 0
 
     def count_tokens(self, text: str) -> int:
@@ -46,11 +47,11 @@ class FakeGenerator:
         self.counted += 1
         return len(text.split())
 
-    def generate(self, prompt: str) -> str:
+    def generate(self, prompt: Prompt) -> str:
         """Record the prompt and give a fixed answer.
 
         Args:
-            prompt: The prompt built by the use case.
+            prompt: The system and user parts built by the use case.
 
         Returns:
             Always the same answer.
@@ -106,9 +107,9 @@ def test_answer_comes_from_the_model(tmp_path: Path) -> None:
     assert answer == "Use the load_lora_adapter endpoint."
     assert loader.loads == 1
     [prompt] = loader.generator.prompts
-    assert "The http endpoint loads a lora adapter." in prompt
-    assert "lora.md" in prompt
-    assert prompt.endswith("Question: lora endpoint")
+    assert "The http endpoint loads a lora adapter." in prompt.user
+    assert "lora.md" in prompt.user
+    assert prompt.user.endswith("Question: lora endpoint")
 
 
 def test_prompt_is_measured_with_the_model_tokenizer(tmp_path: Path) -> None:
@@ -183,6 +184,6 @@ def test_answer_from_sources_reads_them_and_asks_the_model(
 
     assert answer == "Use the load_lora_adapter endpoint."
     [prompt] = generator.prompts
-    assert "The http endpoint loads a lora adapter." in prompt
-    assert str(path) in prompt
-    assert prompt.endswith("Question: lora endpoint")
+    assert "The http endpoint loads a lora adapter." in prompt.user
+    assert f'path="{path}"' in prompt.user
+    assert prompt.user.endswith("Question: lora endpoint")

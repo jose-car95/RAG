@@ -1,6 +1,10 @@
-"""Tests for building the prompt from the retrieved sources."""
+"""Tests for building the prompt from the retrieved sources.
 
-from src.domain.prompt import INSTRUCTION, build_prompt
+The prompt has two parts, one per chat role: the rules go in ``system`` and
+the tagged sources plus the question go in ``user``.
+"""
+
+from src.domain.prompt import SYSTEM_PROMPT, Prompt, build_prompt
 
 QUESTION = "How do I load a LoRA adapter?"
 SHORT = (
@@ -14,6 +18,14 @@ ALSO_SHORT = (
 LONG = (
     "data/raw/vllm-0.10.1/docs/serving/long.md",
     " ".join(["filler"] * 500),
+)
+# A real corpus file carries its own example question (the "John Doe" case
+# of #55): the tags keep it inside its source.
+WITH_QUESTION = (
+    "data/raw/vllm-0.10.1/examples/offline_inference/"
+    "automatic_prefix_caching.py",
+    "Question: what is the age of John Doe? Your answer: The age of John "
+    "Doe is",
 )
 
 
@@ -29,38 +41,77 @@ def count_words(text: str) -> int:
     return len(text.split())
 
 
-def base_size() -> int:
-    """Measure a prompt with no sources: instruction and question only.
+def size(prompt: Prompt) -> int:
+    """Measure both parts of a prompt together, as the budget does.
+
+    Args:
+        prompt: A built prompt.
 
     Returns:
         Its size in words.
     """
-    return count_words(build_prompt(QUESTION, [], count_words, 10_000))
+    return count_words(prompt.system) + count_words(prompt.user)
 
 
-def test_the_prompt_holds_instruction_sources_and_question() -> None:
-    """Both sources are numbered with their path and the question goes last."""
+def base_size() -> int:
+    """Measure a prompt with no sources: rules and question only.
+
+    Returns:
+        Its size in words.
+    """
+    return size(build_prompt(QUESTION, [], count_words, 10_000))
+
+
+def test_the_rules_go_alone_in_the_system_part() -> None:
+    """System holds the rules and nothing that changes per question."""
     prompt = build_prompt(QUESTION, [SHORT, ALSO_SHORT], count_words, 1_000)
 
-    assert prompt.startswith(INSTRUCTION)
-    assert f"[1] {SHORT[0]}" in prompt
-    assert SHORT[1] in prompt
-    assert f"[2] {ALSO_SHORT[0]}" in prompt
-    assert ALSO_SHORT[1] in prompt
-    assert prompt.endswith(f"Question: {QUESTION}")
+    assert prompt.system == SYSTEM_PROMPT
+    assert QUESTION not in prompt.system
+    assert SHORT[1] not in prompt.system
+
+
+def test_each_source_is_wrapped_in_its_own_tags() -> None:
+    """Numbered, with its path, its text inside, and closed."""
+    prompt = build_prompt(QUESTION, [SHORT, ALSO_SHORT], count_words, 1_000)
+
+    assert f'<source id="1" path="{SHORT[0]}">\n{SHORT[1]}\n</source>' in (
+        prompt.user
+    )
+    assert (
+        f'<source id="2" path="{ALSO_SHORT[0]}">\n{ALSO_SHORT[1]}\n</source>'
+        in prompt.user
+    )
+
+
+def test_the_question_goes_last_in_the_user_part() -> None:
+    """It is what the model continues from."""
+    prompt = build_prompt(QUESTION, [SHORT, ALSO_SHORT], count_words, 1_000)
+
+    assert prompt.user.endswith(f"Question: {QUESTION}")
+
+
+def test_a_question_inside_a_source_stays_inside_its_tags() -> None:
+    """The source's own "Question:" line comes before the real question."""
+    prompt = build_prompt(QUESTION, [WITH_QUESTION], count_words, 1_000)
+
+    closing = prompt.user.index("</source>")
+    assert prompt.user.index("John Doe") < closing
+    assert prompt.user.rindex("Question:") > closing
+    assert prompt.user.endswith(f"Question: {QUESTION}")
 
 
 def test_sources_keep_the_retrieval_order() -> None:
     """The best source (first in the list) comes first in the prompt."""
     prompt = build_prompt(QUESTION, [SHORT, ALSO_SHORT], count_words, 1_000)
 
-    assert prompt.index(SHORT[1]) < prompt.index(ALSO_SHORT[1])
+    assert prompt.user.index(SHORT[1]) < prompt.user.index(ALSO_SHORT[1])
 
 
 def test_the_instruction_asks_to_stay_on_the_sources() -> None:
     """The model must answer from the sources or say it cannot."""
-    assert "only" in INSTRUCTION.lower()
-    assert "sources" in INSTRUCTION.lower()
+    assert "only" in SYSTEM_PROMPT.lower()
+    assert "sources" in SYSTEM_PROMPT.lower()
 
 
 def test_adding_stops_at_the_first_source_that_does_not_fit() -> None:
@@ -71,9 +122,9 @@ def test_adding_stops_at_the_first_source_that_does_not_fit() -> None:
         QUESTION, [SHORT, ALSO_SHORT, LONG], count_words, budget
     )
 
-    assert SHORT[1] in prompt
-    assert ALSO_SHORT[1] in prompt
-    assert LONG[0] not in prompt
+    assert SHORT[1] in prompt.user
+    assert ALSO_SHORT[1] in prompt.user
+    assert LONG[0] not in prompt.user
 
 
 def test_nothing_after_a_source_that_does_not_fit_is_added() -> None:
@@ -84,9 +135,9 @@ def test_nothing_after_a_source_that_does_not_fit_is_added() -> None:
         QUESTION, [SHORT, LONG, ALSO_SHORT], count_words, budget
     )
 
-    assert SHORT[1] in prompt
-    assert LONG[0] not in prompt
-    assert ALSO_SHORT[1] not in prompt
+    assert SHORT[1] in prompt.user
+    assert LONG[0] not in prompt.user
+    assert ALSO_SHORT[1] not in prompt.user
 
 
 def test_no_room_for_the_first_source_gives_a_prompt_without_sources() -> None:
@@ -96,19 +147,18 @@ def test_no_room_for_the_first_source_gives_a_prompt_without_sources() -> None:
     prompt = build_prompt(QUESTION, [LONG, SHORT], count_words, budget)
 
     assert prompt == build_prompt(QUESTION, [], count_words, budget)
-    assert "[1]" not in prompt
+    assert "<source" not in prompt.user
 
 
-def test_no_sources_gives_instruction_and_question() -> None:
+def test_no_sources_gives_rules_and_question() -> None:
     """An empty list is valid and does not fail."""
     prompt = build_prompt(QUESTION, [], count_words, 1_000)
 
-    assert prompt.startswith(INSTRUCTION)
-    assert prompt.endswith(f"Question: {QUESTION}")
+    assert prompt == Prompt(system=SYSTEM_PROMPT, user=f"Question: {QUESTION}")
 
 
 def test_the_prompt_never_exceeds_the_budget() -> None:
-    """Counted with the same counter, the prompt stays within the budget."""
+    """Both parts together, counted with the same counter, fit the budget."""
     for extra in (0, 5, 20, 40, 100, 600):
         budget = base_size() + extra
 
@@ -116,4 +166,4 @@ def test_the_prompt_never_exceeds_the_budget() -> None:
             QUESTION, [SHORT, ALSO_SHORT, LONG], count_words, budget
         )
 
-        assert count_words(prompt) <= budget
+        assert size(prompt) <= budget

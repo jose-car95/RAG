@@ -18,6 +18,7 @@ from src.adapters.outbound.qwen_generator import (
     QwenGenerator,
     load_generator,
 )
+from src.domain.prompt import Prompt
 
 MODEL_FILES = Path(".cache/huggingface/models--Qwen--Qwen3-0.6B")
 
@@ -70,10 +71,16 @@ def test_count_tokens_uses_the_qwen_tokenizer(
 def test_generate_returns_only_the_new_text(generator: QwenGenerator) -> None:
     """The answer holds no prompt and no thinking tags, just the reply.
 
+    The one-word rule travels in the system message, so the model must
+    read it there.
+
     Decoding the whole output would return the question too, plus empty
     ``<think>`` tags: only the tokens after the prompt are the answer.
     """
-    prompt = "What colour is the sky on a clear day? Answer with one word."
+    prompt = Prompt(
+        system="Answer with one word.",
+        user="What colour is the sky on a clear day?"
+    )
     answer = generator.generate(prompt)
     assert answer.strip().lower().rstrip(".") == "blue"
     assert "colour" not in answer
