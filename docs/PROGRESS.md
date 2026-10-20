@@ -132,6 +132,20 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **Verificado (2026-10-20, issue #73, Makefile completo):** atajos
+  `index`, `search`, `search_dataset`, `evaluate`, `answer` y
+  `answer_dataset` con variables que se cambian al llamar (`DATASET`,
+  `SCOPE`, `K`, `Q`, `MAX_CHUNK_SIZE`, `SEARCH_DIR`, `ANSWER_DIR`).
+  Ejecutados todos: `make evaluate` da docs R@5 0,830 (MRR 0,704) y
+  `DATASET=code` 0,636 (MRR 0,480), como antes; `make answer` 30,5 s;
+  `make answer_dataset` con 2 preguntas y carpetas cambiadas en la llamada.
+  `make test` salta los 3 tests marcados `slow` (Qwen real): 220 passed en
+  7,9 s; `make test-all` 223 passed en 51,0 s. `make lint-strict` pasa con
+  `types-tqdm`. `make clean` solo toca `src/`, `tests/`, `.mypy_cache` y
+  `.pytest_cache`: antes borraba también `__pycache__` dentro de
+  `.cache/uv`. Con Python 3.10 el índice tiene 18.941 chunks (antes
+  18.942): un `.py` de `.buildkite/` usa un f-string que solo acepta 3.12 y
+  se trocea como texto, como prevé el #63.
 - **Verificado (2026-10-20, issue #74, recorte de tests):** 19 tests
   duplicados fuera (de 172 funciones y 243 casos a 153 y 223). Nueve de la
   CLI repetían un error que ya prueba su caso de uso (se queda
