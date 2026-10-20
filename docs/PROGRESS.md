@@ -132,6 +132,17 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **Verificado (2026-10-20, issue #74, recorte de tests):** 19 tests
+  duplicados fuera (de 172 funciones y 243 casos a 153 y 223). Nueve de la
+  CLI repetían un error que ya prueba su caso de uso (se queda
+  `test_index_reports_missing_corpus_folder` como prueba de `ERROR:` y
+  salida `1` de punta a punta); tres de `search` repetían BM25; el resto
+  estaba incluido en otro test más fuerte. Cada uno, con el test que lo
+  sigue cubriendo, en la PR del slice. `make test` 223 passed en 52,9 s:
+  el tiempo casi no cambia (unos 4 s menos de procesos), porque lo lento son
+  Qwen real (31,6 s) y su tokenizador (9,8 s); el #73 los marca `slow`. La
+  meta de 120-150 era demasiado agresiva: el resto prueba comportamientos
+  distintos, y los casos parametrizados son ejemplos, no duplicados.
 - **Verificado (2026-10-20, issue #65, carpeta de salida que es un
   fichero):** `make lint` OK y `make test` 243 passed. `answer_dataset` y
   `search_dataset` con `--save_directory …/out.json` → `ERROR: save
