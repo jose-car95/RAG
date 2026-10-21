@@ -1,5 +1,5 @@
 .PHONY: install run debug clean lint lint-strict test test-all \
-	index search search_dataset evaluate answer answer_dataset
+	index search search_dataset evaluate answer answer_dataset serve
 
 # Extra arguments for the CLI, e.g. make run ARGS="search 'What is vLLM?' --k 5"
 ARGS ?=
@@ -70,3 +70,7 @@ answer:
 answer_dataset:
 	uv run python -m src answer_dataset --student_search_results_path \
 		$(RESULTS_FILE) --save_directory $(ANSWER_DIR)
+
+# Local HTTP API (bonus); open http://127.0.0.1:8000/docs to try it.
+serve:
+	uv run uvicorn --factory src.bootstrap:build_api --host 127.0.0.1 --port 8000
