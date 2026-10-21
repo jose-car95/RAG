@@ -136,6 +136,17 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   caché → indexado incremental → embeddings → recuperación híbrida; después,
   una página de chat que use la API. #75 (recode) y #68 (escuela) quedan
   para el final.
+- **Verificado (2026-10-21, issue #85, caché del índice):** `make lint` OK
+  (68 ficheros) y `make test` 232 passed (4 de `IndexCache` y 1 de la API).
+  Medido antes: de los ~2,1 s de `load_index`, SQLite 0,13 s, tokenizar
+  1,26 s y construir BM25 0,73 s; buscar con el índice hecho, 12 ms.
+  `IndexCache` (en `retrieval.py`, una por app) guarda el último índice con
+  la clave (ruta, `index_version`) = (ruta, `st_mtime_ns`, `st_size`);
+  `run_search` y `run_answer` reciben `load=load_index` por defecto, así que
+  la CLI no cambia. `make serve` real con k=5: 1ª búsqueda 2,22 s, 2ª y 3ª
+  0,013 s; tras `touch` del índice 2,06 s y luego 0,013 s. Opciones
+  descartadas: caché de respuestas (solo sirve si se repite la pregunta) y
+  `pickle` del índice para la CLI. Un único `CountingStore` en los tests.
 - **Verificado (2026-10-21, issue #83, API HTTP):** `make lint` OK (67
   ficheros) y `make test` 227 passed (7 de la API con `TestClient` y el
   modelo falso). Estructura copiada de fly_in: paquete
