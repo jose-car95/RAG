@@ -132,6 +132,21 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   - `uv run python -m src index` → `Ingestion complete! Indices saved under data/processed/`, salida `0`; `--raw_directory /nonexistent` → `ERROR: corpus folder not found: /nonexistent`, salida `1`; `--index_path /proc/nope/index.db` → `ERROR: cannot write index: /proc/nope/index.db`, salida `1`.
   - **Corpus real:** 1.969 ficheros → 18.942 chunks de 1.847 ficheros distintos en **3,65 s** (límite 300 s), 81 MB de memoria máxima, índice de 25 MB con 0 páginas libres. Comprobado en la base de datos: 0 filas con `file_path` fuera de `data/raw/vllm-0.10.1/`, 0 filas donde `len(text) != last - first` y 0 chunks por encima de 2000 (el más ancho mide 2000).
   - **Reconstrucción sin marca de agua:** indexar con `--max_chunk_size 50` deja el fichero en 55.009.280 bytes y volver a 2000 lo devuelve a 26.075.136 bytes, estable en la siguiente ejecución. Antes del `unlink` se quedaba en el tamaño mayor para siempre.
+- **M7 — Bonus abierto (2026-10-21).** Orden aprobado: #83 API HTTP →
+  caché → indexado incremental → embeddings → recuperación híbrida; después,
+  una página de chat que use la API. #75 (recode) y #68 (escuela) quedan
+  para el final.
+- **Verificado (2026-10-21, issue #83, API HTTP):** `make lint` OK (67
+  ficheros) y `make test` 227 passed (7 de la API con `TestClient` y el
+  modelo falso). Estructura copiada de fly_in: paquete
+  `src/adapters/inbound/api/` con `app.py` (`create_app`), `router.py`
+  (`/api/v1`), `schemas.py`, `dependencies.py` y un router por ruta. Los
+  puertos llegan por `app.state` y `Depends`, porque `inbound` no puede
+  importar `outbound`; Qwen se carga una vez por app con `functools.cache`.
+  `make serve` real: `GET /api/v1/health` → `{"status":"ok"}`; `POST
+  /api/v1/search` con k=2 → 2 fuentes de `test_lora_adapters.py` en 1,7 s;
+  query vacía → 400 `query must not be empty`. Sin CORS (la página del chat
+  se servirá desde el mismo servidor) y la CLI sigue en un solo fichero.
 - **Verificado (2026-10-20, issue #67, README completo):** primera línea en
   cursiva con el login y todas las secciones del capítulo VIII más las siete
   propias del proyecto. Cifras medidas hoy con Python 3.10 y `time uv run`:
