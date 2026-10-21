@@ -5,16 +5,19 @@ description = "RAG system that answers questions about the vLLM codebase."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
+    "fastapi>=0.156.8",
     "fire>=0.7.1",
     "pydantic>=2.13,<3",
     "torch>=2.14.1",
     "tqdm>=4.70.1",
     "transformers>=5.19.0",
+    "uvicorn>=0.54.0",
 ]
 
 [dependency-groups]
 dev = [
     "flake8>=7,<8",
+    "httpx>=0.28.1",
     "mypy>=1.11",
     "pytest>=8",
     "types-tqdm>=4.70.0.20260906",
