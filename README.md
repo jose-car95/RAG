@@ -158,6 +158,7 @@ src/
     use_cases/        one module per command, plus the retrieval they share
   adapters/
     inbound/cli.py    Python Fire CLI; the error boundary
+    inbound/api/      FastAPI app (bonus): one router per route
     outbound/         corpus files, JSON files, SQLite index, Qwen generator
   bootstrap.py        the only place that builds the concrete adapters
 ```
@@ -326,6 +327,40 @@ Generation is the slow part: Qwen3-0.6B on the CPU takes about 30 s for one
 - **Python 3.10 at school:** a null byte in a source file raises `ValueError`
   instead of `SyntaxError` before Python 3.12, and one vLLM script uses a
   3.12-only f-string. Both now fall back to text chunking, with a test.
+
+## Bonus: local HTTP API
+
+The same `search` and `answer` are served over HTTP by a second inbound
+adapter, so another program (or a browser page) can use the system without
+the command line. The use cases did not change.
+
+```bash
+make serve            # uvicorn on http://127.0.0.1:8000; try it at /docs
+```
+
+| Route | Body | Returns |
+|---|---|---|
+| `GET /api/v1/health` | none | `{"status": "ok"}` |
+| `POST /api/v1/search` | `{"query": "...", "k": 10}` | the question and its `retrieved_sources` |
+| `POST /api/v1/answer` | `{"query": "...", "k": 10}` | the question and the model `answer` |
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/search \
+     -H "Content-Type: application/json" \
+     -d '{"query": "How do I load a LoRA adapter?", "k": 2}'
+```
+
+- The layout follows one router per route under `/api/v1`, with the request
+  and response shapes as pydantic models in `schemas.py`.
+- `bootstrap.py` builds the app with the real adapters; the routes receive
+  the ports through FastAPI's `Depends`, so the inbound layer still never
+  imports SQLite or Qwen.
+- The model is loaded on the first `answer` and kept for the life of the
+  server (`functools.cache` inside the app, not a module global).
+- A user error (empty query, `k = 0`, missing index) is a `400` with the same
+  sentence the CLI prints; a malformed body is a `422` from pydantic.
+- Measured: `health` answers at once and a `search` takes 1.7 s, because the
+  index is still read from SQLite on every request.
 
 ## Resources
 
