@@ -12,6 +12,7 @@ from fastapi import Request
 from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.generator import GeneratorLoader
 from src.application.ports.index_store import IndexStore
+from src.application.use_cases.retrieval import IndexLoader
 
 
 @dataclass(frozen=True)
@@ -23,12 +24,15 @@ class ApiServices:
         corpus: Where the source files are read from.
         load_generator: Model loader, cached so Qwen loads once per app.
         index_path: The index file to search.
+        load_index: Index loader, cached so the index is built once per app
+            and again only when the file changes.
     """
 
     index_store: IndexStore
     corpus: CorpusReader
     load_generator: GeneratorLoader
     index_path: str
+    load_index: IndexLoader
 
 
 def get_services(request: Request) -> ApiServices:

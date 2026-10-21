@@ -29,8 +29,11 @@ def handle_search(
     """
     try:
         results = run_search(
-            request.query, request.k, services.index_path,
-            services.index_store
+            request.query,
+            request.k,
+            services.index_path,
+            services.index_store,
+            load=services.load_index
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
