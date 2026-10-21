@@ -1,1 +1,1 @@
-"""Tests of the inbound adapter: the CLI and its error boundary."""
+"""Tests of the inbound adapters: the CLI, its error boundary and the API."""
