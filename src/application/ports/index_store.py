@@ -41,3 +41,17 @@ class IndexStore(Protocol):
             ValueError: If the index does not exist or cannot be read.
         """
         ...
+
+    def index_version(self, index_path: str) -> tuple[int, int]:
+        """Tell whether the index changed, without reading it.
+
+        Args:
+            index_path: Where the index lives.
+
+        Returns:
+            A value that changes whenever the index is rebuilt.
+
+        Raises:
+            ValueError: If the index does not exist.
+        """
+        ...

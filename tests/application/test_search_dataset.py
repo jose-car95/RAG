@@ -10,7 +10,7 @@ import pytest
 from src.adapters.outbound.corpus import FileCorpus
 from src.adapters.outbound.json_files import JsonDatasetStore
 from src.adapters.outbound.sqlite_index import SqliteIndexStore
-from src.application.ports.index_store import NewChunk, StoredChunk
+from src.application.ports.index_store import StoredChunk
 from src.application.use_cases.index_corpus import run_index
 from src.application.use_cases.search_dataset import run_search_dataset
 
@@ -19,21 +19,12 @@ STORE = SqliteIndexStore()
 DATASETS = JsonDatasetStore()
 
 
-class CountingStore:
+class CountingStore(SqliteIndexStore):
     """The real SQLite store, counting how often the index is loaded."""
 
     def __init__(self) -> None:
         """Start with no loads."""
         self.loads = 0
-
-    def save_chunks(self, chunks: list[NewChunk], index_path: str) -> None:
-        """Store the chunks with SQLite.
-
-        Args:
-            chunks: The chunks to store.
-            index_path: Where the index lives.
-        """
-        STORE.save_chunks(chunks, index_path)
 
     def load_chunks(self, index_path: str) -> list[StoredChunk]:
         """Count the load and read the chunks with SQLite.
@@ -45,7 +36,7 @@ class CountingStore:
             The stored chunks.
         """
         self.loads += 1
-        return STORE.load_chunks(index_path)
+        return super().load_chunks(index_path)
 
 
 PUBLIC_DATASET = Path(
