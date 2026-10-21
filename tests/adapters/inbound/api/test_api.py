@@ -9,25 +9,30 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from src.adapters.inbound.api.app import create_app
+from src.application.ports.index_store import IndexStore
 from tests.application.test_answer import (
     CORPUS,
     STORE,
     FakeLoader,
     make_index,
 )
+from tests.application.test_search_dataset import CountingStore
 
 
-def make_client(index_path: Path, loader: FakeLoader) -> TestClient:
+def make_client(
+    index_path: Path, loader: FakeLoader, store: IndexStore = STORE
+) -> TestClient:
     """Build the app on a test index and wrap it in a client.
 
     Args:
         index_path: Index the app searches.
         loader: Fake model loader.
+        store: Where the index is read from.
 
     Returns:
         A client that calls the app directly.
     """
-    return TestClient(create_app(STORE, CORPUS, loader, str(index_path)))
+    return TestClient(create_app(store, CORPUS, loader, str(index_path)))
 
 
 def test_health_says_the_api_is_up(tmp_path: Path) -> None:
@@ -78,6 +83,18 @@ def test_the_model_is_loaded_once_for_every_request(tmp_path: Path) -> None:
         client.post("/api/v1/answer", json={"query": "lora adapter"})
 
     assert loader.loads == 1
+
+
+def test_the_index_is_read_once_for_every_request(tmp_path: Path) -> None:
+    """Building the index takes seconds: the server keeps it in memory."""
+    store = CountingStore()
+    client = make_client(make_index(tmp_path), FakeLoader(), store)
+
+    client.post("/api/v1/search", json={"query": "lora adapter"})
+    client.post("/api/v1/search", json={"query": "lora adapter"})
+    client.post("/api/v1/answer", json={"query": "lora adapter"})
+
+    assert store.loads == 1
 
 
 def test_a_user_error_is_a_400_with_the_cli_message(tmp_path: Path) -> None:

@@ -9,6 +9,7 @@ from src.adapters.inbound.api.router import api_v1_router
 from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.generator import GeneratorLoader
 from src.application.ports.index_store import IndexStore
+from src.application.use_cases.retrieval import IndexCache
 
 
 def create_app(
@@ -33,7 +34,8 @@ def create_app(
         index_store=index_store,
         corpus=corpus,
         load_generator=cache(load_generator),
-        index_path=index_path
+        index_path=index_path,
+        load_index=IndexCache().load
     )
     app.include_router(api_v1_router)
     return app

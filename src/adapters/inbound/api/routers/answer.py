@@ -29,8 +29,13 @@ def handle_answer(
     """
     try:
         text = run_answer(
-            request.query, request.k, services.index_path,
-            services.index_store, services.corpus, services.load_generator
+            request.query,
+            request.k,
+            services.index_path,
+            services.index_store,
+            services.corpus,
+            services.load_generator,
+            load=services.load_index
         )
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))

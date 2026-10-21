@@ -4,6 +4,7 @@ from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.generator import Generator, GeneratorLoader
 from src.application.ports.index_store import IndexStore
 from src.application.use_cases.retrieval import (
+    IndexLoader,
     load_index,
     search_index,
     validate_query_and_k
@@ -25,7 +26,8 @@ def run_answer(
     index_path: str,
     index_store: IndexStore,
     corpus: CorpusReader,
-    load_generator: GeneratorLoader
+    load_generator: GeneratorLoader,
+    load: IndexLoader = load_index
 ) -> str:
     """Retrieve the sources of a question and let the model answer it.
 
@@ -40,6 +42,7 @@ def run_answer(
         index_store: Reads the stored chunks.
         corpus: Reads the text of each source.
         load_generator: Loads the model when it is called.
+        load: Builds the searchable index; the API passes its cache.
 
     Returns:
         The model's answer, or ``NO_SOURCES_ANSWER`` when nothing was found.
@@ -49,7 +52,7 @@ def run_answer(
             file cannot be read.
     """
     clean_query = validate_query_and_k(query, k)
-    index = load_index(index_path, index_store)
+    index = load(index_path, index_store)
     results = search_index(index, clean_query, k)
     if not results:
         return NO_SOURCES_ANSWER

@@ -34,6 +34,7 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | Nunca importar la moulinette | `grep` de imports vacío | `grep -rnE "^[[:space:]]*(import\|from)[[:space:]]+moulinette" src/ tests/` vacío en cada `/cierra` (último: issue #83, 2026-10-21) | EVIDENCED |
 | README: primera línea en cursiva + secciones de VIII | Checklist completa | `README.md` con la línea en cursiva, Description, Instructions, Resources (con el uso de IA) y las siete secciones del proyecto (issue #67, 2026-10-20) | EVIDENCED |
 | Bonus: API HTTP local | `search` y `answer` por HTTP sin cambiar los casos de uso | `src/adapters/inbound/api/`, 7 tests en `tests/adapters/inbound/api/test_api.py`; `make serve` real: health, search en 1,7 s y query vacía → 400 (issue #83, 2026-10-21) | EVIDENCED |
+| Bonus: caché | Tiempo antes y después | `IndexCache` en `src/application/use_cases/retrieval.py`, 4 tests en `tests/application/test_retrieval.py` y 1 en la API; `make serve` real: búsqueda de 2,22 s a 0,013 s desde la segunda petición, y recarga sola tras reindexar (issue #85, 2026-10-21) | EVIDENCED |
 | Comprensión: 5 preguntas (4 de 5) | Respuestas propias de Jose | Ensayo oral (M6) | NOT_STARTED |
 | Recode en vivo | Jose modifica el código sin ayuda | Ensayo con 3 modificaciones propuestas (M6) | NOT_STARTED |
 | Repo de entrega solo con lo pedido | Sin `docs/eval`, moulinette, datos ni salidas | Checklist del repo de entrega (M6) | NOT_STARTED |

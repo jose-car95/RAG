@@ -36,6 +36,28 @@ SELECT_CHUNKS_SQL = """
 """
 
 
+def find_index_file(index_path: str) -> Path:
+    """Return the index file, or say it is missing.
+
+    Shared by every read so the message the user sees lives in one place.
+
+    Args:
+        index_path: Path of the SQLite index.
+
+    Returns:
+        The index file.
+
+    Raises:
+        ValueError: If there is no file at that path.
+    """
+    index_file = Path(index_path)
+    if not index_file.is_file():
+        raise ValueError(
+            f"index not found: {index_path}; run index first"
+        )
+    return index_file
+
+
 class SqliteIndexStore(IndexStore):
     """The ``IndexStore`` port on a SQLite file with one flat table."""
 
@@ -89,13 +111,27 @@ class SqliteIndexStore(IndexStore):
         Raises:
             ValueError: If the index does not exist or cannot be read.
         """
-        index_file = Path(index_path)
-        if not index_file.is_file():
-            raise ValueError(
-                f"index not found: {index_path}; run index first"
-            )
+        index_file = find_index_file(index_path)
         try:
             with closing(sqlite3.connect(index_file)) as connection:
                 return list(connection.execute(SELECT_CHUNKS_SQL))
         except (sqlite3.Error, OSError) as error:
             raise ValueError(f"cannot read index: {index_path}") from error
+
+    def index_version(self, index_path: str) -> tuple[int, int]:
+        """Return the modification time and size of the index file.
+
+        ``index`` deletes and recreates the file, so the modification time
+        changes on every rebuild; the size is a second, cheap witness.
+
+        Args:
+            index_path: Path of the SQLite index.
+
+        Returns:
+            Modification time in nanoseconds and size in bytes.
+
+        Raises:
+            ValueError: If the index does not exist.
+        """
+        status = find_index_file(index_path).stat()
+        return status.st_mtime_ns, status.st_size

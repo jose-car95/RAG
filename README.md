@@ -359,8 +359,32 @@ curl -X POST http://127.0.0.1:8000/api/v1/search \
   server (`functools.cache` inside the app, not a module global).
 - A user error (empty query, `k = 0`, missing index) is a `400` with the same
   sentence the CLI prints; a malformed body is a `422` from pydantic.
-- Measured: `health` answers at once and a `search` takes 1.7 s, because the
-  index is still read from SQLite on every request.
+
+## Bonus: index cache
+
+Building the searchable index is almost the whole cost of a search: about
+2.1 s (0.13 s reading SQLite, 1.26 s tokenising, 0.73 s building BM25) against
+12 ms for the search itself. A CLI command lives for one query, so it has
+nothing to reuse; the HTTP server does.
+
+- `IndexCache` keeps the last built index, keyed by the index path and its
+  version: the file's modification time and size, read with one `stat` call
+  through the `IndexStore` port. Running `index` recreates the file, so the
+  next request rebuilds automatically.
+- Each app owns its cache (no module-level state). `run_search` and
+  `run_answer` take the loader as an optional parameter, so the CLI is
+  unchanged.
+- Measured with `make serve`, `k = 5`:
+
+| Request | Time |
+|---|---|
+| First search (empty cache) | 2.22 s |
+| Second and third search | 0.013 s |
+| After touching the index file | 2.06 s, then 0.013 s |
+
+- Known limit: two requests that miss at the same time both build the index
+  once; a lock would avoid it. Caching whole answers was left out because it
+  only helps when the exact same question repeats.
 
 ## Resources
 

@@ -9,6 +9,7 @@ This module holds what both use cases share, so that neither
 ``search`` nor ``search_dataset`` depends on the other.
 """
 
+from collections.abc import Callable
 from typing import NamedTuple
 
 from src.application.ports.index_store import IndexStore
@@ -57,6 +58,47 @@ def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
         bm25=index,
         locations=locations
     )
+
+
+# Anything that turns a stored index into a searchable one: ``load_index``
+# itself, or the ``load`` method of an ``IndexCache``.
+IndexLoader = Callable[[str, IndexStore], CorpusIndex]
+
+
+class IndexCache:
+    """Keep the last built index and rebuild it only when the file changes.
+
+    For long-lived processes such as the HTTP server: a CLI command lives for
+    one query, so it has nothing to reuse. Each app owns its own cache, so
+    there is no module-level state.
+
+    ponytail: two requests that miss at the same time both build the index
+    (about 2 s once, same result); a lock would avoid it if it ever matters.
+    """
+
+    def __init__(self) -> None:
+        """Start empty: the first load always builds the index."""
+        self._key: tuple[str, tuple[int, int]] | None = None
+        self._corpus: CorpusIndex | None = None
+
+    def load(self, index_path: str, index_store: IndexStore) -> CorpusIndex:
+        """Return the built index, rebuilding it if the file changed.
+
+        Args:
+            index_path: Where the index lives.
+            index_store: Reads the version and, on a miss, the chunks.
+
+        Returns:
+            The searchable index for ``index_path``.
+
+        Raises:
+            ValueError: If the index does not exist or cannot be read.
+        """
+        key = (index_path, index_store.index_version(index_path))
+        if self._corpus is None or key != self._key:
+            self._corpus = load_index(index_path, index_store)
+            self._key = key
+        return self._corpus
 
 
 def validate_query_and_k(query: str, k: int) -> str:
