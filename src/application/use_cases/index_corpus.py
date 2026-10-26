@@ -1,5 +1,7 @@
 """Use case that turns the raw corpus into a persisted chunk index."""
 
+import hashlib
+
 from tqdm import tqdm
 
 from src.application.ports.corpus_reader import CorpusReader
@@ -12,6 +14,25 @@ from src.domain.chunking import chunker_for
 MAX_CHUNK_SIZE: int = 2000
 
 
+def fingerprint(text: str, max_chunk_size: int) -> str:
+    """Summarise what the chunks of a file depend on, in 64 characters.
+
+    The chunks depend on the text and on the chunk size, so both go into the
+    hash: a new ``--max_chunk_size`` changes every fingerprint. SHA-256 of
+    the content instead of modification time and size, because archives
+    restore old dates and a changed file would then look unchanged.
+
+    Args:
+        text: The whole text of a corpus file.
+        max_chunk_size: The chunk size it is indexed with.
+
+    Returns:
+        The hexadecimal SHA-256 digest.
+    """
+    content = f"{max_chunk_size}\n{text}"
+    return hashlib.sha256(content.encode("utf-8")).hexdigest()
+
+
 def run_index(
     raw_directory: str,
     max_chunk_size: int,
@@ -19,7 +40,12 @@ def run_index(
     corpus: CorpusReader,
     index_store: IndexStore
 ) -> int:
-    """Chunk every corpus file and store the chunks in the index.
+    """Chunk the corpus files that changed and store them in the index.
+
+    Every file is read and fingerprinted; only those whose fingerprint
+    differs from the stored one are chunked. When nothing can be reused
+    (first run, old index, new chunk size) the index is rebuilt from
+    scratch, which also gives the file back its minimal size.
 
     Args:
         raw_directory: Root directory of the corpus to read.
@@ -30,7 +56,7 @@ def run_index(
         index_store: Stores the chunks.
 
     Returns:
-        The number of chunks stored.
+        The number of chunks in the index afterwards.
 
     Raises:
         ValueError: If ``max_chunk_size`` is out of range, or the corpus
@@ -47,13 +73,37 @@ def run_index(
         raise ValueError(
             f"max_chunk_size must be an integer between 1 and {MAX_CHUNK_SIZE}"
         )
+
     files = corpus.find_files(raw_directory)
+    stored = index_store.load_fingerprints(index_path)
+    fingerprints: dict[str, str] = {}
     chunks: list[NewChunk] = []
+
     for path in tqdm(files, desc="Indexing", unit="file"):
+        file_path = str(path)
         text = corpus.read_text(path)
+        fingerprints[file_path] = fingerprint(text, max_chunk_size)
+
+        if stored.get(file_path) == fingerprints[file_path]:
+            continue
+
         chunker = chunker_for(path.suffix)
         for first, last in chunker(text, max_chunk_size):
-            chunks.append((str(path), first, last, text[first:last]))
+            chunks.append((file_path, first, last, text[first:last]))
 
-    index_store.save_chunks(chunks, index_path)
-    return len(chunks)
+    changed = {
+        file_path: new
+        for file_path, new in fingerprints.items()
+        if stored.get(file_path) != new
+    }
+
+    if len(changed) == len(fingerprints):
+        index_store.save_chunks(chunks, index_path, fingerprints)
+        return len(chunks)
+
+    removed = [
+        file_path
+        for file_path, old in stored.items()
+        if fingerprints.get(file_path) != old
+    ]
+    return index_store.update_files(index_path, removed, chunks, changed)
