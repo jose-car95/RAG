@@ -278,8 +278,8 @@ Generation is the slow part: Qwen3-0.6B on the CPU takes about 30 s for one
 - **One flat SQLite table** `chunks(id, file_path, first_character_index,
   last_character_index, text)`: storing the text lets `search` and the prompt
   use it without reading the corpus again; repeating the path costs about
-  1 MB of the 25 MB index and avoids a join. The index is rebuilt from
-  scratch on every `index`, so it never keeps stale chunks.
+  1 MB of the 25 MB index and avoids a join. A second table, `files`, keeps
+  one fingerprint per file for incremental indexing (see the bonus below).
 - **Prompt by chat roles:** the rules go in the `system` message; the sources
   go in the `user` message, each wrapped in
   `<source id="N" path="...">...</source>`, with the question last. The rules
@@ -385,6 +385,35 @@ nothing to reuse; the HTTP server does.
 - Known limit: two requests that miss at the same time both build the index
   once; a lock would avoid it. Caching whole answers was left out because it
   only helps when the exact same question repeats.
+
+## Bonus: incremental indexing
+
+`index` re-chunks only the files that changed. Chunking is most of the work
+(2.27 s of the full run, mostly `ast`), while telling what changed is cheap.
+
+- Every file gets a **fingerprint**: the SHA-256 of its text together with
+  `max_chunk_size`, stored in a `files` table next to the chunks. A file whose
+  fingerprint matches keeps its chunks; a modified file is re-chunked; a
+  deleted file loses its chunks. All of it happens in one SQLite transaction.
+- SHA-256 of the content (0.074 s for the 1,969 files) was chosen over
+  modification time and size (0.013 s): archives restore old dates, so a
+  changed file could keep both and the index would go stale without anyone
+  noticing.
+- The chunk size is part of the fingerprint, so a new `--max_chunk_size`
+  re-chunks everything. When nothing can be reused (first run, an index from
+  before this change, a new size) the index is rebuilt from scratch, which
+  also gives the file back its minimal size.
+- No new flag: the command is the subject's `index --max_chunk_size`.
+
+| `index` run | Time |
+|---|---|
+| Full rebuild | 3.7-3.8 s (4.2 s before the change) |
+| Nothing changed | 1.05 s |
+| One file changed | 1.11 s |
+
+The index written incrementally gives the same recall: docs Recall@5 0.830
+(MRR 0.704), code 0.636 (MRR 0.480). On this corpus most of the remaining
+second is Python starting up; the gain grows with the size of the corpus.
 
 ## Resources
 
