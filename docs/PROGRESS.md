@@ -136,6 +136,17 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   caché → indexado incremental → embeddings → recuperación híbrida; después,
   una página de chat que use la API. #75 (recode) y #68 (escuela) quedan
   para el final.
+- **Verificado (2026-10-26, issue #87, indexado incremental):** `make lint`
+  OK y `make test` 238 passed (6 nuevos: nada cambia, uno modificado igual a
+  una reconstrucción completa, uno borrado, tamaño nuevo, índice antiguo y
+  huellas de un índice inexistente). Decisión de Jose: huella SHA-256 del
+  texto más `max_chunk_size` (opción B) en una tabla `files`; fecha y tamaño
+  se descartan porque fallan en silencio. Medido: trocear 2,27 s del total;
+  huellas 0,074 s (SHA-256) frente a 0,013 s (`stat`). `index` real:
+  completo 3,67-3,84 s (`main` 4,19 s), sin cambios 1,05 s, un fichero
+  cambiado 1,11 s (copia del corpus en el scratchpad, `data/raw` intacto).
+  El índice antiguo de `data/processed` se reconstruyó solo (5,5 s, en
+  frío). Recall igual: docs R@5 0,830 / MRR 0,704, code 0,636 / 0,480.
 - **Verificado (2026-10-21, issue #85, caché del índice):** `make lint` OK
   (68 ficheros) y `make test` 232 passed (4 de `IndexCache` y 1 de la API).
   Medido antes: de los ~2,1 s de `load_index`, SQLite 0,13 s, tokenizar
