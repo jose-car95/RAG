@@ -9,7 +9,9 @@ import pytest
 
 from src.adapters.outbound.corpus import FileCorpus
 from src.adapters.outbound.sqlite_index import SqliteIndexStore
+from src.application.use_cases import index_corpus
 from src.application.use_cases.index_corpus import run_index
+from src.domain.chunking import Chunker, chunker_for
 
 CORPUS = FileCorpus()
 STORE = SqliteIndexStore()
@@ -159,9 +161,9 @@ def test_index_file_matches_its_current_content(tmp_path: Path) -> None:
     ]
     few = [("data/raw/file_0.py", 0, 10, "x" * 10)]
 
-    STORE.save_chunks(many, str(index_path))
+    STORE.save_chunks(many, str(index_path), {})
     big_size = index_path.stat().st_size
-    STORE.save_chunks(few, str(index_path))
+    STORE.save_chunks(few, str(index_path), {})
 
     assert index_path.stat().st_size < big_size
     with closing(sqlite3.connect(index_path)) as connection:
@@ -250,7 +252,7 @@ def test_stored_chunks_are_read_back_with_their_location() -> None:
             ("data/raw/a.py", 0, 5, "alpha"),
             ("data/raw/b.md", 5, 9, "beta"),
         ]
-        STORE.save_chunks(chunks, index_path)
+        STORE.save_chunks(chunks, index_path, {})
 
         rows = STORE.load_chunks(index_path)
 
@@ -268,4 +270,145 @@ def test_loading_a_missing_index_creates_no_file(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match=message):
         STORE.load_chunks(str(index_path))
 
+    assert not index_path.exists()
+
+
+def count_chunked_files(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Record the suffix of every file the use case chunks.
+
+    Args:
+        monkeypatch: pytest fixture that swaps ``chunker_for`` for the test.
+
+    Returns:
+        The list that fills up as files are chunked.
+    """
+    chunked: list[str] = []
+
+    def recording_chunker_for(suffix: str) -> Chunker:
+        chunked.append(suffix)
+        return chunker_for(suffix)
+
+    monkeypatch.setattr(index_corpus, "chunker_for", recording_chunker_for)
+    return chunked
+
+
+def index_twice(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, Path, list[str]]:
+    """Index the small corpus, then start recording what gets chunked.
+
+    Args:
+        tmp_path: Temporary folder provided by pytest.
+        monkeypatch: pytest fixture used to record the chunked files.
+
+    Returns:
+        The corpus folder, the index file and the recording list.
+    """
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+    return corpus, index_path, count_chunked_files(monkeypatch)
+
+
+def full_rebuild_rows(
+    corpus: Path, tmp_path: Path
+) -> list[tuple[str, int, int, str]]:
+    """Index the same corpus from scratch into a fresh file.
+
+    Args:
+        corpus: The corpus folder.
+        tmp_path: Temporary folder provided by pytest.
+
+    Returns:
+        The rows of an index built from nothing.
+    """
+    fresh = tmp_path / "fresh.db"
+    run_index(str(corpus), 2000, str(fresh), CORPUS, STORE)
+    return read_rows(fresh)
+
+
+def test_an_unchanged_corpus_is_not_chunked_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Same fingerprints: every chunk is reused and nothing is chunked."""
+    corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
+    before = read_rows(index_path)
+
+    chunk_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    assert chunked == []
+    assert read_rows(index_path) == before
+    assert chunk_count == len(before)
+
+
+def test_only_a_modified_file_is_chunked_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The index ends up exactly as a full rebuild would leave it."""
+    corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
+    (corpus / "b.md").write_text("# A\nnew words\n", encoding="utf-8")
+
+    chunk_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    assert chunked == [".md"]
+    rows = read_rows(index_path)
+    assert rows == full_rebuild_rows(corpus, tmp_path)
+    assert chunk_count == len(rows)
+    assert not any("uno" in text for *_, text in rows)
+
+
+def test_a_deleted_file_loses_its_chunks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A file that is gone leaves nothing behind in the index."""
+    corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
+    (corpus / "b.md").unlink()
+
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    assert chunked == []
+    assert {Path(row[0]).name for row in read_rows(index_path)} == {"a.py"}
+
+
+def test_a_new_max_chunk_size_chunks_everything_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The size is part of the fingerprint, so every file changes."""
+    corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
+
+    run_index(str(corpus), 5, str(index_path), CORPUS, STORE)
+
+    assert sorted(chunked) == [".md", ".py"]
+    widths = [last - first for _, first, last, _ in read_rows(index_path)]
+    assert max(widths) <= 5
+
+
+def test_an_index_without_fingerprints_is_rebuilt(tmp_path: Path) -> None:
+    """An index from before this change is rebuilt instead of failing."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+    with closing(sqlite3.connect(index_path)) as connection, connection:
+        connection.execute(
+            "CREATE TABLE chunks (id INTEGER PRIMARY KEY, file_path TEXT,"
+            " first_character_index INTEGER, last_character_index INTEGER,"
+            " text TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO chunks VALUES (1, 'old.md', 0, 3, 'old')"
+        )
+
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    assert read_rows(index_path) == full_rebuild_rows(corpus, tmp_path)
+
+
+def test_fingerprints_of_a_missing_index_are_empty(tmp_path: Path) -> None:
+    """Nothing to reuse, and asking creates no file."""
+    index_path = tmp_path / "nope" / "index.db"
+
+    assert STORE.load_fingerprints(str(index_path)) == {}
     assert not index_path.exists()
