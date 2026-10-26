@@ -251,6 +251,9 @@ los 18.900 chunks, esa ruta larga se repetiría cientos de veces.</p>
 Si guardar la ruta en cada chunk (una tabla) o separar <code>files</code> y <code>chunks</code>
 (dos tablas con clave ajena) es justo una de las decisiones del slice #20. Las dos son
 defendibles: una tabla es más simple; dos ocupan menos y evitan repetir texto.
+Se eligió una sola tabla <code>chunks</code> con la ruta repetida. Desde el bonus de
+indexado incremental (#87) existe también una tabla <code>files</code>, pero sin clave
+ajena: guarda la ruta y la huella SHA-256 de cada fichero para saber qué cambió.
 </div>
 
 <h2 id="db-sql">4. SQL: las cinco frases que necesito</h2>
