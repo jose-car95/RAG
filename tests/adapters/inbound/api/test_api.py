@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from src.adapters.inbound.api.app import create_app
 from src.application.ports.index_store import IndexStore
+from src.application.use_cases.index_corpus import run_index
 from tests.application.test_answer import (
     CORPUS,
     STORE,
@@ -95,6 +96,33 @@ def test_the_index_is_read_once_for_every_request(tmp_path: Path) -> None:
     client.post("/api/v1/answer", json={"query": "lora adapter"})
 
     assert store.loads == 1
+
+
+def test_a_repeated_question_reaches_the_model_once(tmp_path: Path) -> None:
+    """The second answer to the same question comes from the cache."""
+    loader = FakeLoader()
+    client = make_client(make_index(tmp_path), loader)
+
+    first = client.post("/api/v1/answer", json={"query": "lora adapter"})
+    second = client.post("/api/v1/answer", json={"query": "lora adapter"})
+
+    assert second.json() == first.json()
+    assert len(loader.generator.prompts) == 1
+
+
+def test_a_rebuilt_index_is_answered_again(tmp_path: Path) -> None:
+    """Cached results belong to one version of the index."""
+    index_path = make_index(tmp_path)
+    loader = FakeLoader()
+    client = make_client(index_path, loader)
+    client.post("/api/v1/answer", json={"query": "lora adapter"})
+    corpus = tmp_path / "corpus"
+    (corpus / "kv.md").write_text("# Cache\nThe kv cache blocks.\n")
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    client.post("/api/v1/answer", json={"query": "lora adapter"})
+
+    assert len(loader.generator.prompts) == 2
 
 
 def test_a_user_error_is_a_400_with_the_cli_message(tmp_path: Path) -> None:
