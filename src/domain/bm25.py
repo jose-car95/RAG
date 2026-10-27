@@ -133,3 +133,18 @@ def rank(
 
     ordered = sorted(scores.items(), key=lambda pair: (-pair[1], pair[0]))
     return ordered[:k]
+
+
+class CorpusIndex(NamedTuple):
+    """The searchable corpus: BM25 counts plus where each chunk lives.
+
+    The two travel together because a ranking returns chunk ids, and the
+    caller needs a ``file_path`` and a character range to report a source.
+
+    Attributes:
+        bm25: Term counts and lengths, everything the formula needs.
+        locations: Chunk id to its file path and character range.
+    """
+
+    bm25: Bm25Index
+    locations: dict[int, tuple[str, int, int]]

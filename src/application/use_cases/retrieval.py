@@ -10,31 +10,20 @@ This module holds what both use cases share, so that neither
 """
 
 from collections.abc import Callable
-from typing import NamedTuple
 
 from src.application.ports.index_store import IndexStore
-from src.domain.bm25 import Bm25Index, build_index, rank
+from src.domain.bm25 import CorpusIndex, build_index, rank
 from src.domain.models import MinimalSource
 from src.domain.tokenizer import tokenize
 
 
-class CorpusIndex(NamedTuple):
-    """The searchable corpus: BM25 counts plus where each chunk lives.
-
-    The two travel together because a ranking returns chunk ids, and the
-    caller needs a ``file_path`` and a character range to report a source.
-
-    Attributes:
-        bm25: Term counts and lengths, everything the formula needs.
-        locations: Chunk id to its file path and character range.
-    """
-
-    bm25: Bm25Index
-    locations: dict[int, tuple[str, int, int]]
-
-
 def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
     """Read the stored index once and prepare it for searching.
+
+    Building it costs about 2 s, so the result is saved through the store
+    and a later process loads it in about 0.2 s while the index is the same.
+    The version is read before the chunks: if ``index`` runs meanwhile, the
+    saved copy carries the old version and is simply rebuilt next time.
 
     Args:
         index_path: Where the index built by ``index`` lives.
@@ -46,6 +35,10 @@ def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
     Raises:
         ValueError: If the index does not exist or cannot be read.
     """
+    version = index_store.index_version(index_path)
+    built = index_store.load_built_index(index_path, version)
+    if built is not None:
+        return built
     rows = index_store.load_chunks(index_path)
     index = build_index(
         (chunk_id, tokenize(text)) for chunk_id, _, _, _, text in rows
@@ -54,10 +47,9 @@ def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
         chunk_id: (file_path, first_index, last_index)
         for chunk_id, file_path, first_index, last_index, _ in rows
     }
-    return CorpusIndex(
-        bm25=index,
-        locations=locations
-    )
+    corpus = CorpusIndex(bm25=index, locations=locations)
+    index_store.save_built_index(index_path, version, corpus)
+    return corpus
 
 
 # Anything that turns a stored index into a searchable one: ``load_index``

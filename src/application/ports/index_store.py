@@ -2,6 +2,9 @@
 
 from typing import Protocol
 
+from src.domain.bm25 import CorpusIndex
+
+
 # A stored chunk: id, file path, first and last character index, and text.
 StoredChunk = tuple[int, str, int, int, str]
 # A chunk to store, without the id the store assigns.
@@ -99,5 +102,31 @@ class IndexStore(Protocol):
 
         Raises:
             ValueError: If the index does not exist.
+        """
+        ...
+
+    def load_built_index(
+        self, index_path: str, version: tuple[int, int]
+    ) -> CorpusIndex | None:
+        """Return the index built by an earlier process, if still valid.
+
+        Args:
+            index_path: Where the index lives.
+            version: The current ``index_version`` of the index.
+
+        Returns:
+            The built index, or ``None`` when there is none for this version.
+        """
+        ...
+
+    def save_built_index(
+        self, index_path: str, version: tuple[int, int], corpus: CorpusIndex
+    ) -> None:
+        """Keep a built index for the next process; failing only costs time.
+
+        Args:
+            index_path: Where the index lives.
+            version: The ``index_version`` the index was built from.
+            corpus: The built index.
         """
         ...
