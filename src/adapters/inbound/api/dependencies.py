@@ -5,34 +5,33 @@ the ports it receives on ``app.state`` and routes ask for them with
 ``Depends(get_services)``.
 """
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from fastapi import Request
 
-from src.application.ports.corpus_reader import CorpusReader
-from src.application.ports.generator import GeneratorLoader
 from src.application.ports.index_store import IndexStore
-from src.application.use_cases.retrieval import IndexLoader
+from src.domain.models import MinimalSource
 
 
 @dataclass(frozen=True)
 class ApiServices:
-    """The ports and settings every route needs, fixed when the app is built.
+    """What every route needs, fixed when the app is built.
 
     Attributes:
-        index_store: Where the index is read from.
-        corpus: Where the source files are read from.
-        load_generator: Model loader, cached so Qwen loads once per app.
+        index_store: Tells the version of the index, part of every cache key.
         index_path: The index file to search.
-        load_index: Index loader, cached so the index is built once per app
-            and again only when the file changes.
+        search: ``run_search`` behind a result cache keyed by query, ``k``
+            and index version.
+        answer: ``run_answer`` behind the same kind of cache.
     """
 
     index_store: IndexStore
-    corpus: CorpusReader
-    load_generator: GeneratorLoader
     index_path: str
-    load_index: IndexLoader
+    search: Callable[
+        [str, int, tuple[int, int]], list[tuple[MinimalSource, float]]
+    ]
+    answer: Callable[[str, int, tuple[int, int]], str]
 
 
 def get_services(request: Request) -> ApiServices:

@@ -360,31 +360,45 @@ curl -X POST http://127.0.0.1:8000/api/v1/search \
 - A user error (empty query, `k = 0`, missing index) is a `400` with the same
   sentence the CLI prints; a malformed body is a `422` from pydantic.
 
-## Bonus: index cache
+## Bonus: caching
 
 Building the searchable index is almost the whole cost of a search: about
 2.1 s (0.13 s reading SQLite, 1.26 s tokenising, 0.73 s building BM25) against
-12 ms for the search itself. A CLI command lives for one query, so it has
-nothing to reuse; the HTTP server does.
+12 ms for the search itself. Three caches cover cold start and repeated
+queries; every one is keyed by the index **version** (the file's modification
+time and size, one `stat` call through the `IndexStore` port), so running
+`index` invalidates them all.
 
-- `IndexCache` keeps the last built index, keyed by the index path and its
-  version: the file's modification time and size, read with one `stat` call
-  through the `IndexStore` port. Running `index` recreates the file, so the
-  next request rebuilds automatically.
-- Each app owns its cache (no module-level state). `run_search` and
-  `run_answer` take the loader as an optional parameter, so the CLI is
-  unchanged.
-- Measured with `make serve`, `k = 5`:
+- **Built index on disk (cold start).** The first process that builds the
+  BM25 index pickles it, with its version, to `data/processed/index.pkl`
+  (8.7 MB). Any later command loads it in about 0.2 s instead of rebuilding.
+  A copy from another version, or a file that cannot be read, is ignored and
+  rebuilt; a cache that cannot be written only costs time. Only this file,
+  written by the program itself, is ever unpickled, because unpickling can run
+  code.
+- **Built index in memory (server).** `IndexCache` keeps the last built index
+  for the life of the HTTP server, so a search costs milliseconds.
+- **Query results (server).** `/search` and `/answer` results are kept in an
+  `lru_cache` of 256 entries keyed by query, `k` and index version; errors are
+  never cached.
 
-| Request | Time |
-|---|---|
-| First search (empty cache) | 2.22 s |
-| Second and third search | 0.013 s |
-| After touching the index file | 2.06 s, then 0.013 s |
+Each app owns its caches (no module-level state), and `run_search` and
+`run_answer` take the index loader as an optional parameter, so the CLI code
+did not change.
 
-- Known limit: two requests that miss at the same time both build the index
-  once; a lock would avoid it. Caching whole answers was left out because it
-  only helps when the exact same question repeats.
+Measured on a busy machine (load average about 10), `main` and this version
+run back to back:
+
+| Request | Without the caches | With the caches |
+|---|---|---|
+| CLI `search` (cold start) | 4.28-4.46 s | 1.35-1.76 s |
+| `search_dataset`, 100 docs questions | 10.53 s | 5.92 s |
+| Server `/search`, second time | 2.22 s | 0.003-0.013 s |
+| Server `/answer`, same question again | about 30 s | 0.004 s |
+
+Known limits: two server requests that miss at the same time both build the
+index once (a lock would avoid it), and `"lora"` and `" lora "` are different
+cache keys.
 
 ## Bonus: incremental indexing
 

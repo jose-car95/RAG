@@ -136,6 +136,18 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   caché → indexado incremental → embeddings → recuperación híbrida; después,
   una página de chat que use la API. #75 (recode) y #68 (escuela) quedan
   para el final.
+- **Verificado (2026-10-27, issue #89, caché en frío y de consultas):** el
+  bonus pide "cache the index and query results to speed up cold start and
+  repeated queries"; el #85 solo cubría el índice en la memoria del
+  servidor (error de la IA al proponerlo, sin contrastar con el enunciado).
+  Ahora: el índice BM25 construido se guarda con `pickle` y su versión en
+  `data/processed/index.pkl` (8,7 MB; volcado 0,08 s, carga 0,19 s frente a
+  2,11 s de construir); `CorpusIndex` pasa al dominio; la API guarda
+  `/search` y `/answer` en un `lru_cache` de 256 por (pregunta, k, versión).
+  `make lint` OK y `make test` 243 passed (5 nuevos). Medido con la máquina
+  cargada (load average 10-11), `main` y la rama seguidas: `search` CLI
+  4,28-4,46 s → 1,35-1,76 s; `search_dataset` docs 10,53 s → 5,92 s;
+  `/answer` repetido 0,004 s (el primero, 94 s por la carga de la máquina).
 - **Verificado (2026-10-26, issue #87, indexado incremental):** `make lint`
   OK y `make test` 238 passed (6 nuevos: nada cambia, uno modificado igual a
   una reconstrucción completa, uno borrado, tamaño nuevo, índice antiguo y
