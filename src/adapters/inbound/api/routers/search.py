@@ -4,7 +4,6 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from src.adapters.inbound.api.dependencies import ApiServices, get_services
 from src.adapters.inbound.api.schemas import QueryRequest, SearchResponse
-from src.application.use_cases.search import run_search
 
 
 search_router = APIRouter(prefix="/search")
@@ -28,13 +27,8 @@ def handle_search(
         HTTPException: 400 with the CLI message for any user error.
     """
     try:
-        results = run_search(
-            request.query,
-            request.k,
-            services.index_path,
-            services.index_store,
-            load=services.load_index
-        )
+        version = services.index_store.index_version(services.index_path)
+        results = services.search(request.query, request.k, version)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error))
     return SearchResponse(
