@@ -20,7 +20,7 @@ from src.application.use_cases.answer_dataset import run_answer_dataset
 from src.application.use_cases.evaluate import run_evaluate
 from src.application.use_cases.embed_index import run_embed_index
 from src.application.use_cases.index_corpus import run_index, MAX_CHUNK_SIZE
-from src.application.use_cases.search import run_search
+from src.application.use_cases.search import run_search, run_semantic_search
 from src.application.use_cases.search_dataset import run_search_dataset
 
 
@@ -111,7 +111,9 @@ class RagCli:
         self,
         query: str,
         k: int = 10,
-        index_path: str = "data/processed/index.db"
+        index_path: str = "data/processed/index.db",
+        retriever: str = "bm25",
+        vectors_path: str = "data/processed/embeddings.db"
     ) -> None:
         """Print the best sources for a single question, best first.
 
@@ -122,8 +124,24 @@ class RagCli:
             query: Question to search for; it cannot be empty.
             k: Maximum number of sources to print.
             index_path: SQLite index to search, built by ``index``.
+            retriever: ``bm25`` for the lexical search (default) or
+                ``semantic`` for the embeddings of ``index --embeddings``.
+            vectors_path: Where the vectors live, for ``--retriever semantic``.
         """
-        results = run_search(query, k, index_path, self._index_store)
+        if retriever == "bm25":
+            results = run_search(query, k, index_path, self._index_store)
+        elif retriever == "semantic":
+            results = run_semantic_search(
+                query,
+                k,
+                index_path,
+                vectors_path,
+                self._index_store,
+                self._vector_store,
+                self._load_embedder
+            )
+        else:
+            raise ValueError("retriever must be 'bm25' or 'semantic'")
         if not results:
             print("No sources found.")
         for position, (source, score) in enumerate(results, start=1):
