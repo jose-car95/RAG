@@ -4,6 +4,8 @@ import sqlite3
 from contextlib import closing
 from pathlib import Path
 
+import numpy as np
+
 from src.application.ports.embedder import Vectors
 from src.application.ports.vector_store import VectorStore
 
@@ -17,6 +19,7 @@ CREATE_VECTORS_TABLE_SQL = """
 INSERT_VECTOR_SQL = (
     "INSERT OR REPLACE INTO vectors (text_hash, vector) VALUES (?, ?)"
 )
+SELECT_VECTORS_SQL = "SELECT text_hash, vector FROM vectors"
 SELECT_HASHES_SQL = "SELECT text_hash FROM vectors"
 
 
@@ -80,3 +83,26 @@ class SqliteVectorStore(VectorStore):
             raise ValueError(
                 f"cannot write embeddings: {vectors_path}"
             ) from error
+
+    def load_vectors(self, vectors_path: str) -> dict[str, Vectors]:
+        """Load every stored vector, keyed by its text hash.
+
+        Args:
+            vectors_path: The vector file.
+
+        Returns:
+            Text hash to its vector; empty if the file is missing or
+            unreadable, so a semantic search finds nothing to rank.
+        """
+        if not Path(vectors_path).is_file():
+            return {}
+        try:
+            with closing(sqlite3.connect(vectors_path)) as connection:
+                return {
+                    text_hash: np.frombuffer(blob, dtype=np.float32)
+                    for text_hash, blob in connection.execute(
+                        SELECT_VECTORS_SQL
+                    )
+                }
+        except sqlite3.Error:
+            return {}
