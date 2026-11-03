@@ -11,9 +11,14 @@ This module holds what both use cases share, so that neither
 
 from collections.abc import Callable
 
+import numpy as np
+
+from src.application.ports.embedder import Embedder
 from src.application.ports.index_store import IndexStore
+from src.application.ports.vector_store import VectorStore
 from src.domain.bm25 import CorpusIndex, build_index, rank
 from src.domain.models import MinimalSource
+from src.domain.semantic import SemanticIndex, rank_semantic, text_hash
 from src.domain.tokenizer import tokenize
 
 
@@ -151,3 +156,74 @@ def search_index(
         results.append((source, score))
 
     return results
+
+
+def load_semantic_index(
+    index_path: str,
+    vectors_path: str,
+    index_store: IndexStore,
+    vector_store: VectorStore
+) -> SemanticIndex:
+    """Build the semantic index: each chunk paired with its vector.
+
+    Chunks share a vector when their text is equal, so a chunk is looked up
+    by the hash of its text, the same key the indexer stored it under.
+
+    Args:
+        index_path: Where the chunks live.
+        vectors_path: Where the vectors live.
+        index_store: Reads the chunks.
+        vector_store: Reads the vectors.
+
+    Returns:
+        The corpus as vectors, ready to search.
+
+    Raises:
+        ValueError: If no chunk of the index has a vector: nothing was
+            embedded, or the vectors belong to texts the index no longer has.
+    """
+    vectors = vector_store.load_vectors(vectors_path)
+    chunks = index_store.load_chunks(index_path)
+    matrix_rows = []
+    sources = []
+    for _, file_path, first_index, last_index, text in chunks:
+        key = text_hash(text)
+        if key in vectors:
+            matrix_rows.append(vectors[key])
+            sources.append(
+                MinimalSource(
+                    file_path=file_path,
+                    first_character_index=first_index,
+                    last_character_index=last_index
+                )
+            )
+    if not matrix_rows:
+        raise ValueError(
+            f"embeddings not found: {vectors_path}; "
+            f"run index --embeddings first"
+        )
+    # ponytail: chunks without a vector (index newer than the embeddings) are
+    # left out of the semantic search; index --embeddings fills them in.
+    return SemanticIndex(matrix=np.stack(matrix_rows), sources=sources)
+
+
+def search_semantic(
+    index: SemanticIndex, query: str, k: int, embedder: Embedder
+) -> list[tuple[MinimalSource, float]]:
+    """Return the ``k`` sources closest in meaning to the query.
+
+    Args:
+        index: A semantic index built with ``load_semantic_index``.
+        query: Question to search for; only spaces counts as empty.
+        k: Maximum number of sources.
+        embedder: Turns the query into a vector.
+
+    Returns:
+        Pairs of source and cosine score, best first.
+
+    Raises:
+        ValueError: If ``k`` is not a positive integer or the query is empty.
+    """
+    clean_query = validate_query_and_k(query, k)
+    query_vector = embedder.embed([clean_query])[0]
+    return rank_semantic(index, query_vector, k)

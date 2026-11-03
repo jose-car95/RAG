@@ -41,6 +41,25 @@ justificar), **ABIERTO** (pendiente, con límite).
   con flags propios como `--raw_directory`: `index --embeddings` (apagado
   por defecto) y `--vectors_path` (`data/processed/embeddings.db`). `index`
   sin el flag no cambia.
+- **DECISIÓN (2026-11-03, Jose, issue #93)** — `search` gana dos flags
+  opcionales: `--retriever` (`bm25` por defecto, o `semantic`) y
+  `--vectors_path` (`data/processed/embeddings.db`). Con los valores por
+  defecto, `search <query> --k` del enunciado no cambia. Un retriever
+  desconocido termina con `ERROR: retriever must be 'bm25' or 'semantic'`.
+  `search_dataset` y la API siguen solo con BM25 (slices aparte).
+- **NOTA, mejora pendiente (2026-11-03, issue #93)** — Los ~8 min del
+  cálculo de embeddings se pueden recortar, pero se decide DESPUÉS de medir
+  el recall semántico (no se optimiza algo que quizá no sirva). Candidatos a
+  analizar entonces: cuantización int8 (`torch.quantize_dynamic`, ~1,5-2x,
+  sin dependencia nueva, a costa de precisión), bajar `MAX_TOKENS`, ONNX
+  Runtime (dependencia pesada). Ya aplicadas y gratis: dedup por huella y
+  ordenar por longitud. El coste se paga una sola vez (segunda pasada 0,8 s).
+- **DECISIÓN (2026-11-03, Jose, issue #93)** — Los vectores se guardan en
+  SQLite (`embeddings.db`), no en un `.pt`/`.npy` ni en FAISS: la clave por
+  huella da el dedup incremental casi gratis y es coherente con `index.db`.
+  El formato no afecta al tiempo de cálculo (se va en el modelo, no en
+  guardar). A escala de millones sí convendría una base vectorial (FAISS);
+  para 18.941 vectores un producto escalar de numpy sobra.
 - **INTERPRETACIÓN** — Las rutas de los ficheros del corpus conservan el
   prefijo tal como se pasa `--raw_directory` (por defecto `data/raw/...`),
   porque la moulinette compara `file_path` literalmente con

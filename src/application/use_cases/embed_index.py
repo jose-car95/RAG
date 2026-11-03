@@ -1,27 +1,14 @@
 """Use case: store one embedding per chunk text, next to the lexical index."""
 
-import hashlib
-
 from tqdm import tqdm
 
 from src.application.ports.embedder import EmbedderLoader
 from src.application.ports.index_store import IndexStore
 from src.application.ports.vector_store import VectorStore
+from src.domain.semantic import text_hash
 
 
 BATCH_SIZE: int = 32
-
-
-def text_hash(text: str) -> str:
-    """Name a chunk text by its SHA-256 hash.
-
-    Args:
-        text: The chunk text.
-
-    Returns:
-        The hash in hexadecimal.
-    """
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 def run_embed_index(

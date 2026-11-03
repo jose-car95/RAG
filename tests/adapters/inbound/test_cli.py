@@ -217,6 +217,111 @@ def test_search_says_when_nothing_is_found(tmp_path: Path) -> None:
     assert result.stdout == "No sources found.\n"
 
 
+def build_semantic_index(
+    tmp_path: Path, cli: RagCli
+) -> tuple[Path, Path]:
+    """Index a one-chunk corpus with embeddings, through the given CLI.
+
+    Args:
+        tmp_path: Temporary folder provided by pytest.
+        cli: The in-process CLI with a fake embedder.
+
+    Returns:
+        The index file and the vectors file.
+    """
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "b.md").write_text(
+        "# Endpoints\nThe http endpoint loads a lora adapter.\n",
+        encoding="utf-8",
+    )
+    index_path = tmp_path / "index.db"
+    vectors_path = tmp_path / "embeddings.db"
+    run(
+        cli,
+        [
+            "index",
+            "--raw_directory", str(corpus),
+            "--index_path", str(index_path),
+            "--embeddings",
+            "--vectors_path", str(vectors_path),
+        ],
+    )
+    return index_path, vectors_path
+
+
+def test_search_semantic_ranks_with_the_embedding_model(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--retriever semantic`` prints a ranked source using the vectors."""
+    cli = make_cli(FakeEmbedderLoader())
+    index_path, vectors_path = build_semantic_index(tmp_path, cli)
+    capsys.readouterr()
+
+    exit_code = run(
+        cli,
+        [
+            "search", "how do I load it",
+            "--index_path", str(index_path),
+            "--retriever", "semantic",
+            "--vectors_path", str(vectors_path),
+        ],
+    )
+
+    assert exit_code == 0
+    first_line = capsys.readouterr().out.splitlines()[0]
+    assert first_line.startswith("1. ")
+    assert str(tmp_path / "corpus" / "b.md") in first_line
+
+
+def test_an_unknown_retriever_is_rejected(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A retriever that is neither bm25 nor semantic fails with exit 1."""
+    cli = make_cli(FakeEmbedderLoader())
+    index_path, _ = build_semantic_index(tmp_path, cli)
+    capsys.readouterr()
+
+    exit_code = run(
+        cli,
+        [
+            "search", "http endpoint",
+            "--index_path", str(index_path),
+            "--retriever", "lexical",
+        ],
+    )
+
+    assert exit_code == 1
+    assert capsys.readouterr().err == (
+        "ERROR: retriever must be 'bm25' or 'semantic'\n"
+    )
+
+
+def test_semantic_search_without_embeddings_says_to_index(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Asking for meaning before embedding says what to run, exit 1."""
+    cli = make_cli(FakeEmbedderLoader())
+    index_path = make_tiny_index(tmp_path)
+    capsys.readouterr()
+
+    exit_code = run(
+        cli,
+        [
+            "search", "http endpoint",
+            "--index_path", str(index_path),
+            "--retriever", "semantic",
+            "--vectors_path", str(tmp_path / "embeddings.db"),
+        ],
+    )
+
+    assert exit_code == 1
+    assert capsys.readouterr().err == (
+        f"ERROR: embeddings not found: {tmp_path / 'embeddings.db'}; "
+        f"run index --embeddings first\n"
+    )
+
+
 def test_index_writes_the_index_file(tmp_path: Path) -> None:
     """``index`` reports how many chunks it stored and where (VI.1 capture)."""
     corpus = tmp_path / "corpus"

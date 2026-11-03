@@ -33,3 +33,15 @@ class VectorStore(Protocol):
             ValueError: If the file cannot be written.
         """
         ...
+
+    def load_vectors(self, vectors_path: str) -> dict[str, Vectors]:
+        """Load every stored vector, keyed by its text hash.
+
+        Args:
+            vectors_path: The vector file.
+
+        Returns:
+            Text hash to its vector; empty if the file is missing or
+            unreadable.
+        """
+        ...

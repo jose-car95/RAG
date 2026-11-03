@@ -136,6 +136,25 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   caché → indexado incremental → embeddings → recuperación híbrida; después,
   una página de chat que use la API. #75 (recode) y #68 (escuela) quedan
   para el final.
+- **Verificado (2026-11-03, issue #93, retriever semántico):** `search
+  --retriever semantic` (por defecto `bm25`) busca por significado con los
+  vectores de `index --embeddings`: embebe la pregunta, la compara con los
+  18.941 vectores por similitud del coseno (producto escalar, porque son
+  unitarios) y devuelve las k mejores. Dominio puro `src/domain/semantic.py`
+  (`SemanticIndex`, `rank_semantic`), `load_vectors` en el puerto y el
+  adaptador, `load_semantic_index` y `search_semantic` en `retrieval.py`,
+  `run_semantic_search` como caso de uso hermano de `run_search` (que no
+  cambia; la API sigue igual) y el flag en la CLI, que elige el caso de uso.
+  `text_hash` pasa al dominio (lo comparten indexar y buscar). Vectores
+  viejos (índice reindexado sin `--embeddings`) dan el mensaje claro, no el
+  de numpy. `make lint` OK (78 ficheros), `make test` 265 passed (4 del
+  dominio, 5 de `retrieval`, 2 del round-trip del store y 3 de la CLI). **Medido (ver Métricas):** semántico solo R@5 docs
+  0,620 y code 0,404, por debajo de BM25 (0,830 / 0,636): en un corpus de
+  código y docs los términos exactos mandan, y MiniLM es de inglés general y
+  recorta a 256 tokens. **No se ajusta nada contra los públicos.** Esto
+  motiva la híbrida (bonus 5). Retriever semántico en la API y en
+  `search_dataset`: pendientes, slices aparte. **Siguiente:** bonus 5,
+  recuperación híbrida (BM25 + semántico).
 - **Verificado (2026-11-03, issue #91, guardar embeddings):** `index
   --embeddings` (apagado por defecto) guarda un vector de all-MiniLM-L6-v2
   por texto distinto de chunk en `data/processed/embeddings.db`, con la
@@ -405,6 +424,24 @@ de disco caliente); ponytail: se toma como ruido y se medirá siempre igual.
 
 MRR (desde el slice #46) del estado actual: docs **0,704**, code **0,480**.
 **Estado final de M4:** docs R@5 0,830 (margen 3), code R@5 0,636 (margen 14).
+
+### Experimentos del bonus (M7)
+
+Comparación del retriever semántico con BM25, misma moulinette y mismos
+datasets públicos, `--k 10`. Nada se ajustó contra ellos.
+
+| Fecha | Retriever | docs R@1 / R@3 / **R@5** / R@10 | code R@1 / R@3 / **R@5** / R@10 | Resultado |
+|---|---|---|---|---|
+| 2026-11-03 | BM25 (obligatorio) | 0,610 / 0,810 / **0,830** / 0,860 | 0,354 / 0,566 / **0,636** / 0,697 | Línea de referencia; pasa los umbrales |
+| 2026-11-03 | Semántico (MiniLM, #93) | 0,430 / 0,560 / **0,620** / 0,680 | 0,222 / 0,333 / **0,404** / 0,475 | **Peor que BM25 solo**; términos exactos y recorte a 256 tokens. Motiva la híbrida (bonus 5) |
+
+Búsqueda semántica de las 199 preguntas: 33 s en total (índice + modelo 6,4
+s; docs 100 en 13,2 s; code 99 en 13,2 s), bien dentro de los 90 s. Comando:
+`search --retriever semantic` por pregunta sobre `index.db` + `embeddings.db`
+reales (18.941 vectores), evaluado con
+`./moulinette-ubuntu evaluate_student_search_results`. Los umbrales del
+enunciado son del retriever obligatorio (BM25), que los cumple; el semántico
+es un experimento de bonus.
 
 ### Historial
 

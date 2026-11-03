@@ -13,7 +13,8 @@ import pytest
 
 from src.adapters.outbound.sqlite_vectors import SqliteVectorStore
 from src.application.ports.embedder import Vectors
-from src.application.use_cases.embed_index import run_embed_index, text_hash
+from src.application.use_cases.embed_index import run_embed_index
+from src.domain.semantic import text_hash
 from src.application.use_cases.index_corpus import run_index
 from tests.application.test_index_corpus import (
     CORPUS,
@@ -189,3 +190,23 @@ def test_a_missing_vectors_file_knows_no_hash(tmp_path: Path) -> None:
 
     assert VECTORS.known_hashes(str(vectors_path)) == set()
     assert not vectors_path.exists()
+
+
+def test_load_vectors_gives_every_stored_vector_by_hash(
+    tmp_path: Path
+) -> None:
+    """The round trip: what ``save_vectors`` wrote comes back unchanged."""
+    _, index_path, vectors_path = build_index(tmp_path)
+    loader = FakeEmbedderLoader()
+    embed(index_path, vectors_path, loader)
+
+    stored = VECTORS.load_vectors(str(vectors_path))
+
+    assert set(stored) == VECTORS.known_hashes(str(vectors_path))
+    text = loader.embedder.texts[0]
+    assert stored[text_hash(text)].tolist() == [float(len(text)), 1.0]
+
+
+def test_load_vectors_is_empty_when_there_is_no_file(tmp_path: Path) -> None:
+    """A search before indexing embeddings finds no vectors, not an error."""
+    assert VECTORS.load_vectors(str(tmp_path / "nope.db")) == {}
