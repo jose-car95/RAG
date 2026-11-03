@@ -429,10 +429,11 @@ The index written incrementally gives the same recall: docs Recall@5 0.830
 (MRR 0.704), code 0.636 (MRR 0.480). On this corpus most of the remaining
 second is Python starting up; the gain grows with the size of the corpus.
 
-## Bonus: semantic embeddings
+## Bonus: semantic search
 
-`index --embeddings` also stores one semantic vector per chunk text, the
-first half of semantic search (searching with them comes next).
+`index --embeddings` stores one semantic vector per chunk text, and
+`search <query> --retriever semantic` searches with them. The default
+retriever is `bm25`, so the subject's `search` is unchanged.
 
 - The model is `sentence-transformers/all-MiniLM-L6-v2` (91 MB, 384
   numbers per vector), run with plain `transformers`: the mean of the token
@@ -456,6 +457,23 @@ first half of semantic search (searching with them comes next).
 
 Chunks longer than 256 tokens (43%) are cut to the length the model was
 trained on, so their vector describes their beginning.
+
+`search --retriever semantic` embeds the query with the same model and
+ranks the stored vectors by cosine similarity (a dot product, since the
+vectors are unit length). On this corpus it is **worse than BM25 alone**,
+measured with the same moulinette and public datasets:
+
+| Recall@5 | BM25 | Semantic (MiniLM) |
+|---|---|---|
+| docs | 0.830 | 0.620 |
+| code | 0.636 | 0.404 |
+
+The reason is the corpus: code and technical docs are found by exact terms
+(API names, flags), where BM25 excels, while a general-purpose sentence
+model blurs them and only sees the first 256 tokens of each chunk. This is
+the motivation for hybrid retrieval, which combines both. The subject's
+recall thresholds apply to the required retriever (BM25), which meets them;
+the semantic one is a bonus experiment.
 
 ## Resources
 
