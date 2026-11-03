@@ -429,6 +429,34 @@ The index written incrementally gives the same recall: docs Recall@5 0.830
 (MRR 0.704), code 0.636 (MRR 0.480). On this corpus most of the remaining
 second is Python starting up; the gain grows with the size of the corpus.
 
+## Bonus: semantic embeddings
+
+`index --embeddings` also stores one semantic vector per chunk text, the
+first half of semantic search (searching with them comes next).
+
+- The model is `sentence-transformers/all-MiniLM-L6-v2` (91 MB, 384
+  numbers per vector), run with plain `transformers`: the mean of the token
+  vectors, ignoring padding, scaled to length 1. Qwen is not used: it is
+  trained to write, not to place texts of equal meaning close together, and
+  it is ~27 times larger.
+- Vectors live in their own file, `data/processed/embeddings.db`
+  (`--vectors_path`), keyed by the SHA-256 of the chunk text. Equal texts
+  share one vector, and only texts without a vector reach the model; when
+  none is missing the model is not even loaded.
+- Vectors of texts that left the index are kept: they are small, never
+  searched and reused if the text comes back.
+- The flag is off by default: embedding takes minutes on a CPU, so the
+  subject's `index` keeps its seconds and its 300 s limit.
+
+| `index --embeddings` run | Result |
+|---|---|
+| First run | 18,563 distinct texts of 18,941 chunks in 8 min 33 s, 756 MB peak RAM |
+| Vector file | 39.6 MB (1,536 bytes per vector) |
+| Second run, nothing new | `0 new of 18563` in 0.81 s |
+
+Chunks longer than 256 tokens (43%) are cut to the length the model was
+trained on, so their vector describes their beginning.
+
 ## Resources
 
 - S. E. Robertson, S. Walker, S. Jones, M. M. Hancock-Beaulieu, M. Gatford,

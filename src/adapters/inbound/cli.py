@@ -11,11 +11,14 @@ import fire
 
 from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.dataset_store import DatasetStore
+from src.application.ports.embedder import EmbedderLoader
 from src.application.ports.generator import GeneratorLoader
 from src.application.ports.index_store import IndexStore
+from src.application.ports.vector_store import VectorStore
 from src.application.use_cases.answer import run_answer
 from src.application.use_cases.answer_dataset import run_answer_dataset
 from src.application.use_cases.evaluate import run_evaluate
+from src.application.use_cases.embed_index import run_embed_index
 from src.application.use_cases.index_corpus import run_index, MAX_CHUNK_SIZE
 from src.application.use_cases.search import run_search
 from src.application.use_cases.search_dataset import run_search_dataset
@@ -36,7 +39,9 @@ class RagCli:
         index_store: IndexStore,
         corpus: CorpusReader,
         datasets: DatasetStore,
-        load_generator: GeneratorLoader
+        load_generator: GeneratorLoader,
+        vector_store: VectorStore,
+        load_embedder: EmbedderLoader
     ) -> None:
         """Keep the adapters every command passes to its use case.
 
@@ -49,17 +54,23 @@ class RagCli:
             corpus: Finds and reads the corpus files.
             datasets: Reads and writes the JSON files of the subject.
             load_generator: Loads the language model when called.
+            vector_store: Where the chunk embeddings are kept.
+            load_embedder: Loads the embedding model when called.
         """
         self._index_store = index_store
         self._corpus = corpus
         self._datasets = datasets
         self._load_generator = load_generator
+        self._vector_store = vector_store
+        self._load_embedder = load_embedder
 
     def index(
         self,
         max_chunk_size: int = MAX_CHUNK_SIZE,
         raw_directory: str = "data/raw",
-        index_path: str = "data/processed/index.db"
+        index_path: str = "data/processed/index.db",
+        embeddings: bool = False,
+        vectors_path: str = "data/processed/embeddings.db"
     ) -> None:
         """Chunk the corpus and store the chunks in the index.
 
@@ -68,6 +79,8 @@ class RagCli:
                 ``MAX_CHUNK_SIZE``.
             raw_directory: Folder of the corpus to index.
             index_path: Where the SQLite index is written.
+            embeddings: Also store a semantic vector per chunk text (bonus).
+            vectors_path: Where the vectors are written.
         """
         chunk_count = run_index(
             raw_directory,
@@ -80,6 +93,19 @@ class RagCli:
             f"Ingestion complete! Indexed {chunk_count} chunks under "
             f"{Path(index_path).parent}/"
         )
+
+        if embeddings:
+            new, total = run_embed_index(
+                index_path,
+                vectors_path,
+                self._index_store,
+                self._vector_store,
+                self._load_embedder
+            )
+            print(
+                f"Embeddings ready! {new} new of {total} chunk texts under "
+                f"{Path(vectors_path).parent}/"
+            )
 
     def search(
         self,

@@ -136,6 +136,19 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   caché → indexado incremental → embeddings → recuperación híbrida; después,
   una página de chat que use la API. #75 (recode) y #68 (escuela) quedan
   para el final.
+- **Verificado (2026-11-03, issue #91, guardar embeddings):** `index
+  --embeddings` (apagado por defecto) guarda un vector de all-MiniLM-L6-v2
+  por texto distinto de chunk en `data/processed/embeddings.db`, con la
+  huella SHA-256 del texto como clave; solo se vectorizan las huellas que
+  faltan y, si no falta ninguna, el modelo ni se carga. Puertos `Embedder` y
+  `VectorStore`; `transformers` con media por máscara, sin dependencia
+  nueva. Decisión de Jose: los vectores huérfanos se quedan (`ponytail:`).
+  `make lint` OK (75 ficheros), `make test` 251 passed (6 del caso de uso y
+  2 de la CLI) y el test lento con MiniLM real, 1 passed. Real: 18.941
+  chunks → 18.563 textos distintos en 8 min 33 s (581 lotes de 32), 756 MB
+  de RAM máxima, fichero de 39,6 MB, 1.536 bytes por vector; segunda
+  ejecución `0 new of 18563` en 0,81 s. **Siguiente:** bonus 4b, `search
+  --retriever semantic` y su recall frente a BM25.
 - **Verificado (2026-10-27, issue #89, caché en frío y de consultas):** el
   bonus pide "cache the index and query results to speed up cold start and
   repeated queries"; el #85 solo cubría el índice en la memoria del

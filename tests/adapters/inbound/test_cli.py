@@ -17,8 +17,10 @@ from src.adapters.inbound.cli import RagCli, run
 from src.adapters.outbound.corpus import FileCorpus
 from src.adapters.outbound.json_files import JsonDatasetStore
 from src.adapters.outbound.sqlite_index import SqliteIndexStore
+from src.adapters.outbound.sqlite_vectors import SqliteVectorStore
 from tests.application.test_answer import FakeLoader
 from tests.application.test_answer_dataset import write_results
+from tests.application.test_embed_index import FakeEmbedderLoader
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -30,6 +32,25 @@ REQUIRED_COMMANDS = (
     "answer_dataset",
     "evaluate",
 )
+
+
+def make_cli(load_embedder: FakeEmbedderLoader) -> RagCli:
+    """Build the CLI in-process with real stores and fake models.
+
+    Args:
+        load_embedder: The fake embedding model loader.
+
+    Returns:
+        A CLI that never loads Qwen or MiniLM.
+    """
+    return RagCli(
+        SqliteIndexStore(),
+        FileCorpus(),
+        JsonDatasetStore(),
+        FakeLoader(),
+        SqliteVectorStore(),
+        load_embedder
+    )
 
 
 def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
@@ -219,6 +240,55 @@ def test_index_writes_the_index_file(tmp_path: Path) -> None:
     assert index_path.is_file()
 
 
+def test_index_with_embeddings_stores_the_vectors(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--embeddings`` adds one line after the subject's one."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.py").write_text("def first() -> int:\n    return 1\n")
+    index_path = tmp_path / "processed" / "index.db"
+    vectors_path = tmp_path / "processed" / "embeddings.db"
+    loader = FakeEmbedderLoader()
+
+    exit_code = run(
+        make_cli(loader),
+        [
+            "index",
+            "--raw_directory", str(corpus),
+            "--index_path", str(index_path),
+            "--embeddings",
+            "--vectors_path", str(vectors_path),
+        ],
+    )
+
+    assert exit_code == 0
+    assert capsys.readouterr().out.splitlines()[-1] == (
+        f"Embeddings ready! 1 new of 1 chunk texts under "
+        f"{vectors_path.parent}/"
+    )
+    assert vectors_path.is_file()
+
+
+def test_index_without_embeddings_loads_no_model(tmp_path: Path) -> None:
+    """The subject's ``index`` stays as it was: no vectors, no model."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "a.py").write_text("def first() -> int:\n    return 1\n")
+    index_path = tmp_path / "processed" / "index.db"
+    loader = FakeEmbedderLoader()
+
+    exit_code = run(
+        make_cli(loader),
+        ["index", "--raw_directory", str(corpus), "--index_path",
+         str(index_path)],
+    )
+
+    assert exit_code == 0
+    assert loader.loads == 0
+    assert not (index_path.parent / "embeddings.db").exists()
+
+
 def test_evaluate_prints_recall_in_the_subject_format(tmp_path: Path) -> None:
     """One line with Recall@1/3/5/10 and three decimals, as in the subject."""
     correct = {
@@ -342,9 +412,7 @@ def test_answer_dataset_prints_the_subject_lines(
     """
     input_path = write_results(tmp_path)
     save_directory = tmp_path / "answers"
-    cli = RagCli(
-        SqliteIndexStore(), FileCorpus(), JsonDatasetStore(), FakeLoader()
-    )
+    cli = make_cli(FakeEmbedderLoader())
 
     exit_code = run(
         cli,

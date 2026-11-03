@@ -35,6 +35,12 @@ justificar), **ABIERTO** (pendiente, con límite).
   (`data/processed/index.db`, un único fichero SQLite), también en `search`,
   `search_dataset` y `answer`. Con los valores por defecto, los comandos del
   enunciado funcionan sin cambios.
+- **DECISIÓN (2026-10-27, Jose, issue #91)** — El bonus de embeddings
+  necesita calcular un vector por chunk, y en CPU eso son ~625 s para los
+  18.941 chunks, por encima de los 300 s del indexado. Por eso es opcional,
+  con flags propios como `--raw_directory`: `index --embeddings` (apagado
+  por defecto) y `--vectors_path` (`data/processed/embeddings.db`). `index`
+  sin el flag no cambia.
 - **INTERPRETACIÓN** — Las rutas de los ficheros del corpus conservan el
   prefijo tal como se pasa `--raw_directory` (por defecto `data/raw/...`),
   porque la moulinette compara `file_path` literalmente con
