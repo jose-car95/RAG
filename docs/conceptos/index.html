@@ -6,58 +6,91 @@
 <title>Conceptos del proyecto RAG</title>
 <style>
 :root {
-    --bg: #ffffff; --fg: #1a1a1a; --muted: #5b5b5b; --line: #d7d7d7;
-    --soft: #f4f4f5; --accent: #1f5fa8; --warn: #a33; --ok: #1d7a4a;
+    --bg: #ffffff; --fg: #1a1a1a; --muted: #5b5b5b; --line: #e3e3e8;
+    --soft: #f5f6f8; --accent: #2563eb; --accent-tint: #eaf0ff;
+    --warn: #c0392b; --warn-tint: #fdecea; --ok: #1d7a4a; --ok-tint: #e7f5ee;
+    --code-fg: #b0266b; --zebra: #fafbfc;
+    /* un color por pestaña, para orientarse de un vistazo */
+    --c-db: #0d9488; --c-lex: #4f46e5; --c-rec: #9333ea;
+    --c-pipe: #2563eb; --c-arq: #d97706; --c-run: #059669;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #14161a; --fg: #e7e7e7; --muted: #a2a2a2; --line: #333842;
-      --soft: #1c1f25; --accent: #7fb0ea; --warn: #e88; --ok: #6fd39b;
+      --soft: #1c1f25; --accent: #7fb0ea; --accent-tint: #1b2a44;
+      --warn: #e88; --warn-tint: #3a2220; --ok: #6fd39b; --ok-tint: #16301f;
+      --code-fg: #f2a3cc; --zebra: #181b21;
+      --c-db: #2dd4bf; --c-lex: #a5b4fc; --c-rec: #d8b4fe;
+      --c-pipe: #7fb0ea; --c-arq: #fbbf24; --c-run: #34d399;
     }
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0 auto; max-width: 62rem; padding: 2rem 1.1rem 5rem;
+    margin: 0 auto; max-width: 62rem; padding: 1.2rem 1.1rem 5rem;
     background: var(--bg); color: var(--fg); line-height: 1.6;
     font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
-  h1 { font-size: 1.85rem; line-height: 1.25; margin: 0 0 .3rem; }
+  h1 {
+    font-size: 1.9rem; line-height: 1.25; margin: 0 0 .4rem;
+    padding-bottom: .35rem; border-bottom: 3px solid var(--panel-accent, var(--accent));
+  }
   h2 {
-    font-size: 1.3rem; margin: 2.6rem 0 .8rem; padding-top: .8rem;
-    border-top: 1px solid var(--line);
+    font-size: 1.3rem; margin: 2.4rem 0 .8rem; padding: .15rem 0 .15rem .7rem;
+    border-left: 4px solid var(--panel-accent, var(--accent));
   }
-  h3 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; }
+  h3 { font-size: 1.05rem; margin: 1.6rem 0 .5rem; color: var(--panel-accent, var(--fg)); }
   p, li { font-size: .97rem; }
+  a { color: var(--panel-accent, var(--accent)); }
   code, pre { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  code { background: var(--soft); padding: .1rem .3rem; border-radius: 3px; font-size: .88em; }
-  pre {
-    background: var(--soft); border: 1px solid var(--line); border-radius: 6px;
-    padding: .8rem .9rem; overflow-x: auto; font-size: .85rem; line-height: 1.45;
+  code {
+    background: var(--soft); color: var(--code-fg); padding: .1rem .35rem;
+    border-radius: 4px; font-size: .88em;
   }
-  pre code { background: none; padding: 0; font-size: 1em; }
-  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .9rem; display: block; overflow-x: auto; }
-  th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; vertical-align: top; }
-  th { background: var(--soft); }
+  pre {
+    background: var(--soft); border: 1px solid var(--line);
+    border-left: 4px solid var(--panel-accent, var(--accent)); border-radius: 6px;
+    padding: .8rem .9rem; overflow-x: auto; font-size: .85rem; line-height: 1.5;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: 1em; }
+  table {
+    border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .9rem;
+    display: block; overflow-x: auto; border-radius: 6px;
+  }
+  th, td { border: 1px solid var(--line); padding: .45rem .65rem; text-align: left; vertical-align: top; }
+  th { background: var(--accent-tint); color: var(--fg); }
+  tbody tr:nth-child(even) td { background: var(--zebra); }
   td.num, th.num { text-align: right; font-family: ui-monospace, Menlo, Consolas, monospace; }
   .lead { color: var(--muted); font-size: 1.02rem; margin-top: 0; }
   .note, .warn, .ok {
-    border-left: 3px solid var(--accent); background: var(--soft);
+    border-left: 4px solid var(--accent); background: var(--accent-tint);
     padding: .7rem .9rem; border-radius: 0 6px 6px 0; margin: 1rem 0;
   }
-  .warn { border-left-color: var(--warn); }
-  .ok { border-left-color: var(--ok); }
+  .warn { border-left-color: var(--warn); background: var(--warn-tint); }
+  .ok { border-left-color: var(--ok); background: var(--ok-tint); }
   .fig { margin: 1.2rem 0; }
   .fig svg { width: 100%; height: auto; }
   .fig figcaption { color: var(--muted); font-size: .85rem; margin-top: .4rem; }
+  nav {
+    background: var(--soft); border: 1px solid var(--line);
+    border-left: 4px solid var(--panel-accent, var(--accent));
+    border-radius: 0 6px 6px 0; padding: .8rem 1rem; margin: 1.2rem 0;
+  }
   nav ol { margin: .4rem 0 0; padding-left: 1.3rem; }
-  nav a { color: var(--accent); }
+  nav a { color: var(--panel-accent, var(--accent)); }
+  /* chip para marcar un flag o una ruta en el texto */
+  .flag {
+    display: inline-block; font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: .82em; background: var(--accent-tint); color: var(--code-fg);
+    border: 1px solid var(--line); border-radius: 4px; padding: .02rem .4rem;
+  }
   .tag {
     display: inline-block; font-size: .72rem; letter-spacing: .04em;
     text-transform: uppercase; color: var(--muted); border: 1px solid var(--line);
     border-radius: 999px; padding: .05rem .5rem; vertical-align: middle;
   }
   .formula {
-    background: var(--soft); border: 1px solid var(--line); border-radius: 6px;
+    background: var(--soft); border: 1px solid var(--line);
+    border-left: 4px solid var(--panel-accent, var(--accent)); border-radius: 6px;
     padding: .9rem 1rem; margin: 1rem 0; overflow-x: auto;
     font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .9rem;
   }
@@ -69,24 +102,36 @@
   svg .dash { stroke: currentColor; stroke-width: 1; fill: none; stroke-dasharray: 4 3; opacity: .55; }
   svg .thick { stroke: currentColor; stroke-width: 2; fill: none; }
 
-  /* --- pestañas --- */
+  /* --- pestañas, cada una con su color --- */
   .tabs {
     position: sticky; top: 0; z-index: 10; display: flex; flex-wrap: wrap;
-    gap: .3rem; padding: .6rem 0 .5rem; margin: 0 0 .5rem;
-    background: var(--bg); border-bottom: 1px solid var(--line);
+    gap: .35rem; padding: .7rem 0 .55rem; margin: 0 0 .6rem;
+    background: var(--bg); border-bottom: 2px solid var(--line);
   }
   .tabs button {
     font: inherit; font-size: .9rem; cursor: pointer; color: var(--muted);
     background: var(--soft); border: 1px solid var(--line);
-    border-radius: 999px; padding: .35rem .9rem;
+    border-radius: 999px; padding: .35rem .95rem; transition: all .12s ease;
   }
-  .tabs button:hover { color: var(--fg); }
+  .tabs button:hover { color: var(--fg); border-color: var(--muted); }
   .tabs button[aria-selected="true"] {
-    color: var(--bg); background: var(--accent); border-color: var(--accent);
-    font-weight: 600;
+    color: #fff; font-weight: 600; border-color: transparent;
   }
+  #tab-db[aria-selected="true"]   { background: var(--c-db); }
+  #tab-lex[aria-selected="true"]  { background: var(--c-lex); }
+  #tab-rec[aria-selected="true"]  { background: var(--c-rec); }
+  #tab-pipe[aria-selected="true"] { background: var(--c-pipe); }
+  #tab-arq[aria-selected="true"]  { background: var(--c-arq); }
+  #tab-run[aria-selected="true"]  { background: var(--c-run); }
+  /* cada panel tiñe sus títulos, barras y enlaces con su color */
+  #panel-db   { --panel-accent: var(--c-db); }
+  #panel-lex  { --panel-accent: var(--c-lex); }
+  #panel-rec  { --panel-accent: var(--c-rec); }
+  #panel-pipe { --panel-accent: var(--c-pipe); }
+  #panel-arq  { --panel-accent: var(--c-arq); }
+  #panel-run  { --panel-accent: var(--c-run); }
   .panel[hidden] { display: none; }
-  .panel > h1 { margin-top: 1rem; }
+  .panel > h1 { margin-top: .6rem; }
   @media (max-width: 30rem) { .tabs button { font-size: .82rem; padding: .3rem .7rem; } }
 
 </style>
@@ -2081,6 +2126,8 @@ de este proyecto, con su fecha.</p>
   <strong>Contenido</strong>
   <ol>
     <li><a href="#run-mapa">El mapa: cuatro pasos en orden</a></li>
+    <li><a href="#run-rutas">Las rutas que pasa cada comando</a></li>
+    <li><a href="#run-cache">La caché y los tiempos</a></li>
     <li><a href="#run-index"><code>index</code></a></li>
     <li><a href="#run-search"><code>search</code></a></li>
     <li><a href="#run-search-dataset"><code>search_dataset</code></a></li>
@@ -2174,14 +2221,51 @@ línea</strong> <code>ERROR: …</code> por stderr y el programa termina con
 con 130.
 </div>
 
+<h3 id="run-rutas">Las rutas que pasa cada comando</h3>
+<p>Ninguna ruta está escrita en el código: todas son argumentos, con un valor
+por defecto cuando tiene sentido. Esta es la lista completa, con qué apunta cada
+una y para qué.</p>
+<table>
+<tr><th>Ruta (flag)</th><th>Comandos</th><th>Por defecto</th><th>A qué apunta y cuál es su objetivo</th></tr>
+<tr><td><span class="flag">--raw_directory</span></td><td><code>index</code></td><td><code>data/raw</code></td><td>La carpeta del <strong>corpus en bruto</strong> (el árbol de vLLM). Es la <em>entrada</em> de <code>index</code>: lo que se descubre y se trocea.</td></tr>
+<tr><td><span class="flag">--index_path</span></td><td><code>index</code> (escribe) · <code>search</code>, <code>search_dataset</code>, <code>answer</code> (leen)</td><td><code>data/processed/index.db</code></td><td>El <strong>índice SQLite</strong> de chunks. <code>index</code> lo crea; los demás lo leen para buscar. Es el punto de encuentro entre el paso 1 y el resto.</td></tr>
+<tr><td><span class="flag">--vectors_path</span></td><td><code>index --embeddings</code> (escribe) · <code>search --retriever semantic|hybrid</code> (lee)</td><td><code>data/processed/embeddings.db</code></td><td>Los <strong>vectores semánticos</strong> (bonus). Solo entra en juego si pides embeddings; la búsqueda BM25 obligatoria no lo toca.</td></tr>
+<tr><td><span class="flag">--dataset_path</span></td><td><code>search_dataset</code>, <code>evaluate</code></td><td>obligatoria</td><td>El <strong>JSON de preguntas</strong>. En <code>search_dataset</code>, las preguntas a buscar (<code>UnansweredQuestions</code>); en <code>evaluate</code>, el dataset con las fuentes correctas (<code>AnsweredQuestions</code>).</td></tr>
+<tr><td><span class="flag">--save_directory</span></td><td><code>search_dataset</code> · <code>answer_dataset</code></td><td><code>data/output/search_results</code> · <code>…/search_results_and_answer</code></td><td>La <strong>carpeta</strong> donde se escribe el resultado; el fichero se llama como el dataset de entrada. Usa una subcarpeta por tipo (<code>…/UnansweredQuestions</code>) para que docs y code no se pisen.</td></tr>
+<tr><td><span class="flag">--student_search_results_path</span></td><td><code>evaluate</code>, <code>answer_dataset</code></td><td>obligatoria</td><td>El fichero que produjo <code>search_dataset</code>. <code>evaluate</code> lo puntúa; <code>answer_dataset</code> le añade respuestas <em>sin volver a buscar</em>.</td></tr>
+</table>
+<div class="note"><strong>Regla de oro de las rutas:</strong> <code>index</code>
+es el único que <em>escribe</em> el índice; los demás lo <em>leen</em>. Si
+cambias <span class="flag">--index_path</span> al indexar, pásale el mismo a
+<code>search</code>, <code>search_dataset</code> y <code>answer</code>.</div>
+
+<h3 id="run-cache">La caché: por qué la segunda vez vuela</h3>
+<p>Construir el índice de búsqueda en memoria (tokenizar los 18.941 chunks y
+montar BM25) es casi todo el tiempo de una búsqueda; buscar de verdad son
+milisegundos. Tres cachés evitan repetir ese trabajo, y todas se invalidan
+solas cuando cambia lo que deben reflejar.</p>
+<table>
+<tr><th>Caché</th><th>Dónde</th><th>Qué ahorra</th><th>Cuándo se rehace (su clave)</th></tr>
+<tr><td><strong>Índice construido en disco</strong><br><code>index.pkl</code></td><td>junto a <code>index.db</code></td><td>el arranque en frío: la 1.ª búsqueda lo construye (~segundos) y lo guarda; las siguientes lo cargan en ~0,2 s</td><td>versión del <code>index.db</code> (fecha + tamaño) <strong>y</strong> versión del código de indexado (#97): reindexar, o tocar <code>chunking</code>/<code>tokenizer</code>/<code>bm25</code>, lo rehace</td></tr>
+<tr><td><strong>Indexado incremental</strong></td><td>tabla <code>files</code> de <code>index.db</code></td><td>re-trocea solo los ficheros que cambiaron, no los 1.969</td><td>huella SHA-256 del texto + <code>max_chunk_size</code> + versión del código</td></tr>
+<tr><td><strong>En el servidor</strong> (bonus API)</td><td>memoria del proceso</td><td><code>IndexCache</code> guarda el índice montado; <code>/search</code> y <code>/answer</code> cachean resultados repetidos</td><td>misma versión del índice; los errores nunca se cachean</td></tr>
+</table>
+<div class="ok"><strong>En números:</strong> un <code>search</code> en frío
+construye el índice (varios segundos); el siguiente, con <code>index.pkl</code>
+caliente, baja a ~0,2 s. Un <code>index</code> sin cambios reusa todo (~1 s)
+frente a la reconstrucción completa. Por eso el primer comando tras reindexar
+«tarda» y los siguientes van sueltos.</div>
+
 <h2 id="run-index">2. <code>index</code>: preparar la biblioteca</h2>
 
 <pre><code>uv run python -m src index --max_chunk_size 2000</code></pre>
 <table>
 <tr><th>Flag</th><th>Por defecto</th><th>Qué es</th></tr>
 <tr><td><code>--max_chunk_size</code></td><td>2000</td><td>ancho máximo de un chunk, de 1 a 2000 caracteres</td></tr>
-<tr><td><code>--raw_directory</code></td><td><code>data/raw</code></td><td>carpeta del corpus</td></tr>
-<tr><td><code>--index_path</code></td><td><code>data/processed/index.db</code></td><td>dónde se guarda el índice</td></tr>
+<tr><td><code>--raw_directory</code></td><td><code>data/raw</code></td><td>carpeta del corpus a trocear</td></tr>
+<tr><td><code>--index_path</code></td><td><code>data/processed/index.db</code></td><td>dónde se escribe el índice</td></tr>
+<tr><td><code>--embeddings</code></td><td><code>False</code></td><td>bonus: además, calcula un vector semántico por chunk (tarda minutos)</td></tr>
+<tr><td><code>--vectors_path</code></td><td><code>data/processed/embeddings.db</code></td><td>bonus: dónde se guardan esos vectores</td></tr>
 </table>
 
 <p><strong>Para qué sirve:</strong> es el paso <em>indexing</em> del RAG. Como
@@ -2199,20 +2283,25 @@ búsquedas lo aprovechan.</p>
   <li>Por cada fichero (con barra de tqdm), <code>chunker_for</code> elige la
       estrategia: <code>ast</code> para Python, títulos → párrafos → corte para
       Markdown y texto.</li>
-  <li><code>index_store.save_chunks</code>: borra el fichero viejo y guarda todos
-      los chunks en una tabla SQLite, en una sola transacción.</li>
+  <li>Pone en cada chunk su <strong>contexto</strong> (clase o títulos que lo
+      contienen, y la ruta del fichero), que la búsqueda tokeniza con el texto
+      pero nunca devuelve como fuente (pestaña «CamelCase y contexto»).</li>
+  <li><strong>Indexado incremental:</strong> compara la huella de cada fichero
+      con la guardada y re-trocea solo los que cambiaron; si nada se puede
+      reaprovechar (primera vez, nuevo tamaño, código cambiado) reconstruye el
+      índice entero, en una sola transacción SQLite.</li>
 </ol>
 
 <p><strong>Qué mide:</strong> el umbral de <strong>indexado ≤ 300 s</strong>.</p>
 <pre><code>Indexing: 100%|██████████| 1969/1969 [00:03&lt;00:00, 562.46file/s]
-Ingestion complete! Indexed 18942 chunks under data/processed/</code></pre>
+Ingestion complete! Indexed 18941 chunks under data/processed/</code></pre>
 <p>Es el formato de la captura del enunciado (VI.1): dice cuántos chunks y
 dónde. El paso a paso de VI.7.2 escribe «Indices saved under», con la misma
 información salvo el número; por eso elegimos la frase de la captura (#72).</p>
 <table>
 <tr><th>Dato real</th><th>Valor</th></tr>
 <tr><td>Ficheros indexados</td><td class="num">1.969</td></tr>
-<tr><td>Chunks guardados (de 1.847 ficheros con texto)</td><td class="num">18.942</td></tr>
+<tr><td>Chunks guardados (de 1.847 ficheros con texto)</td><td class="num">18.941</td></tr>
 <tr><td>Chunk más ancho</td><td class="num">2.000 caracteres</td></tr>
 <tr><td>Tamaño del índice</td><td class="num">25 MB</td></tr>
 <tr><td>Tiempo (2026-09-23 / 2026-10-19)</td><td class="num">3,65 s / 9,43 s, 81 MB de RAM</td></tr>
@@ -2227,8 +2316,14 @@ index --raw_directory /nope    → ERROR: corpus folder not found: /nope</code><
 <h2 id="run-search">3. <code>search</code>: buscar una pregunta</h2>
 
 <pre><code>uv run python -m src search "How to configure OpenAI server?" --k 3</code></pre>
-<p>Flags: <code>query</code> (posicional), <code>--k</code> (10 por defecto),
-<code>--index_path</code>.</p>
+<table>
+<tr><th>Flag</th><th>Por defecto</th><th>Qué es</th></tr>
+<tr><td><code>query</code> (posicional)</td><td>obligatoria</td><td>la pregunta; no puede estar vacía</td></tr>
+<tr><td><code>--k</code></td><td>10</td><td>cuántas fuentes imprimir</td></tr>
+<tr><td><code>--index_path</code></td><td><code>data/processed/index.db</code></td><td>el índice a leer</td></tr>
+<tr><td><code>--retriever</code></td><td><code>bm25</code></td><td><code>bm25</code> (léxico, obligatorio), <code>semantic</code> (vectores) o <code>hybrid</code> (fusión, bonus)</td></tr>
+<tr><td><code>--vectors_path</code></td><td><code>data/processed/embeddings.db</code></td><td>los vectores, solo para <code>semantic</code>/<code>hybrid</code></td></tr>
+</table>
 
 <p><strong>Para qué sirve:</strong> el paso <em>retrieving</em> con una sola
 pregunta. Es la herramienta para depurar a mano: ver qué fuentes saca BM25 y con
@@ -2261,7 +2356,9 @@ excluido.</p>
 <div class="note">
 <strong>Por eso existe <code>search_dataset</code>:</strong> casi todo el tiempo
 es <em>preparar</em> el índice, no buscar. Con 200 preguntas se prepara una vez
-y se busca 200 veces.
+y se busca 200 veces. Y por eso existe la caché <code>index.pkl</code>: tras la
+primera búsqueda, la preparación se salta y una consulta baja a ~0,2 s (ver
+«La caché y los tiempos» arriba).
 </div>
 
 <pre><code>search "" --k 5                → ERROR: query must not be empty
@@ -2549,7 +2646,7 @@ una capa encima de estos mismos comandos.</p></div>
 </div>
 
 <script>
-  var TABS = ["db", "lex", "pipe", "arq", "run"];
+  var TABS = ["db", "lex", "rec", "pipe", "arq", "run"];
 
   function showTab(name, keepHash) {
     TABS.forEach(function (one) {
