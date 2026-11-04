@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RAG against the machine</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="dot" aria-hidden="true"></span>
+    <div>
+      <h1>RAG against the machine</h1>
+      <p>Ask about the vLLM 0.10.1 source and docs. Answers are grounded in
+         the retrieved sources.</p>
+    </div>
+  </div>
+</header>
+
+<main id="chat" class="chat" aria-live="polite">
+  <!-- The welcome message and every turn are added here by app.js. -->
+</main>
+
+<form id="composer" class="composer" autocomplete="off">
+  <label class="k" title="How many sources to retrieve">
+    sources
+    <input id="k" type="number" min="1" max="20" value="5" inputmode="numeric">
+  </label>
+  <textarea id="query" rows="1" placeholder="Ask a question about vLLM…"
+            aria-label="Your question"></textarea>
+  <button id="send" type="submit">Send</button>
+</form>
+
+<p class="hint">Runs the model on CPU, so an answer can take ~20–30 s.
+  Enter to send, Shift+Enter for a new line.</p>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,8 +1,10 @@
 """FastAPI application: builds the app and plugs in the API router."""
 
 from functools import cache, lru_cache
+from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
 from src.adapters.inbound.api.dependencies import ApiServices
 from src.adapters.inbound.api.router import api_v1_router
@@ -17,6 +19,10 @@ from src.domain.models import MinimalSource
 
 # Results kept per route; the least recently used one goes first when full.
 QUERY_CACHE_SIZE: int = 256
+
+# The static chat client, at the repo root next to src/. Served by the API so
+# the page and the API share one origin (no CORS) under a single `serve`.
+FRONTEND_DIR = Path(__file__).resolve().parents[4] / "frontend"
 
 
 def create_app(
@@ -69,4 +75,10 @@ def create_app(
         answer=answer
     )
     app.include_router(api_v1_router)
+    # Mounted last and at the root, so it only catches what the API routes and
+    # /docs did not: the chat page at / and its assets. html=True serves
+    # index.html for /. Guarded so the API still starts without the folder.
+    if FRONTEND_DIR.is_dir():
+        chat = StaticFiles(directory=FRONTEND_DIR, html=True)
+        app.mount("/", chat, name="frontend")
     return app
