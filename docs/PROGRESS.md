@@ -58,6 +58,16 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   atajos `make` volverán tras el retoque del Makefile). Pendiente de la
   Fase 4 (híbrida re-medida y reranker) que necesita el OK de Jose para
   regenerar `embeddings.db` y descargar el modelo.
+- **Verificado (2026-11-04, issue #114, chat frontend):** carpeta `frontend/`
+  en la raíz (`index.html`, `style.css`, `app.js`, HTML/CSS/JS a pelo, sin
+  framework ni CDN); la API la sirve con `StaticFiles` montado en `/` (tras el
+  router y `/docs`), así `make serve` abre chat y API en el mismo origen, sin
+  CORS. Cada pregunta hace `POST /search` (muestra fuentes al momento) y luego
+  `POST /answer` (respuesta, lo lento en CPU). `make lint` OK, `make test` 294
+  passed (test nuevo: `/` sirve la página y `/app.js`). Probado en vivo
+  (puerto 8099): `/`, `/style.css`, `/app.js`, `/docs`, `/api/v1/health` y
+  `/api/v1/search` con el índice real; query vacía → 400. El frontend lo
+  escribió la IA (bonus, no es la lógica evaluada).
 - **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
   (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
   B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la
@@ -397,6 +407,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 | Fecha | Decisión | Motivo |
 |---|---|---|
+| 2026-11-04 | El chat frontend vive en `frontend/` (raíz), no en `src/`, y la API lo sirve con `StaticFiles` (opción a, #114) | El frontend es un cliente de la API, no parte del hexágono; meterlo en `src/` emborronaría la frontera y `src/backend` rompería `python -m src` y todos los imports. Servirlo desde la API da un solo origen (sin CORS) y un solo `serve`. Decisión de Jose con las opciones sobre la mesa |
 | 2026-11-04 | Las cachés incluyen un hash automático del código de `chunking`, `tokenizer` y `bm25` (opción B, #97) | Una constante de versión manual depende de que alguien se acuerde de subirla, y en un recode en vivo nadie lo hará. Coste aceptado: editar un comentario también invalida (una reconstrucción, ~5 s) |
 | 2026-11-04 | Plan de mejora de cinco fases aprobado; pestaña de comandos de ejecución sin `make` y README reescrito entero | Decisión de Jose tras la revisión; el Makefile lo retocará él y se incorporará después |
 | 2026-09-13 | Solo CPU; `torch` desde wheels de CPU cuando llegue M5 | Las máquinas de la escuela no tienen GPU |

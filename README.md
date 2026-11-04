@@ -366,7 +366,7 @@ adapter, so another program (or a browser page) can use the system without
 the command line. The use cases did not change.
 
 ```bash
-make serve            # uvicorn on http://127.0.0.1:8000; try it at /docs
+make serve            # uvicorn on http://127.0.0.1:8000; chat at /, docs at /docs
 ```
 
 | Route | Body | Returns |
@@ -390,6 +390,26 @@ curl -X POST http://127.0.0.1:8000/api/v1/search \
   server (`functools.cache` inside the app, not a module global).
 - A user error (empty query, `k = 0`, missing index) is a `400` with the same
   sentence the CLI prints; a malformed body is a `422` from pydantic.
+
+## Bonus: chat frontend
+
+A small chat page talks to that API, so the system can be used from a browser
+instead of the command line. It lives in `frontend/` (`index.html`,
+`style.css`, `app.js`) — plain HTML, CSS and JavaScript, no framework and no
+CDN — and the API serves it as static files, so the page and the API share
+one origin and `make serve` opens both at once.
+
+```bash
+make serve            # then open http://127.0.0.1:8000/  (API docs at /docs)
+```
+
+- The frontend is a **client of the API**, not part of the hexagon, so it sits
+  outside `src/`. The API adapter mounts it with `StaticFiles` at `/`, added
+  after the routes and `/docs` so it only catches the page and its assets.
+- Each question runs the pipeline in two visible steps: a `POST /search` shows
+  the retrieved sources at once, then a `POST /answer` fills in the grounded
+  answer (the slow part on CPU). Errors show the same one-line message the API
+  returns.
 
 ## Bonus: caching
 
