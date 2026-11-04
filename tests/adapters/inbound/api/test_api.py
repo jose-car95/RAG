@@ -36,6 +36,19 @@ def make_client(
     return TestClient(create_app(store, CORPUS, loader, str(index_path)))
 
 
+def test_the_chat_page_is_served_at_the_root(tmp_path: Path) -> None:
+    """The static client is mounted, so / serves index.html and its assets."""
+    client = make_client(tmp_path / "index.db", FakeLoader())
+
+    page = client.get("/")
+    assert page.status_code == 200
+    assert "RAG against the machine" in page.text
+
+    script = client.get("/app.js")
+    assert script.status_code == 200
+    assert "/api/v1" in script.text
+
+
 def test_health_says_the_api_is_up(tmp_path: Path) -> None:
     """A cheap check that the server answers, without touching the index."""
     client = make_client(tmp_path / "index.db", FakeLoader())
