@@ -21,6 +21,13 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   passed (tras reconstruir el índice real por el cambio de esquema). Recall
   público: code R@5 **0,768** (antes 0,707), docs R@5 0,830 (−1 pregunta por
   ruido de .py, lo recupera el slice de títulos). Segundo slice de la Fase 2.
+- **Verificado (2026-11-04, issue #103, contexto de Markdown):**
+  `heading_breadcrumb` en `chunking.py` da a cada chunk de texto la ruta de
+  títulos que lo contiene (`# Quantization ## Supported hardware`), guardada
+  en `context` y tokenizada en la búsqueda; el título que cae justo en el
+  inicio del chunk no se repite. `make lint` OK, `make test` 292 passed.
+  Recall público: docs R@5 **0,840** (recupera la pregunta del slice anterior,
+  R@1 0,590 → 0,650), code R@5 0,768 sin cambio. Tercer slice de la Fase 2.
 - **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
   (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
   B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la

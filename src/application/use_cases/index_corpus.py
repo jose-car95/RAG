@@ -11,6 +11,7 @@ from src.domain.chunking import (
     chunker_for,
     context_for_offset,
     definition_spans,
+    heading_breadcrumb,
 )
 
 
@@ -96,12 +97,16 @@ def run_index(
             continue
 
         chunker = chunker_for(path.suffix)
-        # The enclosing class or function gives a mid-class chunk back the
-        # name it would otherwise lose. Only Python has spans; other files
-        # get an empty context here.
-        spans = definition_spans(text) if path.suffix == ".py" else []
+        # Context gives a mid-document chunk back what it would otherwise lose:
+        # for Python the enclosing class or function, for Markdown and text
+        # the trail of headings above it.
+        is_python = path.suffix == ".py"
+        spans = definition_spans(text) if is_python else []
         for first, last in chunker(text, max_chunk_size):
-            context = context_for_offset(spans, first)
+            if is_python:
+                context = context_for_offset(spans, first)
+            else:
+                context = heading_breadcrumb(text, first)
             chunks.append((file_path, first, last, text[first:last], context))
 
     changed = {

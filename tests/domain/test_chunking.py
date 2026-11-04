@@ -7,6 +7,7 @@ from src.domain.chunking import (
     chunk_text,
     context_for_offset,
     definition_spans,
+    heading_breadcrumb,
 )
 
 MARKDOWN_SAMPLE = (
@@ -79,6 +80,45 @@ def test_context_for_offset_finds_the_enclosing_definition() -> None:
 def test_definition_spans_of_unparsable_source_is_empty() -> None:
     """Source that does not parse has no spans instead of raising."""
     assert definition_spans(BROKEN_PYTHON) == []
+
+
+HEADING_SAMPLE = (
+    "# Quantization\n"           # 0
+    "intro\n\n"                  # 15
+    "## Supported hardware\n"    # 22
+    "amd and nvidia\n\n"         # 43
+    "### Notes\n"                # 58
+    "detail\n"                   # 68
+)
+
+
+def test_heading_breadcrumb_trails_the_enclosing_headings() -> None:
+    """A chunk carries every heading open above it, outermost first."""
+    at_intro = HEADING_SAMPLE.index("intro")
+    at_amd = HEADING_SAMPLE.index("amd")
+    at_detail = HEADING_SAMPLE.index("detail")
+
+    assert heading_breadcrumb(HEADING_SAMPLE, at_intro) == "# Quantization"
+    assert heading_breadcrumb(HEADING_SAMPLE, at_amd) == (
+        "# Quantization ## Supported hardware"
+    )
+    assert heading_breadcrumb(HEADING_SAMPLE, at_detail) == (
+        "# Quantization ## Supported hardware ### Notes"
+    )
+
+
+def test_heading_breadcrumb_excludes_a_heading_at_the_offset() -> None:
+    """A chunk starting on a heading does not repeat it; it keeps ancestors."""
+    at_subheading = HEADING_SAMPLE.index("## Supported")
+
+    assert heading_breadcrumb(
+        HEADING_SAMPLE, at_subheading
+    ) == "# Quantization"
+
+
+def test_heading_breadcrumb_is_empty_before_any_heading() -> None:
+    """Text before the first heading has no breadcrumb."""
+    assert heading_breadcrumb("plain text, no heading", 5) == ""
 
 
 def assert_valid_chunks(

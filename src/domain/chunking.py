@@ -88,6 +88,54 @@ def _heading_starts(text: str) -> list[int]:
     return positions
 
 
+def _heading_lines(text: str) -> list[tuple[int, int, str]]:
+    """Find each Markdown heading: where it starts, its level and its text.
+
+    Args:
+        text: Text to inspect.
+
+    Returns:
+        Tuples of start offset, level (the count of ``#``) and the stripped
+        heading line, in the order they appear.
+    """
+    headings: list[tuple[int, int, str]] = []
+    offset: int = 0
+    for line in text.splitlines(keepends=True):
+        hash_count = len(line) - len(line.lstrip("#"))
+        if 1 <= hash_count <= 6 and line[hash_count:hash_count + 1] == " ":
+            headings.append((offset, hash_count, line.strip()))
+        offset += len(line)
+    return headings
+
+
+def heading_breadcrumb(text: str, offset: int) -> str:
+    """Return the trail of headings open above an offset, outermost first.
+
+    A deeper heading replaces the shallower ones it closes, so the trail is
+    the path from the top heading down to the section the offset sits in. A
+    heading landing exactly on the offset is left out: its text already opens
+    the chunk, and only its ancestors add anything.
+
+    Args:
+        text: The Markdown or plain text the offset points into.
+        offset: A character offset into that text.
+
+    Returns:
+        The enclosing heading lines joined by a space, or the empty string
+        when the offset is above every heading.
+    """
+    trail: list[tuple[int, str]] = []
+    for position, level, title in _heading_lines(text):
+        if position > offset:
+            break
+        ancestors = [entry for entry in trail if entry[0] < level]
+        if position == offset:
+            trail = ancestors
+            break
+        trail = ancestors + [(level, title)]
+    return " ".join(title for _, title in trail)
+
+
 def _paragraph_starts(text: str) -> list[int]:
     """Find the position where each paragraph starts, after a blank line.
 
