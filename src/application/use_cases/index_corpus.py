@@ -7,12 +7,7 @@ from tqdm import tqdm
 from src.application.indexing_code import code_version
 from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.index_store import IndexStore, NewChunk
-from src.domain.chunking import (
-    chunker_for,
-    context_for_offset,
-    definition_spans,
-    heading_breadcrumb,
-)
+from src.domain.chunking import chunk_context, chunker_for, definition_spans
 
 
 # The subject's ceiling for a retrieved source, in characters. The guard,
@@ -97,16 +92,13 @@ def run_index(
             continue
 
         chunker = chunker_for(path.suffix)
-        # Context gives a mid-document chunk back what it would otherwise lose:
-        # for Python the enclosing class or function, for Markdown and text
-        # the trail of headings above it.
+        # Context gives a mid-document chunk back what it would otherwise lose
+        # (its class or its headings) plus the file path; the domain builds it
+        # so the code version of #97 covers every rule that shapes the index.
         is_python = path.suffix == ".py"
         spans = definition_spans(text) if is_python else []
         for first, last in chunker(text, max_chunk_size):
-            if is_python:
-                context = context_for_offset(spans, first)
-            else:
-                context = heading_breadcrumb(text, first)
+            context = chunk_context(text, file_path, first, spans, is_python)
             chunks.append((file_path, first, last, text[first:last], context))
 
     changed = {

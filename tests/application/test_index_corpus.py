@@ -62,6 +62,21 @@ def read_rows(index_path: Path) -> list[tuple[str, int, int, str]]:
         return list(connection.execute(query))
 
 
+def test_chunk_context_ends_with_the_file_path(tmp_path: Path) -> None:
+    """The path joins the context so its words count for ranking (#45)."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    rows = STORE.load_chunks(str(index_path))
+    assert rows, "the corpus must produce chunks"
+    for _, file_path, _, _, _, context in rows:
+        assert context.endswith(file_path)
+
+
 def test_chunks_are_stored_with_their_text(tmp_path: Path) -> None:
     """Every row keeps the corpus path and the exact text of its range."""
     corpus = tmp_path / "corpus"
