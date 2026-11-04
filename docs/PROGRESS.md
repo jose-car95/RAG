@@ -6,6 +6,12 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 - **Milestone:** M7 — Bonus (en curso). M0-M5 cerrados; M4 el 2026-10-14.
   M6 tiene abiertos #75 (recode) y #68 (escuela), que se dejan para el final.
+- **Verificado (2026-11-04, issue #99, CamelCase):** `tokenize` parte los
+  identificadores en CamelCase conservando los dígitos (`int8`/`fp8` enteros);
+  `MolmoForCausalLM` → `molmo`, `for`, `causal`, `lm`. `make lint` OK,
+  `make test` 286 passed. Recall público (índice real, reconstruido solo al
+  cambiar el código): docs R@5 **0,840** (antes 0,830), code R@5 **0,707**
+  (antes 0,636). Primer slice de la Fase 2.
 - **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
   (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
   B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la
