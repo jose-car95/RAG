@@ -48,6 +48,16 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   (con `PYTHONPATH`) y ya no escribe en `data/output` real; nota de los 4
   ficheros CRLF y comentario ponytail de la doble lectura de la híbrida.
   `make lint` OK, `make test` 293 passed. Sin cambios de recall (es limpieza).
+- **Verificado (2026-11-04, issue #109, docs Fase 5):** README actualizado
+  al estado post-Fase-2 (método de recuperación con CamelCase y contexto,
+  tabla de recall docs 0,840 / code 0,828, reversión del #45 en las
+  decisiones, subsección de la híbrida, salidas de ejemplo regeneradas,
+  mediciones del 2026-11-04). `docs/conceptos/index.html`: pestaña nueva
+  «CamelCase y contexto» (prefijo `rec-`, con números y preguntas de defensa)
+  y la pestaña de comandos pasa a comandos crudos `uv run` (nota de que los
+  atajos `make` volverán tras el retoque del Makefile). Pendiente de la
+  Fase 4 (híbrida re-medida y reranker) que necesita el OK de Jose para
+  regenerar `embeddings.db` y descargar el modelo.
 - **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
   (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
   B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la

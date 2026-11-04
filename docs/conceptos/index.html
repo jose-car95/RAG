@@ -98,6 +98,8 @@
           onclick="showTab('db')">Bases de datos</button>
   <button role="tab" id="tab-lex" aria-controls="panel-lex" aria-selected="false"
           onclick="showTab('lex')">Búsqueda léxica y BM25</button>
+  <button role="tab" id="tab-rec" aria-controls="panel-rec" aria-selected="false"
+          onclick="showTab('rec')">CamelCase y contexto</button>
   <button role="tab" id="tab-pipe" aria-controls="panel-pipe" aria-selected="false"
           onclick="showTab('pipe')">El pipeline de búsqueda</button>
   <button role="tab" id="tab-arq" aria-controls="panel-arq" aria-selected="false"
@@ -1330,6 +1332,132 @@ Datos medidos sobre <code>data/processed/index.db</code> (18.942 chunks) y
 <code>dataset_docs_public.json</code>.</p>
 </div>
 
+<div class="panel" id="panel-rec" role="tabpanel" aria-labelledby="tab-rec" hidden>
+<h1>CamelCase y contexto: subir el recall sin trampas</h1>
+<p class="lead">Material de estudio del plan de mejora de recall (bonus,
+slices #99, #101, #103 y #105). Todos los números están medidos con la
+moulinette sobre los datasets públicos y privados; las decisiones se tomaron
+con los públicos <em>antes</em> de mirar los privados.</p>
+
+<nav>
+  <strong>Contenido</strong>
+  <ol>
+    <li><a href="#rec-problema">El diagnóstico: buenos chunks, mal ordenados</a></li>
+    <li><a href="#rec-camel">CamelCase: partir <code>MolmoForCausalLM</code></a></li>
+    <li><a href="#rec-contexto">Contexto del chunk: clase, títulos y ruta</a></li>
+    <li><a href="#rec-ruta">Por qué la ruta (reversión del #45)</a></li>
+    <li><a href="#rec-numeros">Los números, paso a paso</a></li>
+    <li><a href="#rec-trampa">Por qué esto no es hacer trampa</a></li>
+    <li><a href="#rec-glosario">Glosario</a></li>
+    <li><a href="#rec-defensa">Preguntas de defensa</a></li>
+  </ol>
+</nav>
+
+<h2 id="rec-problema">1. El diagnóstico: buenos chunks, mal ordenados</h2>
+<p>Al clasificar los fallos a <strong>Recall@5</strong>, la mayoría no eran
+fuentes imposibles de encontrar: el chunk correcto estaba en el ranking, pero
+en los puestos 6 a 200. En code, 28 de 36 fallos; en docs, 13 de 17. El
+problema era el <strong>orden</strong>, no el tamaño del chunk.</p>
+<p>La causa en code: las preguntas nombran clases como <code>Molmo</code> o
+<code>DeepSeek</code>, pero el código las escribe pegadas
+(<code>MolmoForCausalLM</code>), y el tokenizador las dejaba como un solo
+token que nunca coincide con <code>molmo</code>. Y un chunk a mitad de una
+clase había perdido el nombre de la clase a la que pertenece.</p>
+
+<h2 id="rec-camel">2. CamelCase: partir <code>MolmoForCausalLM</code></h2>
+<p><strong>CamelCase</strong> = palabras pegadas con mayúscula inicial. Encima
+del corte por guion bajo que ya teníamos, ahora partimos también en los
+saltos de mayúscula. El token entero se conserva, y se añaden las partes:</p>
+<div class="formula">MolmoForCausalLM → molmoforcausallm, molmo, for, causal, lm</div>
+<div class="note"><p><strong>Los dígitos no parten un token.</strong>
+<code>int8</code> y <code>fp8</code> siguen enteros (son nombres de técnicas,
+decisión del 2026-09-29). Solo parten los cambios de mayúscula/minúscula, no
+la frontera letra-dígito.</p></div>
+
+<h2 id="rec-contexto">3. Contexto del chunk: clase, títulos y ruta</h2>
+<p>Cada chunk se guarda con un <strong>contexto</strong>: unas palabras extra
+que la búsqueda tokeniza junto al texto, pero que <strong>nunca</strong> se
+devuelven como fuente (el rango y el texto del chunk no cambian, así que la
+IoU no se toca). El contexto es:</p>
+<table>
+<tr><th>Tipo de fichero</th><th>Contexto</th><th>Ejemplo</th></tr>
+<tr><td>Python (<code>.py</code>)</td><td>el nombre de la clase o función que contiene el chunk</td><td><code>MolmoForCausalLM</code></td></tr>
+<tr><td>Markdown/texto</td><td>la ruta de títulos abiertos sobre el chunk</td><td><code># Quantization ## Supported hardware</code></td></tr>
+<tr><td>todos</td><td>la ruta del fichero</td><td><code>vllm/.../molmo.py</code> → <code>molmo</code>, <code>models</code>…</td></tr>
+</table>
+<p>Es como darle a un trozo arrancado de un libro el pasillo, la estantería y
+el capítulo de donde salió. La lógica vive en <code>src/domain/chunking.py</code>,
+cubierta por la versión de código del #97, así que cambiarla invalida las
+cachés.</p>
+
+<h2 id="rec-ruta">4. Por qué la ruta (reversión del #45)</h2>
+<p>En M4 (slice #45) ya probamos meter la ruta y lo <strong>descartamos</strong>:
+sola, bajaba docs de 0,830 a 0,820. Pero encima de CamelCase y del contexto de
+clase y títulos, la ruta ya no baja docs (se queda en 0,840) y sube mucho
+code. El prefijo común <code>data/raw/vllm-0.10.1/</code> está en todos los
+chunks, así que su IDF es casi cero y no estorba.</p>
+<div class="ok"><p>Lección de defensa: una decisión se revisa cuando cambia su
+premisa, no se mantiene por costumbre. El #45 se rechazó con un pipeline; con
+otro, se acepta, y los dos momentos están medidos.</p></div>
+
+<h2 id="rec-numeros">5. Los números, paso a paso</h2>
+<p>Recall@5, una pieza cada vez (índice real, moulinette, <code>--k 10</code>):</p>
+<table>
+<tr><th>Cambio</th><th>docs público</th><th>code público</th><th>docs privado</th><th>code privado</th></tr>
+<tr><td>Línea base (BM25)</td><td>0,830</td><td>0,636</td><td>0,780 ✗</td><td>0,570</td></tr>
+<tr><td>+ CamelCase</td><td>0,840</td><td>0,707</td><td>—</td><td>0,640</td></tr>
+<tr><td>+ contexto de Python</td><td>0,830</td><td>0,768</td><td>—</td><td>0,730</td></tr>
+<tr><td>+ títulos de Markdown</td><td>0,840</td><td>0,768</td><td>0,820 ✓</td><td>0,730</td></tr>
+<tr><td>+ ruta del fichero</td><td><strong>0,840</strong></td><td><strong>0,828</strong></td><td><strong>0,830 ✓</strong></td><td><strong>0,800</strong></td></tr>
+</table>
+<p>Y lo más importante, el saldo de preguntas que <em>entran</em> y
+<em>salen</em> del top 5 con todo junto: en code <strong>entran 23 y no sale
+ninguna</strong>; en docs entran 8 y salen 3. La mejora de code es sólida, no
+suerte.</p>
+
+<h2 id="rec-trampa">6. Por qué esto no es hacer trampa</h2>
+<ul>
+  <li>Cada pieza se decidió con un <strong>motivo</strong> antes de medir, no
+      probando variantes hasta que subiera el número.</li>
+  <li>Las decisiones se tomaron con los <strong>públicos</strong>; los
+      privados solo se miraron una vez, como confirmación.</li>
+  <li>No se tocaron <code>k1</code>, <code>b</code>, el tamaño de chunk ni los
+      pesos de la fusión: ajustar esos contra las respuestas conocidas es
+      justo lo prohibido.</li>
+  <li>Se descartó una variante medida (cortar clases grandes por métodos,
+      code 0,485 → 0,465): el criterio es no empeorar el umbral en ningún
+      dataset.</li>
+</ul>
+
+<h2 id="rec-glosario">7. Glosario</h2>
+<table>
+<tr><th>Término</th><th>Una frase</th></tr>
+<tr><td><strong>CamelCase</strong></td><td>Palabras pegadas con mayúscula inicial: <code>DeepSeekModel</code>.</td></tr>
+<tr><td><strong>Contexto</strong> del chunk</td><td>Palabras extra (clase, títulos, ruta) que se indexan con el chunk pero no se devuelven como fuente.</td></tr>
+<tr><td><strong>Breadcrumb</strong> (miga de pan)</td><td>La ruta de títulos abiertos sobre un chunk, de fuera hacia dentro.</td></tr>
+<tr><td><strong>Entran/salen</strong> (<em>churn</em>)</td><td>Cuántas preguntas gana y cuántas pierde un cambio, no solo el saldo neto.</td></tr>
+<tr><td><strong>Sobreajuste</strong> (<em>overfitting</em>)</td><td>Mejora que solo vale para los datos con que se probó y se cae con otros.</td></tr>
+</table>
+
+<h2 id="rec-defensa">8. Preguntas de defensa</h2>
+<ol>
+  <li>¿Por qué <code>int8</code> no se parte y <code>MolmoForCausalLM</code>
+      sí? ¿Qué regla separa un caso del otro?</li>
+  <li>¿Qué es el contexto de un chunk y por qué no aparece nunca como fuente
+      devuelta? ¿Qué pasaría con la IoU si apareciera?</li>
+  <li>¿Dónde vive la lógica del contexto y por qué ahí? Relaciónalo con las
+      cachés del #97.</li>
+  <li>El #45 rechazó la ruta y ahora la usamos: ¿es una contradicción?
+      Justifícalo con los dos números.</li>
+  <li>¿Por qué miras «entran/salen» y no solo el Recall@5 neto?</li>
+  <li>¿Por qué estas mejoras no son ajustar contra los datasets públicos?</li>
+</ol>
+
+<p class="lead">Última actualización: 2026-11-04 · slices #99, #101, #103 y
+#105 del bonus. Números medidos sobre <code>index.db</code> real (18.941
+chunks) y los datasets públicos y privados con la moulinette.</p>
+</div>
+
 <div class="panel" id="panel-pipe" role="tabpanel" aria-labelledby="tab-pipe" hidden>
 
 <h1>El pipeline de búsqueda, pieza por pieza</h1>
@@ -1789,7 +1917,7 @@ pato», pero comprobado por mypy.</p>
 <p>Prueba ejecutada con un puerto <code>Aparato</code> de tres métodos y clases
 que solo tienen uno:</p>
 <table>
-<tr><th>Caso</th><th>Python al ejecutar</th><th>mypy (<code>make lint</code>)</th></tr>
+<tr><th>Caso</th><th>Python al ejecutar</th><th>mypy (gate de tipos)</th></tr>
 <tr><td>Sin herencia, 1 de 3 métodos</td>
     <td>Funciona hasta que llamas al que falta</td>
     <td>❌ <code>"SoloEnciende" is missing following "Aparato" protocol members: apagar, limpiar</code></td></tr>
@@ -2371,15 +2499,20 @@ uv run python -m src answer_dataset \
     --save_directory data/output/search_results_and_answer/UnansweredQuestions</code></pre>
 <p>Para code, cambia <code>docs</code> por <code>code</code> en las rutas.</p>
 
-<h2 id="run-make">10. Las reglas del <code>Makefile</code></h2>
+<h2 id="run-make">10. Instalar, estilo y tests (comandos crudos)</h2>
+<div class="note"><p>El <code>Makefile</code> se está retocando, así que de
+momento todo va con el comando directo. Cuando esté listo volverán los atajos
+<code>make</code> (<code>make install</code>, <code>make lint</code>, …) como
+una capa encima de estos mismos comandos.</p></div>
 <table>
-<tr><th>Regla</th><th>Qué ejecuta</th><th>Para qué</th></tr>
-<tr><td><code>make install</code></td><td><code>uv sync</code></td><td>instalar las dependencias</td></tr>
-<tr><td><code>make run ARGS="search 'What is vLLM?' --k 5"</code></td><td><code>uv run python -m src $(ARGS)</code></td><td>cualquier comando de la CLI</td></tr>
-<tr><td><code>make debug ARGS="…"</code></td><td>lo mismo bajo <code>pdb</code></td><td>depurar paso a paso</td></tr>
-<tr><td><code>make lint</code></td><td><code>flake8 .</code> + <code>mypy .</code> con los flags del enunciado</td><td>estilo y tipos (gate)</td></tr>
-<tr><td><code>make test</code></td><td><code>pytest</code></td><td>todos los tests (gate)</td></tr>
-<tr><td><code>make clean</code></td><td>borra <code>__pycache__</code> y cachés</td><td>dejar el árbol limpio</td></tr>
+<tr><th>Tarea</th><th>Comando directo</th></tr>
+<tr><td>Instalar dependencias</td><td><code>uv sync</code></td></tr>
+<tr><td>Estilo (gate)</td><td><code>uv run flake8 .</code></td></tr>
+<tr><td>Tipos (gate)</td><td><code>uv run mypy . --warn-return-any --warn-unused-ignores --ignore-missing-imports --disallow-untyped-defs --check-untyped-defs</code></td></tr>
+<tr><td>Tests rápidos (gate)</td><td><code>uv run pytest -m "not slow"</code></td></tr>
+<tr><td>Todos los tests</td><td><code>uv run pytest</code></td></tr>
+<tr><td>Depurar un comando</td><td><code>uv run python -m pdb -m src &lt;comando&gt;</code></td></tr>
+<tr><td>Limpiar cachés</td><td><code>rm -rf .mypy_cache .pytest_cache</code></td></tr>
 </table>
 
 <h2 id="run-glosario">11. Glosario</h2>
