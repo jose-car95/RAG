@@ -40,6 +40,14 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   code R@5 **0,828** (antes 0,768), R@10 code 0,909. Cuarto slice de la Fase
   2; **Jose decide al mergear si entra la ruta** (es una línea de
   `chunk_context`).
+- **Verificado (2026-11-04, issue #107, limpieza Fase 3):** `validate_k` es
+  ahora una sola función compartida por `search_dataset` y
+  `validate_query_and_k`; las rutas por defecto del índice y los vectores son
+  constantes (`DEFAULT_INDEX_PATH`, `DEFAULT_VECTORS_PATH`) en la CLI; el test
+  `test_search_dataset_uses_default_save_directory` corre desde un `tmp_path`
+  (con `PYTHONPATH`) y ya no escribe en `data/output` real; nota de los 4
+  ficheros CRLF y comentario ponytail de la doble lectura de la híbrida.
+  `make lint` OK, `make test` 293 passed. Sin cambios de recall (es limpieza).
 - **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
   (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
   B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la
