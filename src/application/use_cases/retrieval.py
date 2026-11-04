@@ -104,6 +104,23 @@ class IndexCache:
         return self._corpus
 
 
+def validate_k(k: int) -> None:
+    """Reject a number of sources a search cannot work with.
+
+    The one definition of the rule, so ``search_dataset`` (which has no
+    query) and ``validate_query_and_k`` share it. ``bool`` is rejected on
+    purpose: it is a subclass of ``int``, so ``True`` would pass as 1.
+
+    Args:
+        k: Number of sources asked for.
+
+    Raises:
+        ValueError: If ``k`` is not a positive integer.
+    """
+    if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
+        raise ValueError("k must be a positive integer")
+
+
 def validate_query_and_k(query: str, k: int) -> str:
     """Reject the arguments a search cannot work with.
 
@@ -123,8 +140,7 @@ def validate_query_and_k(query: str, k: int) -> str:
         ValueError: If ``k`` is not a positive integer, or the query holds
             nothing but spaces.
     """
-    if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
-        raise ValueError("k must be a positive integer")
+    validate_k(k)
     clean_query = query.strip()
     if not clean_query:
         raise ValueError("query must not be empty")

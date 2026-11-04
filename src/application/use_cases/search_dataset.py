@@ -6,7 +6,11 @@ from tqdm import tqdm
 
 from src.application.ports.dataset_store import DatasetStore
 from src.application.ports.index_store import IndexStore
-from src.application.use_cases.retrieval import load_index, search_index
+from src.application.use_cases.retrieval import (
+    load_index,
+    search_index,
+    validate_k,
+)
 from src.domain.models import (
     RagDataset,
     MinimalSearchResults,
@@ -48,9 +52,7 @@ def run_search_dataset(
             is a file, the dataset or the index cannot be read, or the
             results cannot be written.
     """
-    if not isinstance(k, int) or isinstance(k, bool) or k <= 0:
-        raise ValueError("k must be a positive integer")
-
+    validate_k(k)
     datasets.check_save_directory(Path(save_directory))
 
     dataset: RagDataset = datasets.load_dataset(Path(dataset_path))

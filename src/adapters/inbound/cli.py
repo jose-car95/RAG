@@ -34,6 +34,12 @@ EXIT_SUCCESS = 0
 EXIT_ERROR = 1
 EXIT_INTERRUPTED = 130
 
+# Default store locations, under data/processed/. Kept here so the four
+# commands that read the index, and the two that read the vectors, all point
+# at the same place and a change touches one line.
+DEFAULT_INDEX_PATH = "data/processed/index.db"
+DEFAULT_VECTORS_PATH = "data/processed/embeddings.db"
+
 
 class RagCli:
     """Commands required by the subject, exposed through Fire."""
@@ -72,9 +78,9 @@ class RagCli:
         self,
         max_chunk_size: int = MAX_CHUNK_SIZE,
         raw_directory: str = "data/raw",
-        index_path: str = "data/processed/index.db",
+        index_path: str = DEFAULT_INDEX_PATH,
         embeddings: bool = False,
-        vectors_path: str = "data/processed/embeddings.db"
+        vectors_path: str = DEFAULT_VECTORS_PATH
     ) -> None:
         """Chunk the corpus and store the chunks in the index.
 
@@ -115,9 +121,9 @@ class RagCli:
         self,
         query: str,
         k: int = 10,
-        index_path: str = "data/processed/index.db",
+        index_path: str = DEFAULT_INDEX_PATH,
         retriever: str = "bm25",
-        vectors_path: str = "data/processed/embeddings.db"
+        vectors_path: str = DEFAULT_VECTORS_PATH
     ) -> None:
         """Print the best sources for a single question, best first.
 
@@ -176,7 +182,7 @@ class RagCli:
         dataset_path: str,
         k: int = 10,
         save_directory: str = "data/output/search_results",
-        index_path: str = "data/processed/index.db"
+        index_path: str = DEFAULT_INDEX_PATH
     ) -> None:
         """Search every question of a dataset and save the results.
 
@@ -203,7 +209,7 @@ class RagCli:
         self,
         query: str,
         k: int = 10,
-        index_path: str = "data/processed/index.db"
+        index_path: str = DEFAULT_INDEX_PATH
     ) -> None:
         """Answer a single question using the retrieved sources.
 

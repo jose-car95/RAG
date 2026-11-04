@@ -120,6 +120,10 @@ def run_hybrid_search(
     # Checked before loading, because the index, vectors and model cost
     # seconds and a bad query or k does not deserve that work.
     validate_query_and_k(query, k)
+    # ponytail: the lexical and the semantic loaders each read the chunks, so
+    # a hybrid search reads them twice. Hybrid is a bonus demo path, run once
+    # per query from the CLI, so the second read (about a second) is left as
+    # is; sharing one read would couple the two loaders for no real gain.
     corpus = load_index(index_path, index_store)
     semantic_index = load_semantic_index(
         index_path, vectors_path, index_store, vector_store

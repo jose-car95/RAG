@@ -6,6 +6,7 @@ real stdout/stderr instead of calling Python functions directly.
 """
 
 import json
+import os
 import re
 import subprocess
 import sys
@@ -53,18 +54,27 @@ def make_cli(load_embedder: FakeEmbedderLoader) -> RagCli:
     )
 
 
-def run_cli(*args: str) -> subprocess.CompletedProcess[str]:
-    """Run ``python -m src`` with the given arguments from the repo root.
+def run_cli(
+    *args: str, cwd: Path = REPO_ROOT
+) -> subprocess.CompletedProcess[str]:
+    """Run ``python -m src`` with the given arguments.
 
     Args:
         *args: Command-line arguments passed after ``python -m src``.
+        cwd: Directory to run from; the repo root by default. A test that
+            relies on a default output path passes a temporary folder so it
+            never writes into the real ``data/`` tree.
 
     Returns:
         The finished process, with decoded stdout and stderr.
     """
+    # ``-m src`` needs the repo on the import path even when the command runs
+    # from another folder, so that a default output path lands under ``cwd``.
+    env = {**os.environ, "PYTHONPATH": str(REPO_ROOT)}
     return subprocess.run(
         [sys.executable, "-m", "src", *args],
-        cwd=REPO_ROOT,
+        cwd=cwd,
+        env=env,
         capture_output=True,
         text=True,
         timeout=60,
@@ -143,25 +153,32 @@ def test_search_dataset_writes_results_file(tmp_path: Path) -> None:
 
 
 def test_search_dataset_uses_default_save_directory(tmp_path: Path) -> None:
-    """Without ``--save_directory`` the file goes to the default folder."""
-    output_path = (
-        REPO_ROOT / "data/output/search_results/dataset_code_public.json"
+    """Without ``--save_directory`` the file goes to the default folder.
+
+    Run from ``tmp_path`` so the default relative path resolves there and the
+    real ``data/output`` tree is never touched.
+    """
+    dataset = (
+        REPO_ROOT
+        / "data/datasets/UnansweredQuestions/dataset_code_public.json"
     )
-    output_path.unlink(missing_ok=True)
 
     result = run_cli(
         "search_dataset",
         "--dataset_path",
-        "data/datasets/UnansweredQuestions/dataset_code_public.json",
+        str(dataset),
         "--k",
         "10",
         "--index_path",
         str(make_tiny_index(tmp_path)),
+        cwd=tmp_path,
     )
 
+    output_path = (
+        tmp_path / "data/output/search_results/dataset_code_public.json"
+    )
     assert result.returncode == 0, result.stderr
     assert output_path.is_file()
-    output_path.unlink()
 
 
 def test_index_reports_missing_corpus_folder() -> None:

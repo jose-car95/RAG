@@ -487,3 +487,14 @@ justificar), **ABIERTO** (pendiente, con límite).
   contiene ficheros `.py` que no son nuestros y el corrector ejecuta
   `make lint` con el corpus descomprimido. No es silenciar el linter: todo
   nuestro código se sigue revisando.
+
+- **FACT (medido 2026-11-04, Fase 3 de limpieza)** — 4 ficheros del corpus
+  tienen saltos de línea CRLF (`\r\n`): `vllm/model_executor/layers/`
+  `quantization/utils/__init__.py`, `tests/quantization/test_cpu_offload.py`,
+  `tests/test_embedded_commit.py` y `tests/test_seed_behavior.py`.
+  `Path.read_text(encoding="utf-8")` traduce `\r\n` a `\n` (modo texto
+  universal de Python), así que los offsets de carácter que indexamos cuentan
+  un carácter por salto de línea, no dos. La moulinette compara con el mismo
+  `read_text`, así que coinciden; el riesgo sería si el corrector leyera los
+  bytes en crudo (`\r\n` = 2), pero no lo hace. Se deja documentado; no se
+  normaliza nada (no tocar el corpus, que es intocable).
