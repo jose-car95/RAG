@@ -12,6 +12,15 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   `make test` 286 passed. Recall público (índice real, reconstruido solo al
   cambiar el código): docs R@5 **0,840** (antes 0,830), code R@5 **0,707**
   (antes 0,636). Primer slice de la Fase 2.
+- **Verificado (2026-11-04, issue #101, contexto de Python):** columna
+  `context` en `chunks`; el indexador guarda el nombre de la clase o función
+  de primer nivel que contiene cada chunk `.py` (`definition_spans` y
+  `context_for_offset` en `chunking.py`, cubiertas por `code_version`), y
+  `load_index` tokeniza `text` + `context`; los embeddings siguen con `text`.
+  El rango y el texto devueltos no cambian. `make lint` OK, `make test` 298
+  passed (tras reconstruir el índice real por el cambio de esquema). Recall
+  público: code R@5 **0,768** (antes 0,707), docs R@5 0,830 (−1 pregunta por
+  ruido de .py, lo recupera el slice de títulos). Segundo slice de la Fase 2.
 - **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
   (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
   B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la
