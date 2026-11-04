@@ -136,6 +136,25 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   caché → indexado incremental → embeddings → recuperación híbrida; después,
   una página de chat que use la API. #75 (recode) y #68 (escuela) quedan
   para el final.
+- **Verificado (2026-11-04, issue #95, recuperación híbrida):** `search
+  --retriever hybrid` fusiona los rankings de BM25 y del semántico con
+  **Reciprocal Rank Fusion** (RRF): cada fuente suma `1/(c+puesto)` por cada
+  lista donde aparece, `c=60` (valor de la literatura, no ajustado, como
+  `k1`/`b`). Fusiona por rango, así que las dos escalas (BM25 de 0 a +∞, coseno
+  de −1 a 1) no se normalizan. Dominio puro `src/domain/fusion.py`
+  (`reciprocal_rank_fusion`, clave por la tripleta `(file_path, first, last)`
+  porque `MinimalSource` no es hashable), `run_hybrid_search` en `search.py`
+  (pide `FUSION_DEPTH=100` candidatos a cada buscador, fusiona y recorta a `k`)
+  y el `elif` en la CLI; mensaje de error con los tres retrievers.
+  `search_dataset` y la API siguen BM25-only. `make lint` OK (81 ficheros),
+  `make test` 276 passed (5 del dominio, 5 del caso de uso, 1 de la CLI).
+  **Medido (ver Métricas):** híbrida R@5 docs 0,780 y code 0,626, **por debajo
+  de BM25** (0,830 / 0,636): la fusión a peso igual deja que el semántico
+  (débil aquí) arrastre a BM25. Mejor que el semántico solo. **Experimento
+  negativo, documentado como el #93; no se ajusta nada contra los públicos.**
+  La medición usó un arnés en el scratchpad porque `search_dataset` no acepta
+  `--retriever` todavía. **Siguiente:** subir el recall de docs por el método
+  (medido en público), pendiente de M7.
 - **Verificado (2026-11-03, issue #93, retriever semántico):** `search
   --retriever semantic` (por defecto `bm25`) busca por significado con los
   vectores de `index --embeddings`: embebe la pregunta, la compara con los
@@ -434,6 +453,14 @@ datasets públicos, `--k 10`. Nada se ajustó contra ellos.
 |---|---|---|---|---|
 | 2026-11-03 | BM25 (obligatorio) | 0,610 / 0,810 / **0,830** / 0,860 | 0,354 / 0,566 / **0,636** / 0,697 | Línea de referencia; pasa los umbrales |
 | 2026-11-03 | Semántico (MiniLM, #93) | 0,430 / 0,560 / **0,620** / 0,680 | 0,222 / 0,333 / **0,404** / 0,475 | **Peor que BM25 solo**; términos exactos y recorte a 256 tokens. Motiva la híbrida (bonus 5) |
+| 2026-11-04 | Híbrida RRF c=60 (#95) | 0,580 / 0,710 / **0,780** / 0,810 | 0,343 / 0,545 / **0,626** / 0,717 | **Peor que BM25 solo** en R@5 (docs −0,05, code −0,01); mejor que el semántico. La fusión a peso igual deja que la mitad floja (semántico) arrastre a BM25. Experimento negativo |
+
+La fila de la híbrida se midió con un arnés de medición en el scratchpad (no
+es código de producción; carga el índice, los vectores y el modelo una vez y
+busca las 200 preguntas con cada retriever), porque `search_dataset` sigue
+siendo BM25-only. Las 200 preguntas con los tres retrievers: ~1 min
+(índice + vectores + modelo 6,4 s; bm25 ~4 s, semántico y híbrida ~27 s cada
+uno). Híbrida sube code R@10 (0,717 vs 0,697) pero no el R@5 del umbral.
 
 Búsqueda semántica de las 199 preguntas: 33 s en total (índice + modelo 6,4
 s; docs 100 en 13,2 s; code 99 en 13,2 s), bien dentro de los 90 s. Comando:
