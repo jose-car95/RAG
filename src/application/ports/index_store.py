@@ -5,10 +5,12 @@ from typing import Protocol
 from src.domain.bm25 import CorpusIndex
 
 
-# A stored chunk: id, file path, first and last character index, and text.
-StoredChunk = tuple[int, str, int, int, str]
+# A stored chunk: id, file path, first and last character index, text, and
+# context (extra words indexed with the chunk, such as the enclosing class
+# name; empty when there is none). Context is never returned as a source.
+StoredChunk = tuple[int, str, int, int, str, str]
 # A chunk to store, without the id the store assigns.
-NewChunk = tuple[str, int, int, str]
+NewChunk = tuple[str, int, int, str, str]
 # What a built index was made from: the ``index_version`` of the stored
 # chunks and the ``code_version`` of the code that tokenized and counted them.
 BuiltIndexKey = tuple[tuple[int, int], str]

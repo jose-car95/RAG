@@ -7,7 +7,11 @@ from tqdm import tqdm
 from src.application.indexing_code import code_version
 from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.index_store import IndexStore, NewChunk
-from src.domain.chunking import chunker_for
+from src.domain.chunking import (
+    chunker_for,
+    context_for_offset,
+    definition_spans,
+)
 
 
 # The subject's ceiling for a retrieved source, in characters. The guard,
@@ -92,8 +96,13 @@ def run_index(
             continue
 
         chunker = chunker_for(path.suffix)
+        # The enclosing class or function gives a mid-class chunk back the
+        # name it would otherwise lose. Only Python has spans; other files
+        # get an empty context here.
+        spans = definition_spans(text) if path.suffix == ".py" else []
         for first, last in chunker(text, max_chunk_size):
-            chunks.append((file_path, first, last, text[first:last]))
+            context = context_for_offset(spans, first)
+            chunks.append((file_path, first, last, text[first:last], context))
 
     changed = {
         file_path: new

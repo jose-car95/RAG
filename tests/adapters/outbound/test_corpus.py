@@ -145,6 +145,6 @@ def test_text_matches_the_stored_chunks() -> None:
     read differently here than when indexing, the ranges would drift.
     """
     rows = SqliteIndexStore().load_chunks(str(INDEX_PATH))
-    for _, file_path, first, last, text in rows[::500]:
+    for _, file_path, first, last, text, _ in rows[::500]:
         source = source_of(Path(file_path), first, last)
         assert CORPUS.read_source(source) == text

@@ -28,7 +28,8 @@ CREATE_CHUNKS_TABLE_SQL = """
         file_path TEXT NOT NULL,
         first_character_index INTEGER NOT NULL,
         last_character_index INTEGER NOT NULL,
-        text TEXT NOT NULL
+        text TEXT NOT NULL,
+        context TEXT NOT NULL
     )
 """
 INSERT_CHUNK_SQL = """
@@ -36,12 +37,14 @@ INSERT_CHUNK_SQL = """
         file_path,
         first_character_index,
         last_character_index,
-        text
+        text,
+        context
     )
-    VALUES (?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?)
 """
 SELECT_CHUNKS_SQL = """
-    SELECT id, file_path, first_character_index, last_character_index, text
+    SELECT id, file_path, first_character_index, last_character_index,
+           text, context
     FROM chunks
     ORDER BY id
 """

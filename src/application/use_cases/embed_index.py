@@ -36,7 +36,7 @@ def run_embed_index(
     """
     texts = {
         text_hash(text): text
-        for *_, text in index_store.load_chunks(index_path)
+        for _, _, _, _, text, _ in index_store.load_chunks(index_path)
     }
     # ponytail: vectors of texts that left the index stay in the store;
     # they are small, never searched and reused if the text comes back.
