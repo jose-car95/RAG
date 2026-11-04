@@ -58,6 +58,17 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   atajos `make` volverán tras el retoque del Makefile). Pendiente de la
   Fase 4 (híbrida re-medida y reranker) que necesita el OK de Jose para
   regenerar `embeddings.db` y descargar el modelo.
+- **Verificado (2026-11-04, issue #112, conceptos):** arreglado el bug de la
+  pestaña «CamelCase y contexto» (faltaba `"rec"` en el array `TABS` del
+  script, por eso al abrirla se ocultaban todos los paneles). La pestaña
+  «Casos de uso y comandos» gana una tabla con **todas las rutas** (qué apunta
+  cada flag y su objetivo) y una sección **«La caché y los tiempos»**
+  (`index.pkl`, incremental, servidor), más `--embeddings`/`--vectors_path`
+  en `index`, `--retriever`/`--vectors_path` en `search`, y el contexto e
+  indexado incremental en el «qué hace» de `index`. Rediseño visual: un color
+  por pestaña, barras de sección y código coloreados, tablas con zebra;
+  autocontenido y con modo oscuro. Validado: 6 botones/6 paneles, `<div>` y
+  llaves CSS balanceados.
 - **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
   (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
   B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la
