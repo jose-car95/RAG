@@ -28,6 +28,18 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   inicio del chunk no se repite. `make lint` OK, `make test` 292 passed.
   Recall público: docs R@5 **0,840** (recupera la pregunta del slice anterior,
   R@1 0,590 → 0,650), code R@5 0,768 sin cambio. Tercer slice de la Fase 2.
+- **Verificado (2026-11-04, issue #105, ruta en el contexto, DECISIÓN #45):**
+  el contexto de cada chunk termina con su `file_path`, cuyas palabras (`cli`,
+  `serve`, `molmo`) dicen de qué trata el fichero; el prefijo común
+  `data/raw/...` pesa cero por IDF. Reabre y revierte el #45: entonces la ruta
+  bajaba docs, pero sobre CamelCase + contexto docs se queda en 0,840 y code
+  sube. `chunk_context` se mueve a `chunking.py`, lo que **cierra un hueco del
+  #97**: la lógica de contexto estaba en `index_corpus` (fuera de
+  `INDEXING_MODULES`), así que un cambio no invalidaba las cachés; ahora sí.
+  `make lint` OK, `make test` 293 passed. Recall público: docs R@5 **0,840**,
+  code R@5 **0,828** (antes 0,768), R@10 code 0,909. Cuarto slice de la Fase
+  2; **Jose decide al mergear si entra la ruta** (es una línea de
+  `chunk_context`).
 - **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
   (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
   B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la
