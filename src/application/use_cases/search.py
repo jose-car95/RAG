@@ -12,6 +12,13 @@ from src.application.use_cases.retrieval import (
     validate_query_and_k
 )
 from src.domain.models import MinimalSource
+from src.domain.fusion import reciprocal_rank_fusion
+
+
+# How many candidates to take from each retriever before fusing. Generous on
+# purpose: ten times the largest k we report, deep enough that the fused
+# top-k is stable. Chosen on principle, not by maximizing recall.
+FUSION_DEPTH: int = 100
 
 
 def run_search(
@@ -77,3 +84,52 @@ def run_semantic_search(
         index_path, vectors_path, index_store, vector_store
     )
     return search_semantic(index, query, k, load_embedder())
+
+
+def run_hybrid_search(
+    query: str,
+    k: int,
+    index_path: str,
+    vectors_path: str,
+    index_store: IndexStore,
+    vector_store: VectorStore,
+    load_embedder: EmbedderLoader
+) -> list[tuple[MinimalSource, float]]:
+    """Search one query by words and by meaning, then fuse both rankings.
+
+    BM25 and the semantic retriever each return their best ``FUSION_DEPTH``
+    sources; Reciprocal Rank Fusion merges the two by position and the best
+    ``k`` are returned.
+
+    Args:
+        query: Question to search for.
+        k: Maximum number of sources.
+        index_path: Where the chunks live.
+        vectors_path: Where the vectors live.
+        index_store: Reads the stored chunks.
+        vector_store: Reads the stored vectors.
+        load_embedder: Loads the model that embeds the query.
+
+    Returns:
+        Pairs of source and fused score, best first.
+
+    Raises:
+        ValueError: If the arguments are invalid, the index cannot be read or
+            no chunk has a vector.
+    """
+    # Checked before loading, because the index, vectors and model cost
+    # seconds and a bad query or k does not deserve that work.
+    validate_query_and_k(query, k)
+    corpus = load_index(index_path, index_store)
+    semantic_index = load_semantic_index(
+        index_path, vectors_path, index_store, vector_store
+    )
+    lexical = search_index(corpus, query, FUSION_DEPTH)
+    semantic = search_semantic(
+        semantic_index, query, FUSION_DEPTH, load_embedder()
+    )
+    rankings = [
+        [source for source, _ in lexical],
+        [source for source, _ in semantic]
+    ]
+    return reciprocal_rank_fusion(rankings)[:k]
