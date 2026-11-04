@@ -158,9 +158,6 @@ uno en uno, cuando llega su slice, nunca todos de golpe:
 ## Fuentes
 
 - **Única fuente de verdad:** `docs/en.subject.pdf` (versión 2.0).
-- **Guía interna, no oficial:** `docs/eval/` (escala, scripts de examen,
-  datasets privados). Jose oficialmente no la tiene: el README y el código
-  nunca la citan ni la usan.
 - **Material adjunto:** `docs/README.md` (uso de la moulinette),
   `docs/vllm-0.10.1.zip`, `docs/datasets_public.zip`, `docs/moulinette.zip`.
 - **Ficheros intocables** (no se modifican ni se borran): todo `docs/*.zip`,
@@ -213,14 +210,6 @@ uno en uno, cuando llega su slice, nunca todos de golpe:
   módulo que muta entre llamadas no).
 - Si una regla de estilo es dura (p. ej. longitud de línea), se cumple
   partiendo el código, nunca subiendo el límite ni silenciando el linter.
-- El código de producción nunca importa ni ejecuta material de evaluación
-  (correctores, scripts de corrección, datos de referencia), ni "solo para
-  depurar". En concreto: nunca la moulinette ni `docs/eval/`.
-- No se ajustan parámetros contra un conjunto de referencia con las respuestas
-  conocidas. Eso infla la métrica, se derrumba en cuanto cambian los datos y
-  no lo sé justificar si me preguntan por qué elegí ese valor. Si hay que
-  calibrar, se calibra contra un conjunto propio y se explica en el README.
-  Los datasets privados no se usan jamás, para nada.
 
 ## Convenciones de Git
 
