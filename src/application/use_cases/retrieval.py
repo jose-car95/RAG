@@ -13,6 +13,7 @@ from collections.abc import Callable
 
 import numpy as np
 
+from src.application.indexing_code import code_version
 from src.application.ports.embedder import Embedder
 from src.application.ports.index_store import IndexStore
 from src.application.ports.vector_store import VectorStore
@@ -26,9 +27,10 @@ def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
     """Read the stored index once and prepare it for searching.
 
     Building it costs about 2 s, so the result is saved through the store
-    and a later process loads it in about 0.2 s while the index is the same.
-    The version is read before the chunks: if ``index`` runs meanwhile, the
-    saved copy carries the old version and is simply rebuilt next time.
+    and a later process loads it in about 0.2 s while both the index and the
+    code that builds it are the same. The version is read before the chunks:
+    if ``index`` runs meanwhile, the saved copy carries the old version and
+    is simply rebuilt next time.
 
     Args:
         index_path: Where the index built by ``index`` lives.
@@ -40,8 +42,8 @@ def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
     Raises:
         ValueError: If the index does not exist or cannot be read.
     """
-    version = index_store.index_version(index_path)
-    built = index_store.load_built_index(index_path, version)
+    key = (index_store.index_version(index_path), code_version())
+    built = index_store.load_built_index(index_path, key)
     if built is not None:
         return built
     rows = index_store.load_chunks(index_path)
@@ -53,7 +55,7 @@ def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
         for chunk_id, file_path, first_index, last_index, _ in rows
     }
     corpus = CorpusIndex(bm25=index, locations=locations)
-    index_store.save_built_index(index_path, version, corpus)
+    index_store.save_built_index(index_path, key, corpus)
     return corpus
 
 

@@ -6,10 +6,12 @@ A fresh store and no ``IndexCache`` stand for a new CLI process: only the
 built index saved on disk can spare it the work.
 """
 
+import pickle
 from pathlib import Path
 
 import pytest
 
+from src.application.use_cases import retrieval
 from src.application.use_cases.index_corpus import run_index
 from src.application.use_cases.retrieval import (
     IndexCache,
@@ -122,3 +124,35 @@ def test_a_broken_built_index_is_rebuilt(tmp_path: Path) -> None:
 
     assert store.loads == 1
     assert search_index(corpus_index, "lora adapter", 1)
+
+
+def test_new_indexing_code_is_not_served_from_disk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The saved index carries the code version: a new tokenizer is used."""
+    index_path = str(make_index(tmp_path))
+    load_index(index_path, CountingStore())
+    monkeypatch.setattr(retrieval, "code_version", lambda: "new code")
+    store = CountingStore()
+
+    load_index(index_path, store)
+
+    assert store.loads == 1
+
+
+def test_a_built_index_from_before_the_code_version_is_rebuilt(
+    tmp_path: Path
+) -> None:
+    """An ``index.pkl`` keyed only by the file version is not trusted."""
+    index_path = make_index(tmp_path)
+    corpus_index = load_index(str(index_path), CountingStore())
+    [cache_file] = [
+        path for path in index_path.parent.iterdir() if path != index_path
+    ]
+    old_key = STORE.index_version(str(index_path))
+    cache_file.write_bytes(pickle.dumps((old_key, corpus_index)))
+    store = CountingStore()
+
+    load_index(str(index_path), store)
+
+    assert store.loads == 1
