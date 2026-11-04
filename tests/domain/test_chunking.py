@@ -2,7 +2,12 @@
 
 import pytest
 
-from src.domain.chunking import chunk_python, chunk_text
+from src.domain.chunking import (
+    chunk_python,
+    chunk_text,
+    context_for_offset,
+    definition_spans,
+)
 
 MARKDOWN_SAMPLE = (
     "Intro line before any heading.\n\n"
@@ -35,6 +40,45 @@ PYTHON_SAMPLE = (
 )
 
 BROKEN_PYTHON = "def broken(:\n\n# Title\nsome text\n"
+
+
+CLASS_SAMPLE = (
+    "import os\n"
+    "\n"
+    "\n"
+    "class Engine:\n"
+    "    def start(self) -> None:\n"
+    "        return None\n"
+    "\n"
+    "\n"
+    "def helper() -> int:\n"
+    "    return 1\n"
+)
+
+
+def test_definition_spans_names_each_top_level_definition() -> None:
+    """Each top-level class and def, with the range it covers."""
+    spans = definition_spans(CLASS_SAMPLE)
+
+    names = [name for _, _, name in spans]
+    assert names == ["Engine", "helper"]
+
+
+def test_context_for_offset_finds_the_enclosing_definition() -> None:
+    """An offset inside a class gets its name; outside, the empty string."""
+    spans = definition_spans(CLASS_SAMPLE)
+    inside_engine = CLASS_SAMPLE.index("return None")
+    inside_helper = CLASS_SAMPLE.index("return 1")
+    at_import = CLASS_SAMPLE.index("import os")
+
+    assert context_for_offset(spans, inside_engine) == "Engine"
+    assert context_for_offset(spans, inside_helper) == "helper"
+    assert context_for_offset(spans, at_import) == ""
+
+
+def test_definition_spans_of_unparsable_source_is_empty() -> None:
+    """Source that does not parse has no spans instead of raising."""
+    assert definition_spans(BROKEN_PYTHON) == []
 
 
 def assert_valid_chunks(
