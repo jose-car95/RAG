@@ -20,7 +20,11 @@ from src.application.use_cases.answer_dataset import run_answer_dataset
 from src.application.use_cases.evaluate import run_evaluate
 from src.application.use_cases.embed_index import run_embed_index
 from src.application.use_cases.index_corpus import run_index, MAX_CHUNK_SIZE
-from src.application.use_cases.search import run_search, run_semantic_search
+from src.application.use_cases.search import (
+    run_search,
+    run_semantic_search,
+    run_hybrid_search
+)
 from src.application.use_cases.search_dataset import run_search_dataset
 
 
@@ -124,9 +128,11 @@ class RagCli:
             query: Question to search for; it cannot be empty.
             k: Maximum number of sources to print.
             index_path: SQLite index to search, built by ``index``.
-            retriever: ``bm25`` for the lexical search (default) or
-                ``semantic`` for the embeddings of ``index --embeddings``.
-            vectors_path: Where the vectors live, for ``--retriever semantic``.
+            retriever: ``bm25`` for the lexical search (default),
+                ``semantic`` for the embeddings of ``index --embeddings``, or
+                ``hybrid`` to fuse both with Reciprocal Rank Fusion.
+            vectors_path: Where the vectors live, for ``semantic`` and
+                ``hybrid``.
         """
         if retriever == "bm25":
             results = run_search(query, k, index_path, self._index_store)
@@ -140,8 +146,20 @@ class RagCli:
                 self._vector_store,
                 self._load_embedder
             )
+        elif retriever == "hybrid":
+            results = run_hybrid_search(
+                query,
+                k,
+                index_path,
+                vectors_path,
+                self._index_store,
+                self._vector_store,
+                self._load_embedder
+            )
         else:
-            raise ValueError("retriever must be 'bm25' or 'semantic'")
+            raise ValueError(
+                "retriever must be 'bm25', 'semantic' or 'hybrid'"
+            )
         if not results:
             print("No sources found.")
         for position, (source, score) in enumerate(results, start=1):

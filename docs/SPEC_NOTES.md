@@ -60,6 +60,23 @@ justificar), **ABIERTO** (pendiente, con límite).
   El formato no afecta al tiempo de cálculo (se va en el modelo, no en
   guardar). A escala de millones sí convendría una base vectorial (FAISS);
   para 18.941 vectores un producto escalar de numpy sobra.
+- **DECISIÓN (2026-11-04, Jose, issue #95)** — `search --retriever` gana el
+  valor `hybrid`, que fusiona BM25 y el semántico con **Reciprocal Rank
+  Fusion** (RRF). Se elige RRF frente a la suma ponderada de puntuaciones
+  (opción A frente a B): RRF fusiona por el puesto, así que no hay que
+  normalizar las dos escalas (BM25 de 0 a +∞, coseno de −1 a 1) y usa una sola
+  constante `c=60`, valor de la literatura (Cormack 2009) que no se ajusta,
+  igual que `k1`/`b`. La suma ponderada exigiría un `alpha` que solo se fija
+  mirando las respuestas conocidas, lo que prohíbe el contrato. `FUSION_DEPTH`
+  = 100 candidatos por buscador, elegido por principio (10× el mayor `k` que
+  reportamos, suficiente para que el top-k sea estable), nunca maximizando el
+  recall. `search_dataset` y la API siguen BM25-only (slices aparte).
+- **NOTA, resultado (2026-11-04, issue #95)** — La híbrida 50/50 NO supera a
+  BM25 en los públicos (R@5 docs 0,780 vs 0,830; code 0,626 vs 0,636): la
+  fusión a peso igual deja que el semántico (débil en este corpus) arrastre a
+  BM25. Se deja como feature implementada y experimento negativo, como el
+  semántico del #93. Un retriever desconocido termina con `ERROR: retriever
+  must be 'bm25', 'semantic' or 'hybrid'`.
 - **INTERPRETACIÓN** — Las rutas de los ficheros del corpus conservan el
   prefijo tal como se pasa `--raw_directory` (por defecto `data/raw/...`),
   porque la moulinette compara `file_path` literalmente con

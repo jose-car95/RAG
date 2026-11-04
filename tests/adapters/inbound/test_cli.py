@@ -293,8 +293,32 @@ def test_an_unknown_retriever_is_rejected(
 
     assert exit_code == 1
     assert capsys.readouterr().err == (
-        "ERROR: retriever must be 'bm25' or 'semantic'\n"
+        "ERROR: retriever must be 'bm25', 'semantic' or 'hybrid'\n"
     )
+
+
+def test_search_hybrid_fuses_both_retrievers(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``--retriever hybrid`` prints a ranked source from the fused lists."""
+    cli = make_cli(FakeEmbedderLoader())
+    index_path, vectors_path = build_semantic_index(tmp_path, cli)
+    capsys.readouterr()
+
+    exit_code = run(
+        cli,
+        [
+            "search", "http endpoint",
+            "--index_path", str(index_path),
+            "--retriever", "hybrid",
+            "--vectors_path", str(vectors_path),
+        ],
+    )
+
+    assert exit_code == 0
+    first_line = capsys.readouterr().out.splitlines()[0]
+    assert first_line.startswith("1. ")
+    assert str(tmp_path / "corpus" / "b.md") in first_line
 
 
 def test_semantic_search_without_embeddings_says_to_index(
