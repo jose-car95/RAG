@@ -156,10 +156,10 @@ def test_index_file_matches_its_current_content(tmp_path: Path) -> None:
     """
     index_path = tmp_path / "index.db"
     many = [
-        (f"data/raw/file_{number}.py", 0, 1000, "x" * 1000)
+        (f"data/raw/file_{number}.py", 0, 1000, "x" * 1000, "")
         for number in range(2000)
     ]
-    few = [("data/raw/file_0.py", 0, 10, "x" * 10)]
+    few = [("data/raw/file_0.py", 0, 10, "x" * 10, "")]
 
     STORE.save_chunks(many, str(index_path), {})
     big_size = index_path.stat().st_size
@@ -249,15 +249,15 @@ def test_stored_chunks_are_read_back_with_their_location() -> None:
     with tempfile.TemporaryDirectory() as folder:
         index_path = str(Path(folder) / "index.db")
         chunks = [
-            ("data/raw/a.py", 0, 5, "alpha"),
-            ("data/raw/b.md", 5, 9, "beta"),
+            ("data/raw/a.py", 0, 5, "alpha", "Engine"),
+            ("data/raw/b.md", 5, 9, "beta", ""),
         ]
         STORE.save_chunks(chunks, index_path, {})
 
         rows = STORE.load_chunks(index_path)
 
-    stored = [(path, first, last, text)
-              for _, path, first, last, text in rows]
+    stored = [(path, first, last, text, context)
+              for _, path, first, last, text, context in rows]
     assert stored == chunks
     assert [chunk_id for chunk_id, *_ in rows] == [1, 2]
 

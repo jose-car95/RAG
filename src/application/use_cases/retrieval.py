@@ -47,12 +47,16 @@ def load_index(index_path: str, index_store: IndexStore) -> CorpusIndex:
     if built is not None:
         return built
     rows = index_store.load_chunks(index_path)
+    # The context is tokenized together with the text so the enclosing class
+    # name and the headings help ranking, but it is never part of a returned
+    # source: locations keep only the real character range.
     index = build_index(
-        (chunk_id, tokenize(text)) for chunk_id, _, _, _, text in rows
+        (chunk_id, tokenize(text) + tokenize(context))
+        for chunk_id, _, _, _, text, context in rows
     )
     locations = {
         chunk_id: (file_path, first_index, last_index)
-        for chunk_id, file_path, first_index, last_index, _ in rows
+        for chunk_id, file_path, first_index, last_index, _, _ in rows
     }
     corpus = CorpusIndex(bm25=index, locations=locations)
     index_store.save_built_index(index_path, key, corpus)
@@ -188,7 +192,7 @@ def load_semantic_index(
     chunks = index_store.load_chunks(index_path)
     matrix_rows = []
     sources = []
-    for _, file_path, first_index, last_index, text in chunks:
+    for _, file_path, first_index, last_index, text, _ in chunks:
         key = text_hash(text)
         if key in vectors:
             matrix_rows.append(vectors[key])
