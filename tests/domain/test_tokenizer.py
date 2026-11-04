@@ -18,16 +18,17 @@ CODE_QUESTION = (
 @pytest.mark.parametrize(
     "text, expected",
     [
-        ("What is vLLM?", ["what", "is", "vllm"]),
+        ("What is vLLM?", ["what", "is", "vllm", "v", "llm"]),
         (
             "How to configure OpenAI server?",
-            ["how", "to", "configure", "openai", "server"],
+            ["how", "to", "configure", "openai", "open", "ai", "server"],
         ),
         ("", []),
         ("?!.,;:", []),
         (
             "How to use lm_eval in vLLM?",
-            ["how", "to", "use", "lm_eval", "lm", "eval", "in", "vllm"],
+            ["how", "to", "use", "lm_eval", "lm", "eval", "in",
+             "vllm", "v", "llm"],
         ),
         (
             "Set FP8_MIN for int8",
@@ -40,7 +41,14 @@ CODE_QUESTION = (
         ("__init__", ["__init__", "init"]),
         ("_", ["_"]),
         ("multi-modal input", ["multi", "modal", "input"]),
-        ("vLLM VLLM vllm", ["vllm", "vllm", "vllm"]),
+        (
+            "MolmoForCausalLM",
+            ["molmoforcausallm", "molmo", "for", "causal", "lm"],
+        ),
+        ("DeepSeekV2", ["deepseekv2", "deep", "seek", "v2"]),
+        ("GPTQMarlin", ["gptqmarlin", "gptq", "marlin"]),
+        ("FP8", ["fp8"]),
+        ("vLLM VLLM vllm", ["vllm", "v", "llm", "vllm", "vllm"]),
     ],
     ids=[
         "lowercase",
@@ -53,6 +61,10 @@ CODE_QUESTION = (
         "dunder",
         "lone-underscore",
         "hyphen-splits",
+        "camelcase",
+        "camelcase-digits",
+        "acronym-boundary",
+        "acronym-with-digits",
         "duplicates-kept",
     ],
 )
