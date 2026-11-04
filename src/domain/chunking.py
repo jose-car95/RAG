@@ -307,6 +307,39 @@ def definition_spans(source: str) -> list[tuple[int, int, str]]:
     return spans
 
 
+def chunk_context(
+    text: str,
+    file_path: str,
+    first: int,
+    spans: list[tuple[int, int, str]],
+    is_python: bool
+) -> str:
+    """Build the extra words indexed with a chunk: its structure and path.
+
+    The structure is the enclosing class or function for Python, or the
+    heading breadcrumb for Markdown and text. The file path is always added,
+    because its words (``cli``, ``serve``, ``molmo``) say what the file is
+    about; the shared prefix ``data/raw/...`` weighs nothing through IDF. All
+    of this lives in the domain, so the code version of #97 invalidates the
+    caches whenever it changes.
+
+    Args:
+        text: The whole text of the file the chunk comes from.
+        file_path: The chunk's file path, as stored.
+        first: Offset where the chunk starts.
+        spans: Definition spans of the file, empty for non-Python.
+        is_python: Whether to read the enclosing definition or the headings.
+
+    Returns:
+        The context string, never the empty string (the path is always in).
+    """
+    if is_python:
+        structure = context_for_offset(spans, first)
+    else:
+        structure = heading_breadcrumb(text, first)
+    return f"{structure} {file_path}".strip()
+
+
 def context_for_offset(
     spans: list[tuple[int, int, str]], offset: int
 ) -> str:
