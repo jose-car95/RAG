@@ -385,6 +385,19 @@ def test_a_new_max_chunk_size_chunks_everything_again(
     assert max(widths) <= 5
 
 
+def test_new_indexing_code_chunks_everything_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The code is part of the fingerprint: a new chunker reaches the index."""
+    corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
+    monkeypatch.setattr(index_corpus, "code_version", lambda: "new code")
+
+    chunk_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    assert sorted(chunked) == [".md", ".py"]
+    assert chunk_count == len(read_rows(index_path))
+
+
 def test_an_index_without_fingerprints_is_rebuilt(tmp_path: Path) -> None:
     """An index from before this change is rebuilt instead of failing."""
     corpus = tmp_path / "corpus"

@@ -4,9 +4,42 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 ## Estado actual
 
-- **Milestone:** M5 — Generación con Qwen3-0.6B en CPU (en curso). M0 cerrado
-  el 2026-09-16; M1 el 2026-09-18; M2 el 2026-09-29; M3 el 2026-10-08;
-  **M4 el 2026-10-14**.
+- **Milestone:** M7 — Bonus (en curso). M0-M5 cerrados; M4 el 2026-10-14.
+  M6 tiene abiertos #75 (recode) y #68 (escuela), que se dejan para el final.
+- **Plan de mejora aprobado por Jose (2026-11-04)** tras una revisión a fondo
+  (ver «Plan de mejora» abajo): Fase 1 (#97) cachés que ven el código, opción
+  B; Fase 2 CamelCase → contexto de Python → contexto de Markdown y ruta (la
+  ruta reabre el #45 y se decide con `/decide`); Fase 3 limpieza; Fase 4
+  docs (híbrida con el BM25 nuevo, reranker con OK de descarga, conjunto
+  propio si hay que calibrar); Fase 5 conceptos, **pestaña de comandos de
+  ejecución sin `make`** (Jose va a retocar el Makefile) y README completo
+  (autorizado a reescribirlo entero).
+- **Verificado (2026-11-04, issue #97, cachés que ven el código):** la
+  huella del indexado incremental y la clave de `index.pkl` incluyen
+  `code_version()`, el SHA-256 del código de `chunking`, `tokenizer` y `bm25`
+  (`src/application/indexing_code.py`). Antes, medido: con otro chunker el
+  incremental dejaba 18.941 chunks viejos (desde cero, 41.210) y con otro
+  `tokenize` `index.pkl` servía el vocabulario viejo (56.938 términos).
+  `make lint` OK (83 ficheros); `make test` 281 passed, 1 skipped (el test
+  que necesita `data/processed/index.db`, ver pendientes). Demo real: quitar
+  `lora` en `tokenize` cambia `search "LoRA adapter"` al primer intento
+  (14,77 → 9,69) y al revertirlo vuelve el original. `index` sin cambios
+  0,72 s; desde cero 4,71 s. Recall igual que `main` (docs R@5 0,830, code
+  0,636; nuestro `evaluate` y la moulinette coinciden), medido sobre un
+  índice del scratchpad.
+- **Pendientes detectados (2026-11-04):**
+  - `data/processed/` y `data/output/search_results_and_answer/`
+    desaparecieron a las 14:15:20 sin que ningún comando del agente los
+    borrase; pendiente de confirmar con Jose antes de regenerarlos.
+  - `test_search_dataset_uses_default_save_directory`
+    (`tests/adapters/inbound/test_cli.py`) escribe en el
+    `data/output/search_results/` real y borra `dataset_code_public.json`:
+    un test no debe tocar datos del proyecto. Fase 3.
+  - 4 ficheros del corpus con CRLF; `read_text` los traduce a `\n` y las
+    posiciones difieren del fichero en crudo. Anotar en `SPEC_NOTES.md`.
+  - Las ramas locales `experiment/43-method-chunks` y
+    `experiment/45-path-tokens` siguen ahí; se borran solo con OK de Jose.
+- **Siguiente:** Fase 2, slice de CamelCase en `tokenize`.
 - **M4 cerrado (5 issues):** #48 BM25 original de Okapi y #44 identificadores
   por partes se quedan; #43 clases por métodos y #45 ruta como tokens se
   descartan; #46 añade el MRR. Final: docs R@5 0,830 (margen 3), code 0,636
@@ -18,7 +51,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
   #18 chunking de Markdown y texto en cascada; #19 chunking de Python con
   `ast`; #20 índice en SQLite; #21 validación de `max_chunk_size`. Fuera de
   milestone: #35 página de conceptos de BM25.
-- **Slice en revisión:** #56 "Answer a whole dataset". `answer_from_sources`
+- **Slice #56 (cerrado):** "Answer a whole dataset". `answer_from_sources`
   sale de `run_answer` y la comparten `answer` y `answer_dataset`;
   `src/application/answer_dataset.py` (`run_answer_dataset`) lee el fichero de
   `search_dataset`, carga Qwen una vez, responde con las fuentes que ya trae
@@ -312,6 +345,8 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 | Fecha | Decisión | Motivo |
 |---|---|---|
+| 2026-11-04 | Las cachés incluyen un hash automático del código de `chunking`, `tokenizer` y `bm25` (opción B, #97) | Una constante de versión manual depende de que alguien se acuerde de subirla, y en un recode en vivo nadie lo hará. Coste aceptado: editar un comentario también invalida (una reconstrucción, ~5 s) |
+| 2026-11-04 | Plan de mejora de cinco fases aprobado; pestaña de comandos de ejecución sin `make` y README reescrito entero | Decisión de Jose tras la revisión; el Makefile lo retocará él y se incorporará después |
 | 2026-09-13 | Solo CPU; `torch` desde wheels de CPU cuando llegue M5 | Las máquinas de la escuela no tienen GPU |
 | 2026-09-13 | Cachés en su ruta por defecto mientras desarrollamos; se revisan en la máquina de la escuela al final | Disco local sobrado; la escuela tiene menos espacio |
 | 2026-09-13 | `docs/` completa sube al repo de trabajo; el repo de entrega es otro y lo prepara Jose | Este repo es el taller personal |
@@ -469,6 +504,32 @@ reales (18.941 vectores), evaluado con
 `./moulinette-ubuntu evaluate_student_search_results`. Los umbrales del
 enunciado son del retriever obligatorio (BM25), que los cumple; el semántico
 es un experimento de bonus.
+
+### Plan de mejora (revisión del 2026-11-04)
+
+Diagnóstico de los fallos a @5 de `main` (docs 17, code 36): en 13 de docs y
+28 de code el chunk correcto está en el ranking (puestos 6-200); el problema
+es el orden, no el tamaño de chunk (solo 2 fuentes de referencia, de 12 y 93
+caracteres, son inalcanzables por IoU). En code las preguntas nombran clases
+en CamelCase (`Molmo`, `DeepSeek`) que el tokenizador deja pegadas
+(`molmoforcausallm`).
+
+Medido con un arnés del scratchpad que reproduce la moulinette. Las
+variantes se fijaron antes de medir y no tienen parámetros:
+
+| Variante | docs R@5 | code R@5 | MRR docs / code |
+|---|---|---|---|
+| `main` | 0,830 | 0,636 | 0,704 / 0,480 |
+| + CamelCase entero y por partes | 0,830 | 0,677 | 0,690 / 0,548 |
+| + nombre de la definición que contiene el chunk (Python) | 0,840 | 0,778 | 0,691 / 0,625 |
+| + títulos que contienen el chunk (Markdown) + ruta | 0,840 | 0,828 | 0,737 / 0,677 |
+| S-stemmer de Harman (solo) | 0,830 | 0,646 | 0,712 / 0,497 |
+
+Entran y salen del top 5 con la combinación completa: code +19 / −0
+(robusto), docs +4 / −3 (ruido; salen preguntas genéricas, como en el #45).
+Se probaron unas 9 variantes en una sesión: riesgo de sobreajuste, así que
+cada pieza va en su slice con su principio y su recuento de entradas y
+salidas. No se ajustan `k1`, `b`, tamaño de chunk ni pesos de RRF.
 
 ### Historial
 

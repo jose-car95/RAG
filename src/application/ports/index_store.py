@@ -9,6 +9,9 @@ from src.domain.bm25 import CorpusIndex
 StoredChunk = tuple[int, str, int, int, str]
 # A chunk to store, without the id the store assigns.
 NewChunk = tuple[str, int, int, str]
+# What a built index was made from: the ``index_version`` of the stored
+# chunks and the ``code_version`` of the code that tokenized and counted them.
+BuiltIndexKey = tuple[tuple[int, int], str]
 
 
 class IndexStore(Protocol):
@@ -106,27 +109,27 @@ class IndexStore(Protocol):
         ...
 
     def load_built_index(
-        self, index_path: str, version: tuple[int, int]
+        self, index_path: str, key: BuiltIndexKey
     ) -> CorpusIndex | None:
         """Return the index built by an earlier process, if still valid.
 
         Args:
             index_path: Where the index lives.
-            version: The current ``index_version`` of the index.
+            key: The current index and code versions.
 
         Returns:
-            The built index, or ``None`` when there is none for this version.
+            The built index, or ``None`` when there is none for this key.
         """
         ...
 
     def save_built_index(
-        self, index_path: str, version: tuple[int, int], corpus: CorpusIndex
+        self, index_path: str, key: BuiltIndexKey, corpus: CorpusIndex
     ) -> None:
         """Keep a built index for the next process; failing only costs time.
 
         Args:
             index_path: Where the index lives.
-            version: The ``index_version`` the index was built from.
+            key: The index and code versions it was built from.
             corpus: The built index.
         """
         ...

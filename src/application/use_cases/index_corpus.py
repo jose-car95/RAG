@@ -4,6 +4,7 @@ import hashlib
 
 from tqdm import tqdm
 
+from src.application.indexing_code import code_version
 from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.index_store import IndexStore, NewChunk
 from src.domain.chunking import chunker_for
@@ -14,22 +15,24 @@ from src.domain.chunking import chunker_for
 MAX_CHUNK_SIZE: int = 2000
 
 
-def fingerprint(text: str, max_chunk_size: int) -> str:
+def fingerprint(text: str, max_chunk_size: int, code: str) -> str:
     """Summarise what the chunks of a file depend on, in 64 characters.
 
-    The chunks depend on the text and on the chunk size, so both go into the
-    hash: a new ``--max_chunk_size`` changes every fingerprint. SHA-256 of
+    The chunks depend on the text, on the chunk size and on the chunking
+    code, so all three go into the hash: a new ``--max_chunk_size`` or a new
+    chunker changes every fingerprint. SHA-256 of
     the content instead of modification time and size, because archives
     restore old dates and a changed file would then look unchanged.
 
     Args:
         text: The whole text of a corpus file.
         max_chunk_size: The chunk size it is indexed with.
+        code: The ``code_version`` of the indexing code.
 
     Returns:
         The hexadecimal SHA-256 digest.
     """
-    content = f"{max_chunk_size}\n{text}"
+    content = f"{code}\n{max_chunk_size}\n{text}"
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
 
@@ -75,6 +78,7 @@ def run_index(
         )
 
     files = corpus.find_files(raw_directory)
+    code = code_version()
     stored = index_store.load_fingerprints(index_path)
     fingerprints: dict[str, str] = {}
     chunks: list[NewChunk] = []
@@ -82,7 +86,7 @@ def run_index(
     for path in tqdm(files, desc="Indexing", unit="file"):
         file_path = str(path)
         text = corpus.read_text(path)
-        fingerprints[file_path] = fingerprint(text, max_chunk_size)
+        fingerprints[file_path] = fingerprint(text, max_chunk_size, code)
 
         if stored.get(file_path) == fingerprints[file_path]:
             continue

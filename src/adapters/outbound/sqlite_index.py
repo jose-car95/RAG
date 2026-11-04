@@ -6,6 +6,7 @@ from contextlib import closing
 from pathlib import Path
 
 from src.application.ports.index_store import (
+    BuiltIndexKey,
     IndexStore,
     NewChunk,
     StoredChunk
@@ -235,46 +236,48 @@ class SqliteIndexStore(IndexStore):
         return status.st_mtime_ns, status.st_size
 
     def load_built_index(
-        self, index_path: str, version: tuple[int, int]
+        self, index_path: str, key: BuiltIndexKey
     ) -> CorpusIndex | None:
-        """Load the pickled index if it was built from this version.
+        """Load the pickled index if it was built from this key.
 
         Any problem reading it (missing, cut short, another format) means
-        "build it again", never an error for the user. Only files this
-        program wrote are loaded: unpickling can run code.
+        "build it again", never an error for the user, and so does a file
+        saved under another key, including one from before the code version
+        was part of it. Only files this program wrote are loaded: unpickling
+        can run code.
 
         Args:
             index_path: Path of the SQLite index.
-            version: The current version of the SQLite file.
+            key: The current versions of the SQLite file and of the code.
 
         Returns:
             The built index, or ``None``.
         """
         try:
             with open(built_index_file(index_path), "rb") as file:
-                built: tuple[tuple[int, int], CorpusIndex] = pickle.load(file)
+                built: tuple[BuiltIndexKey, CorpusIndex] = pickle.load(file)
         except (OSError, pickle.PickleError, EOFError, ValueError, TypeError):
             return None
-        stored_version, corpus = built
-        if stored_version != version:
+        stored_key, corpus = built
+        if stored_key != key:
             return None
         return corpus
 
     def save_built_index(
-        self, index_path: str, version: tuple[int, int], corpus: CorpusIndex
+        self, index_path: str, key: BuiltIndexKey, corpus: CorpusIndex
     ) -> None:
-        """Pickle the built index together with its version.
+        """Pickle the built index together with its key.
 
         A folder that cannot be written is ignored: the cache only saves
         time, so it must never make a search fail.
 
         Args:
             index_path: Path of the SQLite index.
-            version: The version the index was built from.
+            key: The versions the index was built from.
             corpus: The built index.
         """
         try:
             with open(built_index_file(index_path), "wb") as file:
-                pickle.dump((version, corpus), file)
+                pickle.dump((key, corpus), file)
         except OSError:
             return
