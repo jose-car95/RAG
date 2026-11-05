@@ -13,7 +13,7 @@ from src.adapters.outbound.json_files import JsonDatasetStore
 from src.adapters.outbound.minilm_embedder import load_embedder
 from src.adapters.outbound.qwen_generator import load_generator
 from src.adapters.outbound.sqlite_index import SqliteIndexStore
-from src.adapters.inbound.cli import RagCli, run
+from src.adapters.inbound.cli import DEFAULT_INDEX_PATH, RagCli, run
 from src.adapters.inbound.api.app import create_app
 from src.adapters.outbound.sqlite_vectors import SqliteVectorStore
 
@@ -43,7 +43,8 @@ def build_api() -> FastAPI:
     return create_app(
         index_store=SqliteIndexStore(),
         corpus=FileCorpus(),
-        load_generator=load_generator
+        load_generator=load_generator,
+        index_path=DEFAULT_INDEX_PATH
     )
 
 

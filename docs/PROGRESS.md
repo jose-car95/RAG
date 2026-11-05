@@ -6,6 +6,12 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 - **Milestone:** M7 — Bonus (en curso). M0-M5 cerrados; M4 el 2026-10-14.
   M6 tiene abiertos #75 (recode) y #68 (escuela), que se dejan para el final.
+- **Verificado (2026-11-05, issue #120, ruta del índice en un solo sitio):**
+  `create_app` recibe `index_path` obligatorio y `bootstrap` le pasa
+  `DEFAULT_INDEX_PATH` (definido una vez en `cli.py`, que conserva su valor
+  por defecto visible en `--help`). Descartado mover las constantes a
+  `bootstrap`: la CLI mostraría `Default: None`. `make serve` real: health
+  y `POST /api/v1/search` OK. `make lint` OK, `make test` 294 passed.
 - **Verificado (2026-11-05, issue #118, `chunker_for` sin mapa):**
   `CHUNKERS` (un `dict` de un solo elemento a nivel de módulo) y el alias
   `Chunker` desaparecen; `chunker_for` es un `if` con comentario `ponytail:`.
