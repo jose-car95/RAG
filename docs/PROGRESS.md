@@ -6,6 +6,11 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 - **Milestone:** M7 — Bonus (en curso). M0-M5 cerrados; M4 el 2026-10-14.
   M6 tiene abiertos #75 (recode) y #68 (escuela), que se dejan para el final.
+- **Verificado (2026-11-05, issue #118, `chunker_for` sin mapa):**
+  `CHUNKERS` (un `dict` de un solo elemento a nivel de módulo) y el alias
+  `Chunker` desaparecen; `chunker_for` es un `if` con comentario `ponytail:`.
+  Auditoría de `src/`: no hay otro código usado solo por tests. `make lint`
+  OK, `make test` 294 passed.
 - **Verificado (2026-11-05, issue #116, limpieza para la entrega):** Makefile
   reducido a `install`, `run`, `debug`, `lint`, `lint-strict`, `test`,
   `clean`, `fclean` y `serve` (sin comentarios ni variables globales; los
