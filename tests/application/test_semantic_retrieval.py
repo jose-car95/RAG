@@ -11,7 +11,7 @@ import pytest
 
 from src.application.ports.embedder import Vectors
 from src.application.use_cases.index_corpus import run_index
-from src.application.use_cases.retrieval import (
+from src.application.use_cases.shared.retrieval import (
     load_semantic_index,
     search_semantic,
 )

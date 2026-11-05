@@ -90,7 +90,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 - **Verificado (2026-11-04, issue #97, cachés que ven el código):** la
   huella del indexado incremental y la clave de `index.pkl` incluyen
   `code_version()`, el SHA-256 del código de `chunking`, `tokenizer` y `bm25`
-  (`src/application/indexing_code.py`). Antes, medido: con otro chunker el
+  (`src/application/use_cases/shared/indexing_code.py`). Antes, medido: con otro chunker el
   incremental dejaba 18.941 chunks viejos (desde cero, 41.210) y con otro
   `tokenize` `index.pkl` servía el vocabulario viejo (56.938 términos).
   `make lint` OK (83 ficheros); `make test` 281 passed, 1 skipped (el test

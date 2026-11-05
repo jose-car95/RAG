@@ -11,9 +11,9 @@ from pathlib import Path
 
 import pytest
 
-from src.application.use_cases import retrieval
+from src.application.use_cases.shared import retrieval
 from src.application.use_cases.index_corpus import run_index
-from src.application.use_cases.retrieval import (
+from src.application.use_cases.shared.retrieval import (
     IndexCache,
     load_index,
     search_index

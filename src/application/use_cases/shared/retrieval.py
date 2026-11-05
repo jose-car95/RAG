@@ -13,7 +13,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from src.application.indexing_code import code_version
+from src.application.use_cases.shared.indexing_code import code_version
 from src.application.ports.embedder import Embedder
 from src.application.ports.index_store import IndexStore
 from src.application.ports.vector_store import VectorStore

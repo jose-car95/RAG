@@ -1,1 +1,1 @@
-"""Use cases: one module per command, plus the retrieval steps they share."""
+"""Use cases: one module per command, plus ``shared/`` for what they share."""
