@@ -29,7 +29,7 @@ def create_app(
     index_store: IndexStore,
     corpus: CorpusReader,
     load_generator: GeneratorLoader,
-    index_path: str = "data/processed/index.db"
+    index_path: str
 ) -> FastAPI:
     """Build the API with the given ports; used by bootstrap and the tests.
 
