@@ -79,16 +79,23 @@ class RagCli:
         max_chunk_size: int = MAX_CHUNK_SIZE,
         raw_directory: str = "data/raw",
         index_path: str = DEFAULT_INDEX_PATH,
+        incremental: bool = False,
         embeddings: bool = False,
         vectors_path: str = DEFAULT_VECTORS_PATH
     ) -> None:
         """Chunk the corpus and store the chunks in the index.
+
+        By default the index is rebuilt from scratch. Both bonuses are off by
+        default: ``--incremental`` re-chunks only the files that changed, and
+        ``--embeddings`` also stores a semantic vector per chunk.
 
         Args:
             max_chunk_size: Maximum characters per chunk, from 1 to
                 ``MAX_CHUNK_SIZE``.
             raw_directory: Folder of the corpus to index.
             index_path: Where the SQLite index is written.
+            incremental: Re-chunk only the files that changed since the last
+                index, instead of rebuilding from scratch (bonus).
             embeddings: Also store a semantic vector per chunk text (bonus).
             vectors_path: Where the vectors are written.
         """
@@ -97,7 +104,8 @@ class RagCli:
             max_chunk_size,
             index_path,
             self._corpus,
-            self._index_store
+            self._index_store,
+            incremental
         )
         print(
             f"Ingestion complete! Indexed {chunk_count} chunks under "

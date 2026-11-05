@@ -354,7 +354,9 @@ def test_an_unchanged_corpus_is_not_chunked_again(
     corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
     before = read_rows(index_path)
 
-    chunk_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+    chunk_count = run_index(
+        str(corpus), 2000, str(index_path), CORPUS, STORE, incremental=True
+    )
 
     assert chunked == []
     assert read_rows(index_path) == before
@@ -368,13 +370,28 @@ def test_only_a_modified_file_is_chunked_again(
     corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
     (corpus / "b.md").write_text("# A\nnew words\n", encoding="utf-8")
 
-    chunk_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+    chunk_count = run_index(
+        str(corpus), 2000, str(index_path), CORPUS, STORE, incremental=True
+    )
 
     assert chunked == [".md"]
     rows = read_rows(index_path)
     assert rows == full_rebuild_rows(corpus, tmp_path)
     assert chunk_count == len(rows)
     assert not any("uno" in text for *_, text in rows)
+
+
+def test_a_plain_run_chunks_everything_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Without ``incremental`` the index is rebuilt even if nothing changed."""
+    corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
+    before = read_rows(index_path)
+
+    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    assert sorted(chunked) == [".md", ".py"]
+    assert read_rows(index_path) == before
 
 
 def test_a_deleted_file_loses_its_chunks(
@@ -384,7 +401,9 @@ def test_a_deleted_file_loses_its_chunks(
     corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
     (corpus / "b.md").unlink()
 
-    run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+    run_index(
+        str(corpus), 2000, str(index_path), CORPUS, STORE, incremental=True
+    )
 
     assert chunked == []
     assert {Path(row[0]).name for row in read_rows(index_path)} == {"a.py"}
