@@ -51,21 +51,22 @@ Other Makefile rules:
 | `make debug ARGS="..."` | The same under `pdb` |
 | `make lint` | `flake8` and `mypy` with the subject's flags |
 | `make lint-strict` | `flake8` and `mypy --strict` |
-| `make test` | The test suite without the three tests that load the real model |
-| `make test-all` | The whole test suite (about 50 s) |
-| `make clean` | Removes `__pycache__`, `.mypy_cache` and `.pytest_cache` |
+| `make test` | The test suite without the tests that load a real model (`slow`) |
+| `make serve` | Starts the local HTTP API on `http://127.0.0.1:8000` |
+| `make clean` | Removes caches and leftovers: `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.coverage`, `htmlcov`, `*.egg-info` |
+| `make fclean` | `clean` plus `.venv`, `.cache`, `data/processed` and `data/output`: back to a fresh clone |
+
+The whole suite, including the slow tests, runs with `uv run pytest`.
 
 ## Example usage
 
-The full pipeline, step by step. Every command has a `make` shortcut whose
-values can be overridden on the command line (`DATASET`, `SCOPE`, `K`, `Q`,
-`MAX_CHUNK_SIZE`, `SEARCH_DIR`, `ANSWER_DIR`).
+The full pipeline, step by step. Every command runs as
+`uv run python -m src <command>`, or through `make run ARGS="<command> ..."`.
 
 **1. Build the index**
 
 ```bash
 uv run python -m src index --max_chunk_size 2000
-make index
 ```
 ```
 Indexing: 100%|██████████| 1969/1969 [00:02<00:00, 695.15file/s]
@@ -76,7 +77,6 @@ Ingestion complete! Indexed 18941 chunks under data/processed/
 
 ```bash
 uv run python -m src search "How to configure OpenAI server?" --k 3
-make search Q="How to configure OpenAI server?" K=3
 ```
 ```
 1.  23.87  data/raw/vllm-0.10.1/docs/deployment/frameworks/dstack.md  [1936:3170]
@@ -93,8 +93,6 @@ range `[first:last)` of the chunk.
 uv run python -m src search_dataset \
     --dataset_path data/datasets/UnansweredQuestions/dataset_docs_public.json \
     --k 10 --save_directory data/output/search_results
-make search_dataset                  # docs
-make search_dataset DATASET=code
 ```
 ```
 Saved student_search_results to data/output/search_results/dataset_docs_public.json
@@ -106,8 +104,6 @@ Saved student_search_results to data/output/search_results/dataset_docs_public.j
 uv run python -m src evaluate \
     --student_search_results_path data/output/search_results/dataset_docs_public.json \
     --dataset_path data/datasets/AnsweredQuestions/dataset_docs_public.json
-make evaluate                        # docs
-make evaluate DATASET=code
 ```
 ```
 Recall@1: 0.660 Recall@3: 0.800 Recall@5: 0.840 Recall@10: 0.870
@@ -118,7 +114,6 @@ MRR: 0.735
 
 ```bash
 uv run python -m src answer "How do I dynamically load a LoRA adapter in vLLM?" --k 5
-make answer Q="How do I dynamically load a LoRA adapter in vLLM?" K=5
 ```
 ```
 To dynamically load a LoRA adapter in vLLM, you can use the `/v1/load_lora_adapter` endpoint or set up a LoRAResolver plugin.
@@ -130,7 +125,6 @@ To dynamically load a LoRA adapter in vLLM, you can use the `/v1/load_lora_adapt
 uv run python -m src answer_dataset \
     --student_search_results_path data/output/search_results/dataset_docs_public.json \
     --save_directory data/output/search_results_and_answer
-make answer_dataset
 ```
 ```
 Loaded 100 questions ... Processed 100 of 100 questions

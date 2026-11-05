@@ -3,10 +3,12 @@
 from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.generator import Generator, GeneratorLoader
 from src.application.ports.index_store import IndexStore
-from src.application.use_cases.retrieval import (
+from src.application.use_cases.shared.retrieval import (
     IndexLoader,
     load_index,
-    search_index,
+    search_index
+)
+from src.application.use_cases.shared.validation import (
     validate_query_and_k
 )
 from src.domain.models import MinimalSource

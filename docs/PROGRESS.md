@@ -6,6 +6,13 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 - **Milestone:** M7 — Bonus (en curso). M0-M5 cerrados; M4 el 2026-10-14.
   M6 tiene abiertos #75 (recode) y #68 (escuela), que se dejan para el final.
+- **Verificado (2026-11-05, issue #116, limpieza para la entrega):** Makefile
+  reducido a `install`, `run`, `debug`, `lint`, `lint-strict`, `test`,
+  `clean`, `fclean` y `serve` (sin comentarios ni variables globales; los
+  atajos de la CLI se van, así que `make run ARGS="..."` o `uv run`).
+  `retrieval`, `indexing_code` y el nuevo `validation` viven en
+  `use_cases/shared/`. README, marker de `slow` y `.gitignore` al día.
+  `make lint` OK (85 ficheros), `make test` 294 passed.
 - **Verificado (2026-11-04, issue #99, CamelCase):** `tokenize` parte los
   identificadores en CamelCase conservando los dígitos (`int8`/`fp8` enteros);
   `MolmoForCausalLM` → `molmo`, `for`, `causal`, `lm`. `make lint` OK,
@@ -90,7 +97,7 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 - **Verificado (2026-11-04, issue #97, cachés que ven el código):** la
   huella del indexado incremental y la clave de `index.pkl` incluyen
   `code_version()`, el SHA-256 del código de `chunking`, `tokenizer` y `bm25`
-  (`src/application/indexing_code.py`). Antes, medido: con otro chunker el
+  (`src/application/use_cases/shared/indexing_code.py`). Antes, medido: con otro chunker el
   incremental dejaba 18.941 chunks viejos (desde cero, 41.210) y con otro
   `tokenize` `index.pkl` servía el vocabulario viejo (56.938 términos).
   `make lint` OK (83 ficheros); `make test` 281 passed, 1 skipped (el test

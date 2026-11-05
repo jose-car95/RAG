@@ -4,8 +4,8 @@ import string
 
 import pytest
 
-from src.application import indexing_code
-from src.application.indexing_code import code_version
+from src.application.use_cases.shared import indexing_code
+from src.application.use_cases.shared.indexing_code import code_version
 from src.domain import bm25, chunking, tokenizer
 
 

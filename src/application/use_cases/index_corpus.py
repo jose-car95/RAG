@@ -4,7 +4,7 @@ import hashlib
 
 from tqdm import tqdm
 
-from src.application.indexing_code import code_version
+from src.application.use_cases.shared.indexing_code import code_version
 from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.index_store import IndexStore, NewChunk
 from src.domain.chunking import chunk_context, chunker_for, definition_spans

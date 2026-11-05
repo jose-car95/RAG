@@ -6,11 +6,11 @@ from tqdm import tqdm
 
 from src.application.ports.dataset_store import DatasetStore
 from src.application.ports.index_store import IndexStore
-from src.application.use_cases.retrieval import (
+from src.application.use_cases.shared.retrieval import (
     load_index,
-    search_index,
-    validate_k,
+    search_index
 )
+from src.application.use_cases.shared.validation import validate_k
 from src.domain.models import (
     RagDataset,
     MinimalSearchResults,

@@ -12,7 +12,7 @@ from src.application.ports.corpus_reader import CorpusReader
 from src.application.ports.generator import GeneratorLoader
 from src.application.ports.index_store import IndexStore
 from src.application.use_cases.answer import run_answer
-from src.application.use_cases.retrieval import IndexCache
+from src.application.use_cases.shared.retrieval import IndexCache
 from src.application.use_cases.search import run_search
 from src.domain.models import MinimalSource
 

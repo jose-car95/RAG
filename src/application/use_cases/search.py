@@ -3,12 +3,14 @@
 from src.application.ports.embedder import EmbedderLoader
 from src.application.ports.index_store import IndexStore
 from src.application.ports.vector_store import VectorStore
-from src.application.use_cases.retrieval import (
+from src.application.use_cases.shared.retrieval import (
     IndexLoader,
     load_index,
     load_semantic_index,
     search_index,
-    search_semantic,
+    search_semantic
+)
+from src.application.use_cases.shared.validation import (
     validate_query_and_k
 )
 from src.domain.models import MinimalSource

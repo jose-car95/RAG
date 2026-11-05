@@ -10,7 +10,7 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | Ítem | Evidencia requerida | Evidencia planeada | Estado |
 |---|---|---|---|
 | Python 3.10+, uv, `pyproject.toml` + `uv.lock` en la raíz | `uv sync` limpio desde la raíz | `uv sync` en un clon limpio; job de CI `uv sync --locked` | IN_PROGRESS |
-| Makefile: install, run, debug, clean, lint | Cada regla ejecuta | Reglas del enunciado más `lint-strict`, `test`, `test-all` y un atajo por comando con variables cambiables; todas ejecutadas el 2026-10-20 (issue #73, salida en `docs/PROGRESS.md`) | EVIDENCED |
+| Makefile: install, run, debug, clean, lint | Cada regla ejecuta | Reglas del enunciado más `lint-strict`, `test`, `serve` y `fclean`; sin comentarios ni variables globales, reescrito en el issue #116 (2026-11-05); `make -n` de todas las reglas | EVIDENCED |
 | flake8 + mypy con los flags del enunciado | `make lint` sin errores | CI `lint` y `types` en verde en cada PR desde M0 (último `main`: run 39493873241, 2026-10-20, success); `make lint` limpio en Python 3.10 | EVIDENCED |
 | Los 8 modelos pydantic | Modelos + validación de los datasets públicos | `src/domain/models.py` + `tests/domain/test_models.py` (11 tests: datasets públicos, UUID, campos extra, rangos, JSON de salida), slice #3 | EVIDENCED |
 | CLI con Python Fire y los seis comandos | `uv run python -m src --help` lista los comandos | `tests/adapters/inbound/test_cli.py` (7 tests, slice #1) | EVIDENCED |
@@ -42,3 +42,21 @@ Estados: `NOT_STARTED` / `IN_PROGRESS` / `EVIDENCED` / `BLOCKED`. Solo se marca
 | Comprensión: 5 preguntas (4 de 5) | Respuestas propias de Jose | Ensayo oral (M6) | NOT_STARTED |
 | Recode en vivo | Jose modifica el código sin ayuda | Ensayo con 3 modificaciones propuestas (M6) | NOT_STARTED |
 | Repo de entrega solo con lo pedido | Sin `docs/eval`, moulinette, datos ni salidas | Checklist del repo de entrega (M6) | NOT_STARTED |
+
+## Lista para el repo de entrega
+
+Salen del repo de trabajo (lo exige la checklist de `CLAUDE.md`):
+
+- `docs/eval/` completo y `data/datasets/private/`.
+- `docs/moulinette.zip`, `docs/vllm-0.10.1.zip`, `docs/datasets_public.zip`.
+- `data/raw/`, `data/processed/`, `data/output/` y cualquier salida generada.
+- Este fichero (`docs/EVALUATION.md`).
+
+Decisión de Jose pendiente (son internos, no del enunciado): `CLAUDE.md`,
+`.claude/`, `docs/PLAN.md`, `docs/PROGRESS.md`, `docs/AI_USAGE.md`,
+`docs/SPEC_NOTES.md`, `docs/conceptos/` y `exams/`. `docs/AI_USAGE.md` tiene
+filas antiguas con detalle por función, distintas de la línea genérica
+acordada el 2026-10-15.
+
+Comprobación final: `git ls-files` del repo de entrega no contiene ninguna
+ruta de las listas anteriores.
