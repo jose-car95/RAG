@@ -393,24 +393,17 @@ def chunk_python(source: str, max_chunk_size: int) -> list[tuple[int, int]]:
     return _chunk_with_cuts(source, cuts, max_chunk_size)
 
 
-# A chunking strategy: it reads a text and its width limit, and returns
-# the ranges to cut it into.
-Chunker = Callable[[str, int], list[tuple[int, int]]]
-
-# Only the suffixes with a strategy of their own are listed here; every
-# other file falls back to the Markdown and plain text one.
-CHUNKERS: dict[str, Chunker] = {
-    ".py": chunk_python
-}
-
-
-def chunker_for(suffix: str) -> Chunker:
+def chunker_for(suffix: str) -> Callable[[str, int], list[tuple[int, int]]]:
     """Pick the chunking strategy for a file suffix.
 
     Args:
         suffix: File suffix including the dot, as ``Path.suffix`` gives it.
 
     Returns:
-        The strategy registered for that suffix, or the text one.
+        ``chunk_python`` for ``.py`` files, the text strategy otherwise.
     """
-    return CHUNKERS.get(suffix, chunk_text)
+    # ponytail: one branch is enough while Python is the only strategy of
+    # its own; with more, go back to a read-only mapping.
+    if suffix == ".py":
+        return chunk_python
+    return chunk_text
