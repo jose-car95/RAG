@@ -1,6 +1,7 @@
 """Tests for the index use case: chunk the corpus and store it in SQLite."""
 
 import sqlite3
+from collections.abc import Callable
 from contextlib import closing
 from pathlib import Path
 from typing import cast
@@ -11,7 +12,7 @@ from src.adapters.outbound.corpus import FileCorpus
 from src.adapters.outbound.sqlite_index import SqliteIndexStore
 from src.application.use_cases import index_corpus
 from src.application.use_cases.index_corpus import run_index
-from src.domain.chunking import Chunker, chunker_for
+from src.domain.chunking import chunker_for
 
 CORPUS = FileCorpus()
 STORE = SqliteIndexStore()
@@ -299,7 +300,9 @@ def count_chunked_files(monkeypatch: pytest.MonkeyPatch) -> list[str]:
     """
     chunked: list[str] = []
 
-    def recording_chunker_for(suffix: str) -> Chunker:
+    def recording_chunker_for(
+        suffix: str
+    ) -> Callable[[str, int], list[tuple[int, int]]]:
         chunked.append(suffix)
         return chunker_for(suffix)
 
