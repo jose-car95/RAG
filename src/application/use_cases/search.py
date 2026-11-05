@@ -8,7 +8,9 @@ from src.application.use_cases.shared.retrieval import (
     load_index,
     load_semantic_index,
     search_index,
-    search_semantic,
+    search_semantic
+)
+from src.application.use_cases.shared.validation import (
     validate_query_and_k
 )
 from src.domain.models import MinimalSource
