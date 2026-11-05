@@ -447,8 +447,10 @@ cache keys.
 
 ## Bonus: incremental indexing
 
-`index` re-chunks only the files that changed. Chunking is most of the work
-(2.27 s of the full run, mostly `ast`), while telling what changed is cheap.
+`index --incremental` re-chunks only the files that changed. Chunking is most
+of the work (2.27 s of the full run, mostly `ast`), while telling what changed
+is cheap. It is off by default: the subject's plain `index` rebuilds from
+scratch, so the required behaviour never depends on a bonus.
 
 - Every file gets a **fingerprint**: the SHA-256 of its text together with
   `max_chunk_size`, stored in a `files` table next to the chunks. A file whose
@@ -462,7 +464,8 @@ cache keys.
   re-chunks everything. When nothing can be reused (first run, an index from
   before this change, a new size) the index is rebuilt from scratch, which
   also gives the file back its minimal size.
-- No new flag: the command is the subject's `index --max_chunk_size`.
+- A full rebuild still records the fingerprints, so the first
+  `index --incremental` after it can already reuse unchanged files.
 
 | `index` run | Time |
 |---|---|

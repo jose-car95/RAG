@@ -41,14 +41,18 @@ def run_index(
     max_chunk_size: int,
     index_path: str,
     corpus: CorpusReader,
-    index_store: IndexStore
+    index_store: IndexStore,
+    incremental: bool = False
 ) -> int:
-    """Chunk the corpus files that changed and store them in the index.
+    """Chunk the corpus and store the chunks in the index.
 
-    Every file is read and fingerprinted; only those whose fingerprint
-    differs from the stored one are chunked. When nothing can be reused
-    (first run, old index, new chunk size) the index is rebuilt from
-    scratch, which also gives the file back its minimal size.
+    By default the index is rebuilt from scratch: every file is chunked and
+    the previous index is replaced, which also gives the file back its
+    minimal size. With ``incremental`` on, the stored fingerprints are read
+    and only the files whose fingerprint differs are re-chunked (bonus); when
+    nothing can be reused (first run, old index, new chunk size) that path
+    still rebuilds from scratch. A full rebuild always records the
+    fingerprints, so a later ``incremental`` run can reuse them.
 
     Args:
         raw_directory: Root directory of the corpus to read.
@@ -57,6 +61,8 @@ def run_index(
         index_path: Where the index is written.
         corpus: Finds and reads the corpus files.
         index_store: Stores the chunks.
+        incremental: Re-chunk only the files that changed since the last
+            index, instead of rebuilding from scratch.
 
     Returns:
         The number of chunks in the index afterwards.
@@ -79,7 +85,9 @@ def run_index(
 
     files = corpus.find_files(raw_directory)
     code = code_version()
-    stored = index_store.load_fingerprints(index_path)
+    # A full rebuild ignores the stored fingerprints: with none to match,
+    # every file is chunked and the save_chunks path below replaces the index.
+    stored = index_store.load_fingerprints(index_path) if incremental else {}
     fingerprints: dict[str, str] = {}
     chunks: list[NewChunk] = []
 
