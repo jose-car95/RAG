@@ -74,9 +74,6 @@ def test_success_returns_zero_and_keeps_stderr_empty(
     assert captured.err == ""
 
 
-def test_fire_usage_errors_are_not_swallowed() -> None:
-    """Fire's own usage errors still exit with code 2 instead of 1."""
-    with pytest.raises(SystemExit) as exit_info:
-        run(FailingCommands(), ["nonexistent_command"])
-
-    assert exit_info.value.code == 2
+def test_unknown_command_exits_with_usage_code() -> None:
+    """An unknown command exits with code 2 instead of 1."""
+    assert run(FailingCommands(), ["nonexistent_command"]) == 2

@@ -80,7 +80,7 @@ def test_load_semantic_index_without_vectors_asks_to_index(
         )
 
     assert str(error.value) == (
-        f"embeddings not found: {vectors_path}; run index --embeddings first"
+        f"embeddings not found: {vectors_path}; run index --semantic first"
     )
 
 
@@ -100,7 +100,7 @@ def test_load_semantic_index_with_stale_vectors_asks_to_index(
         )
 
     assert str(error.value) == (
-        f"embeddings not found: {vectors_path}; run index --embeddings first"
+        f"embeddings not found: {vectors_path}; run index --semantic first"
     )
 
 

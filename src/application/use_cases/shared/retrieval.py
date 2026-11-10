@@ -180,10 +180,10 @@ def load_semantic_index(
     if not matrix_rows:
         raise ValueError(
             f"embeddings not found: {vectors_path}; "
-            f"run index --embeddings first"
+            f"run index --semantic first"
         )
     # ponytail: chunks without a vector (index newer than the embeddings) are
-    # left out of the semantic search; index --embeddings fills them in.
+    # left out of the semantic search; index --semantic fills them in.
     return SemanticIndex(matrix=np.stack(matrix_rows), sources=sources)
 
 

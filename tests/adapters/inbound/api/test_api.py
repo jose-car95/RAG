@@ -36,17 +36,70 @@ def make_client(
     return TestClient(create_app(store, CORPUS, loader, str(index_path)))
 
 
-def test_the_chat_page_is_served_at_the_root(tmp_path: Path) -> None:
-    """The static client is mounted, so / serves index.html and its assets."""
+def test_the_api_does_not_serve_the_frontend(tmp_path: Path) -> None:
+    """Frontend and API are separate servers: the API only has its routes."""
     client = make_client(tmp_path / "index.db", FakeLoader())
 
-    page = client.get("/")
-    assert page.status_code == 200
-    assert "RAG against the machine" in page.text
+    assert client.get("/").status_code == 404
+    assert client.get("/app.js").status_code == 404
+    assert client.get("/api/v1/health").status_code == 200
 
-    script = client.get("/app.js")
-    assert script.status_code == 200
-    assert "/api/v1" in script.text
+
+def test_cors_allows_the_frontend_origin(tmp_path: Path) -> None:
+    """A preflight and a real call from the default frontend origin pass."""
+    client = make_client(tmp_path / "index.db", FakeLoader())
+    origin = "http://127.0.0.1:8080"
+
+    preflight = client.options(
+        "/api/v1/search",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type",
+        },
+    )
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == origin
+
+    health = client.get("/api/v1/health", headers={"Origin": origin})
+    assert health.headers["access-control-allow-origin"] == origin
+
+
+def test_cors_rejects_other_origins(tmp_path: Path) -> None:
+    """An origin that is not in the list gets no allow header."""
+    client = make_client(tmp_path / "index.db", FakeLoader())
+    evil = "http://evil.example"
+
+    preflight = client.options(
+        "/api/v1/search",
+        headers={"Origin": evil, "Access-Control-Request-Method": "POST"},
+    )
+    assert preflight.status_code == 400
+    assert "access-control-allow-origin" not in preflight.headers
+
+    health = client.get("/api/v1/health", headers={"Origin": evil})
+    assert "access-control-allow-origin" not in health.headers
+
+
+def test_cors_origins_are_configurable(tmp_path: Path) -> None:
+    """The origins come from create_app, so a deployment can change them."""
+    app = create_app(
+        STORE, CORPUS, FakeLoader(), str(tmp_path / "index.db"),
+        cors_origins=["http://frontend.test"],
+    )
+    client = TestClient(app)
+
+    allowed = client.get(
+        "/api/v1/health", headers={"Origin": "http://frontend.test"}
+    )
+    default = client.get(
+        "/api/v1/health", headers={"Origin": "http://127.0.0.1:3000"}
+    )
+
+    assert allowed.headers["access-control-allow-origin"] == (
+        "http://frontend.test"
+    )
+    assert "access-control-allow-origin" not in default.headers
 
 
 def test_health_says_the_api_is_up(tmp_path: Path) -> None:

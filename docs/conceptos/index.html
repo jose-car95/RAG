@@ -2229,7 +2229,7 @@ una y para qué.</p>
 <tr><th>Ruta (flag)</th><th>Comandos</th><th>Por defecto</th><th>A qué apunta y cuál es su objetivo</th></tr>
 <tr><td><span class="flag">--raw_directory</span></td><td><code>index</code></td><td><code>data/raw</code></td><td>La carpeta del <strong>corpus en bruto</strong> (el árbol de vLLM). Es la <em>entrada</em> de <code>index</code>: lo que se descubre y se trocea.</td></tr>
 <tr><td><span class="flag">--index_path</span></td><td><code>index</code> (escribe) · <code>search</code>, <code>search_dataset</code>, <code>answer</code> (leen)</td><td><code>data/processed/index.db</code></td><td>El <strong>índice SQLite</strong> de chunks. <code>index</code> lo crea; los demás lo leen para buscar. Es el punto de encuentro entre el paso 1 y el resto.</td></tr>
-<tr><td><span class="flag">--vectors_path</span></td><td><code>index --embeddings</code> (escribe) · <code>search --retriever semantic|hybrid</code> (lee)</td><td><code>data/processed/embeddings.db</code></td><td>Los <strong>vectores semánticos</strong> (bonus). Solo entra en juego si pides embeddings; la búsqueda BM25 obligatoria no lo toca.</td></tr>
+<tr><td><span class="flag">--vectors_path</span></td><td><code>index --semantic</code> (escribe) · <code>search --retriever semantic|hybrid</code> (lee)</td><td><code>data/processed/embeddings.db</code></td><td>Los <strong>vectores semánticos</strong> (bonus). Solo entra en juego si pides embeddings; la búsqueda BM25 obligatoria no lo toca.</td></tr>
 <tr><td><span class="flag">--dataset_path</span></td><td><code>search_dataset</code>, <code>evaluate</code></td><td>obligatoria</td><td>El <strong>JSON de preguntas</strong>. En <code>search_dataset</code>, las preguntas a buscar (<code>UnansweredQuestions</code>); en <code>evaluate</code>, el dataset con las fuentes correctas (<code>AnsweredQuestions</code>).</td></tr>
 <tr><td><span class="flag">--save_directory</span></td><td><code>search_dataset</code> · <code>answer_dataset</code></td><td><code>data/output/search_results</code> · <code>…/search_results_and_answer</code></td><td>La <strong>carpeta</strong> donde se escribe el resultado; el fichero se llama como el dataset de entrada. Usa una subcarpeta por tipo (<code>…/UnansweredQuestions</code>) para que docs y code no se pisen.</td></tr>
 <tr><td><span class="flag">--student_search_results_path</span></td><td><code>evaluate</code>, <code>answer_dataset</code></td><td>obligatoria</td><td>El fichero que produjo <code>search_dataset</code>. <code>evaluate</code> lo puntúa; <code>answer_dataset</code> le añade respuestas <em>sin volver a buscar</em>.</td></tr>
@@ -2264,7 +2264,7 @@ frente a la reconstrucción completa. Por eso el primer comando tras reindexar
 <tr><td><code>--max_chunk_size</code></td><td>2000</td><td>ancho máximo de un chunk, de 1 a 2000 caracteres</td></tr>
 <tr><td><code>--raw_directory</code></td><td><code>data/raw</code></td><td>carpeta del corpus a trocear</td></tr>
 <tr><td><code>--index_path</code></td><td><code>data/processed/index.db</code></td><td>dónde se escribe el índice</td></tr>
-<tr><td><code>--embeddings</code></td><td><code>False</code></td><td>bonus: además, calcula un vector semántico por chunk (tarda minutos)</td></tr>
+<tr><td><code>--semantic</code></td><td><code>False</code></td><td>bonus: además, calcula un vector semántico por chunk (tarda minutos). Con este flag <code>index</code> solo trabaja si algo cambió: si el índice y los vectores están al día dice <code>Index up to date</code> y termina en segundos</td></tr>
 <tr><td><code>--vectors_path</code></td><td><code>data/processed/embeddings.db</code></td><td>bonus: dónde se guardan esos vectores</td></tr>
 </table>
 
@@ -2291,6 +2291,19 @@ búsquedas lo aprovechan.</p>
       reaprovechar (primera vez, nuevo tamaño, código cambiado) reconstruye el
       índice entero, en una sola transacción SQLite.</li>
 </ol>
+
+<p><strong>Fases visibles:</strong> para que no parezca colgado, cada tramo
+largo dice qué hace: <em>Scanning corpus</em> (lee y calcula la huella de cada
+fichero), <em>Chunking</em> (solo los ficheros cambiados), <em>Writing chunks to
+SQLite</em>, <em>Reading chunk texts</em>, <em>Loading the embedding model</em> y
+<em>Embedding</em>. Las barras y el resumen (ficheros, chunks nuevos, tamaño
+medio y máximo, MB del <code>.db</code>, tiempo por fase, vectores nuevos y
+reutilizados) salen por <strong>stderr</strong>; <strong>stdout</strong> conserva
+solo las líneas <code>Ingestion complete!</code> y <code>Embeddings ready!</code>.
+Dos ejecuciones seguidas con <code>--semantic</code>: la primera trocea y
+embebe; la segunda escribe <code>Index up to date</code>, <code>0 new, 224
+reused</code> y no muestra barra de chunking ni de embedding. Para forzar una
+reconstrucción completa con embeddings, borra <code>index.db</code>.</p>
 
 <p><strong>Qué mide:</strong> el umbral de <strong>indexado ≤ 300 s</strong>.</p>
 <pre><code>Indexing: 100%|██████████| 1969/1969 [00:03&lt;00:00, 562.46file/s]

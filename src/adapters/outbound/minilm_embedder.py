@@ -13,6 +13,15 @@ MAX_TOKENS: int = 256
 MODEL_CACHE_DIR: str = ".cache/huggingface"
 
 
+def logical_cpu_count() -> int:
+    """Count the logical CPUs, never fewer than one.
+
+    Returns:
+        ``os.cpu_count()``, or 1 when the system cannot tell.
+    """
+    return os.cpu_count() or 1
+
+
 class MiniLmEmbedder(Embedder):
     """A loaded tokenizer and model that turn texts into unit vectors.
 
@@ -40,6 +49,27 @@ class MiniLmEmbedder(Embedder):
         Args:
             texts: The texts, in order; longer than ``MAX_TOKENS`` tokens
                 they are cut.
+
+        Returns:
+            One float32 row of 384 numbers per text.
+        """
+        import torch
+
+        # torch defaults to the physical cores; all logical CPUs are ~20%
+        # faster here. The thread count is a process-wide torch setting, so
+        # it is restored below: Qwen must keep running with torch's default.
+        previous_threads = torch.get_num_threads()
+        torch.set_num_threads(logical_cpu_count())
+        try:
+            return self._embed_batch(texts)
+        finally:
+            torch.set_num_threads(previous_threads)
+
+    def _embed_batch(self, texts: list[str]) -> Vectors:
+        """Run the model on one batch of texts.
+
+        Args:
+            texts: The texts, in order.
 
         Returns:
             One float32 row of 384 numbers per text.

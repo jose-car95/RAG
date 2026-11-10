@@ -38,9 +38,15 @@ justificar), **ABIERTO** (pendiente, con límite).
 - **DECISIÓN (2026-10-27, Jose, issue #91)** — El bonus de embeddings
   necesita calcular un vector por chunk, y en CPU eso son ~625 s para los
   18.941 chunks, por encima de los 300 s del indexado. Por eso es opcional,
-  con flags propios como `--raw_directory`: `index --embeddings` (apagado
+  con flags propios como `--raw_directory`: `index --semantic` (apagado
   por defecto) y `--vectors_path` (`data/processed/embeddings.db`). `index`
   sin el flag no cambia.
+- **DECISIÓN (2026-11-06, Jose, propuesta del agente aceptada)** —
+  `index --semantic` activa la detección de cambios (como `--incremental`)
+  solo en esa ruta: una segunda ejecución no re-chunkea ni re-embebe y dice
+  `Index up to date`. `index` sin `--semantic` sigue reconstruyendo desde
+  cero, como pide el enunciado. El resumen y las fases van a stderr; stdout
+  conserva el literal `Ingestion complete!`.
 - **DECISIÓN (2026-11-03, Jose, issue #93)** — `search` gana dos flags
   opcionales: `--retriever` (`bm25` por defecto, o `semantic`) y
   `--vectors_path` (`data/processed/embeddings.db`). Con los valores por

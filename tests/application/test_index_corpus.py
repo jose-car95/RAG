@@ -85,7 +85,10 @@ def test_chunks_are_stored_with_their_text(tmp_path: Path) -> None:
     make_corpus(corpus)
     index_path = tmp_path / "index.db"
 
-    chunk_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+    report = run_index(
+        str(corpus), 2000, str(index_path), CORPUS, STORE
+    )
+    chunk_count = report.chunk_count
 
     rows = read_rows(index_path)
     assert chunk_count == len(rows)
@@ -120,8 +123,12 @@ def test_reindexing_does_not_duplicate_chunks(tmp_path: Path) -> None:
     make_corpus(corpus)
     index_path = tmp_path / "index.db"
 
-    first_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
-    second_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+    first_count = run_index(
+        str(corpus), 2000, str(index_path), CORPUS, STORE
+    ).chunk_count
+    second_count = run_index(
+        str(corpus), 2000, str(index_path), CORPUS, STORE
+    ).chunk_count
 
     assert first_count == second_count == len(read_rows(index_path))
 
@@ -356,7 +363,7 @@ def test_an_unchanged_corpus_is_not_chunked_again(
 
     chunk_count = run_index(
         str(corpus), 2000, str(index_path), CORPUS, STORE, incremental=True
-    )
+    ).chunk_count
 
     assert chunked == []
     assert read_rows(index_path) == before
@@ -372,7 +379,7 @@ def test_only_a_modified_file_is_chunked_again(
 
     chunk_count = run_index(
         str(corpus), 2000, str(index_path), CORPUS, STORE, incremental=True
-    )
+    ).chunk_count
 
     assert chunked == [".md"]
     rows = read_rows(index_path)
@@ -403,7 +410,7 @@ def test_a_deleted_file_loses_its_chunks(
 
     run_index(
         str(corpus), 2000, str(index_path), CORPUS, STORE, incremental=True
-    )
+    ).chunk_count
 
     assert chunked == []
     assert {Path(row[0]).name for row in read_rows(index_path)} == {"a.py"}
@@ -429,7 +436,10 @@ def test_new_indexing_code_chunks_everything_again(
     corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
     monkeypatch.setattr(index_corpus, "code_version", lambda: "new code")
 
-    chunk_count = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+    report = run_index(
+        str(corpus), 2000, str(index_path), CORPUS, STORE
+    )
+    chunk_count = report.chunk_count
 
     assert sorted(chunked) == [".md", ".py"]
     assert chunk_count == len(read_rows(index_path))
@@ -462,3 +472,42 @@ def test_fingerprints_of_a_missing_index_are_empty(tmp_path: Path) -> None:
 
     assert STORE.load_fingerprints(str(index_path)) == {}
     assert not index_path.exists()
+
+
+def test_the_report_says_what_was_indexed(tmp_path: Path) -> None:
+    """A full run reports its files, chunks, sizes and a time per phase."""
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    make_corpus(corpus)
+    index_path = tmp_path / "index.db"
+
+    report = run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
+
+    rows = read_rows(index_path)
+    assert report.file_count == report.changed_file_count == 2
+    assert report.chunk_count == report.new_chunk_count == len(rows)
+    assert report.largest_chunk_size == max(len(row[3]) for row in rows)
+    assert not report.up_to_date
+    assert set(report.seconds) == {"scan", "chunk", "write"}
+
+
+def test_an_up_to_date_index_is_reported_and_not_chunked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Nothing changed: no chunking bar, an 'up to date' message, 0 new."""
+    corpus, index_path, chunked = index_twice(tmp_path, monkeypatch)
+    before = read_rows(index_path)
+    capsys.readouterr()
+
+    report = run_index(
+        str(corpus), 2000, str(index_path), CORPUS, STORE, incremental=True
+    )
+
+    err = capsys.readouterr().err
+    assert report.up_to_date and report.new_chunk_count == 0
+    assert report.chunk_count == len(before)
+    assert chunked == []
+    assert "Index up to date" in err
+    assert "Chunking" not in err
