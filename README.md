@@ -52,7 +52,8 @@ Other Makefile rules:
 | `make lint` | `flake8` and `mypy` with the subject's flags |
 | `make lint-strict` | `flake8` and `mypy --strict` |
 | `make test` | The test suite without the tests that load a real model (`slow`) |
-| `make serve` | Starts the local HTTP API on `http://127.0.0.1:8000` |
+| `make serve-api` | Starts the local HTTP API on `http://127.0.0.1:8000` |
+| `make serve-frontend` | Serves the static chat page on `http://127.0.0.1:8080` |
 | `make clean` | Removes caches and leftovers: `__pycache__`, `.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.coverage`, `htmlcov`, `*.egg-info` |
 | `make fclean` | `clean` plus `.venv`, `.cache`, `data/processed` and `data/output`: back to a fresh clone |
 
@@ -360,7 +361,7 @@ adapter, so another program (or a browser page) can use the system without
 the command line. The use cases did not change.
 
 ```bash
-make serve            # uvicorn on http://127.0.0.1:8000; chat at /, docs at /docs
+make serve-api        # uvicorn on http://127.0.0.1:8000; docs at /docs
 ```
 
 | Route | Body | Returns |
@@ -375,6 +376,11 @@ curl -X POST http://127.0.0.1:8000/api/v1/search \
      -d '{"query": "How do I load a LoRA adapter?", "k": 2}'
 ```
 
+- The API serves only `/api/v1/*` and `/docs`. A browser page on another
+  port is another origin, so CORS allows `http://127.0.0.1:8080` and
+  `http://localhost:8080` (GET and POST, `Content-Type` only, no credentials).
+  Set `RAG_CORS_ORIGINS` (comma-separated) to change them; only `bootstrap.py`
+  reads it.
 - The layout follows one router per route under `/api/v1`, with the request
   and response shapes as pydantic models in `schemas.py`.
 - `bootstrap.py` builds the app with the real adapters; the routes receive
@@ -389,17 +395,22 @@ curl -X POST http://127.0.0.1:8000/api/v1/search \
 
 A small chat page talks to that API, so the system can be used from a browser
 instead of the command line. It lives in `frontend/` (`index.html`,
-`style.css`, `app.js`) — plain HTML, CSS and JavaScript, no framework and no
-CDN — and the API serves it as static files, so the page and the API share
-one origin and `make serve` opens both at once.
+`style.css`, `config.js`, `app.js`) — plain HTML, CSS and JavaScript, no build
+step, no framework and no CDN. It is a separate server from the API: each one
+starts on its own.
 
 ```bash
-make serve            # then open http://127.0.0.1:8000/  (API docs at /docs)
+make serve-api        # terminal 1: API on http://127.0.0.1:8000
+make serve-frontend   # terminal 2: page on http://127.0.0.1:8080
 ```
 
 - The frontend is a **client of the API**, not part of the hexagon, so it sits
-  outside `src/`. The API adapter mounts it with `StaticFiles` at `/`, added
-  after the routes and `/docs` so it only catches the page and its assets.
+  outside `src/` and the API does not serve it. It is served by the standard
+  library (`python -m http.server`).
+- The API address is not in `app.js`: `config.js` sets `window.RAG_API_URL`
+  (default `http://127.0.0.1:8000/api/v1`) and is loaded first. Edit it to
+  point the page elsewhere. If the API is down, the chat shows a clear
+  "cannot reach the API" error.
 - Each question runs the pipeline in two visible steps: a `POST /search` shows
   the retrieved sources at once, then a `POST /answer` fills in the grounded
   answer (the slow part on CPU). Errors show the same one-line message the API
@@ -479,7 +490,7 @@ second is Python starting up; the gain grows with the size of the corpus.
 
 ## Bonus: semantic search
 
-`index --embeddings` stores one semantic vector per chunk text, and
+`index --semantic` stores one semantic vector per chunk text, and
 `search <query> --retriever semantic` searches with them. The default
 retriever is `bm25`, so the subject's `search` is unchanged.
 
@@ -497,7 +508,7 @@ retriever is `bm25`, so the subject's `search` is unchanged.
 - The flag is off by default: embedding takes minutes on a CPU, so the
   subject's `index` keeps its seconds and its 300 s limit.
 
-| `index --embeddings` run | Result |
+| `index --semantic` run | Result |
 |---|---|
 | First run | 18,563 distinct texts of 18,941 chunks in 8 min 33 s, 756 MB peak RAM |
 | Vector file | 39.6 MB (1,536 bytes per vector) |

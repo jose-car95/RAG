@@ -6,6 +6,23 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 
 - **Milestone:** M7 — Bonus (en curso). M0-M5 cerrados; M4 el 2026-10-14.
   M6 tiene abiertos #75 (recode) y #68 (escuela), que se dejan para el final.
+- **Verificado (2026-11-06, frontend y API por separado):** la API solo sirve
+  `/api/v1/*` (sin `StaticFiles`) y trae CORS restringido (GET/POST,
+  `Content-Type`, sin credenciales ni `*`; orígenes por `RAG_CORS_ORIGINS`,
+  leída solo en `bootstrap`). El frontend usa `window.RAG_API_URL` de
+  `frontend/config.js` y avisa si la API no responde. Makefile: `serve-api`
+  (8000) y `serve-frontend` (8080); `serve` desaparece. Real: `health` y
+  `search` OK, `GET :8000/` → 404, `:8080/` y `config.js` → 200, preflight
+  CORS 200. No probado en navegador real (no hay chromium) ni `answer`.
+- **Verificado (2026-11-06, `index --semantic` al día y con progreso):**
+  `--semantic` activa la detección de cambios (`incremental or semantic`
+  en la CLI); `index` sin él sigue reconstruyendo desde cero. `run_index`
+  devuelve un `IndexReport`; fases con nombre (Scanning, Chunking, Writing,
+  Reading chunk texts, Loading the embedding model, Embedding) y resumen en
+  stderr; stdout conserva `Ingestion complete!` y `Embeddings ready!`.
+  Real (27 ficheros): 1ª 227 chunks y 224 vectores; 2ª `Index up to date`, 0
+  nuevos, 224 reutilizados; 3ª con un `.md` tocado, 1 fichero re-troceado y
+  1 vector nuevo. `make lint` OK (87 ficheros), `make test` 304 passed.
 - **Verificado (2026-11-05, issue #120, ruta del índice en un solo sitio):**
   `create_app` recibe `index_path` obligatorio y `bootstrap` le pasa
   `DEFAULT_INDEX_PATH` (definido una vez en `cli.py`, que conserva su valor
@@ -533,6 +550,8 @@ Leer al empezar cada sesión (ver `CLAUDE.md`, "Al empezar cada sesión").
 | 2026-09-17 | Se mantiene `.flake8` en vez de pasar las exclusiones al `Makefile` | El enunciado da el comando literal `flake8 .`; el fichero aplica a quien ejecute flake8 (corrector, VS Code, CI). Sin él: 49.694 errores ajenos (40.788 de `.venv`, 8.906 de `data/`) |
 | 2026-09-17 | Se desarrolla con Python 3.12 (`.python-version`); en la escuela (Python 3.10) `uv sync` descargará 3.12 automáticamente | Misma versión en casa, CI y escuela. Plan B si la descarga falla: `.python-version` = `3.10` (el código pasa `mypy --python-version 3.10`) |
 | 2026-09-15 | La CLI vive en `src/adapters/` (carpeta plana, opción B); desaparece `src/interface/` | En hexagonal la CLI es un adaptador de entrada; `interface` chocaba con "interfaz" = puerto. Se descartó separar `inbound/`/`outbound/` (opción C) por simplicidad |
+| 2026-11-06 | Frontend y API se levantan por separado, con CORS en la API (sustituye a la del 2026-11-04, #114) | Servir el cliente desde la API mezclaba dos procesos con ciclos de vida distintos; separados, cada uno se despliega, escala y falla por su lado, y la URL de la API deja de estar fija en el JS. El coste es CORS, acotado a dos verbos, una cabecera y sin credenciales. Petición de Jose |
+| 2026-11-06 | `index --semantic` detecta cambios solo en su ruta; `index` sin él reconstruye desde cero (propuesta, aceptada por Jose) | El enunciado fija la reconstrucción por defecto, así que no se cambia ningún default; con embeddings, reconstruir y re-embeber todo cada vez era lo costoso. Límite conocido: para forzar una reconstrucción hay que borrar `index.db` |
 | 2026-10-19 | Arquitectura hexagonal pura (issue #61): `application/ports/` (4 `Protocol`: `Generator`, `IndexStore`, `CorpusReader`, `DatasetStore`), `application/use_cases/`, `adapters/inbound/` (CLI) y `adapters/outbound/` (corpus, JSON, SQLite, Qwen; nombres de Jose: de entrada y de salida, `in` es palabra reservada), `bootstrap.py` como raíz de composición; tests en espejo y `tests/test_architecture.py` | Los casos de uso importaban SQLite, JSON y el corpus directamente: no era hexagonal aunque lo llamáramos así. Se descartó la capa `infrastructure/` (vocabulario de DDD) para no mezclar escuelas; `outbound` es la misma pieza con el nombre de la hexagonal. Sustituye a la decisión del 2026-09-15 de no separar entrada y salida: entonces había 2 adaptadores, ahora 6, y los bonus (API, caché, embeddings) encajan como adaptadores nuevos |
 | 2026-10-20 | `.python-version` baja a `3.10` (issue #63) | Es el Python de la escuela: se desarrolla y la CI prueba con la misma versión que el corrector, y `uv sync` no descarga otro intérprete allí. Sustituye a la decisión del 2026-09-17 (3.12). Verificado: con 3.10, `flake8` y `mypy` limpios y la suite completa en verde |
 | 2026-10-19 | Prompt por roles: reglas en `system`, fuentes etiquetadas y pregunta en `user` (opción A, issue #62) | Para que quede más limpio y la información le llegue mejor al modelo, no para subir una nota; las etiquetas separan una fuente que contiene su propio `Question:` |
