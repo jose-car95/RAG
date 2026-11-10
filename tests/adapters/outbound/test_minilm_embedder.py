@@ -4,10 +4,18 @@ They need the weights in ``.cache/huggingface/`` (91 MB, not in the repo),
 so they are marked slow and skipped when the model is not downloaded.
 """
 
+import os
+
 import numpy as np
 import pytest
+import torch
 
-from src.adapters.outbound.minilm_embedder import MODEL_NAME, load_embedder
+from src.adapters.outbound.minilm_embedder import (
+    MODEL_NAME,
+    MiniLmEmbedder,
+    load_embedder,
+    logical_cpu_count,
+)
 from tests.adapters.outbound.test_qwen_generator import MODEL_FILES
 
 MINILM_FILES = MODEL_FILES.parent / (
@@ -34,3 +42,31 @@ def test_similar_texts_get_close_unit_vectors() -> None:
     assert np.allclose(np.linalg.norm(vectors, axis=1), 1.0, atol=1e-5)
     similar, unrelated = vectors[1] @ vectors[0], vectors[2] @ vectors[0]
     assert similar > unrelated
+
+
+def test_cpu_count_is_never_below_one(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``os.cpu_count()`` may return None; the count must stay usable."""
+    monkeypatch.setattr(os, "cpu_count", lambda: None)
+
+    assert logical_cpu_count() == 1
+
+
+def test_embed_restores_the_torch_thread_count(
+    monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Embedding borrows every CPU but gives torch's setting back."""
+    embedder = MiniLmEmbedder(tokenizer=None, model=None)
+    seen: list[int] = []
+
+    def fake_batch(texts: list[str]) -> np.ndarray:
+        seen.append(torch.get_num_threads())
+        return np.zeros((len(texts), 384), dtype=np.float32)
+
+    monkeypatch.setattr(embedder, "_embed_batch", fake_batch)
+    before = torch.get_num_threads()
+    monkeypatch.setattr(os, "cpu_count", lambda: before + 1)
+
+    embedder.embed(["a"])
+
+    assert seen == [before + 1]
+    assert torch.get_num_threads() == before
