@@ -1,4 +1,4 @@
-.PHONY: install run debug lint lint-strict test clean fclean serve
+.PHONY: install run debug lint lint-strict test clean fclean serve-api serve-frontend
 
 install:
 	uv sync
@@ -37,5 +37,8 @@ fclean: clean
 	rm -rf data/processed data/output
 	rm -rf .cache
 
-serve:
+serve-api:
 	uv run uvicorn --factory src.bootstrap:build_api --host 127.0.0.1 --port 8000
+
+serve-frontend:
+	uv run python -m http.server 8080 --bind 127.0.0.1 --directory frontend

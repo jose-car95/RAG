@@ -1,10 +1,10 @@
 """FastAPI application: builds the app and plugs in the API router."""
 
+from collections.abc import Sequence
 from functools import cache, lru_cache
-from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.adapters.inbound.api.dependencies import ApiServices
 from src.adapters.inbound.api.router import api_v1_router
@@ -20,16 +20,20 @@ from src.domain.models import MinimalSource
 # Results kept per route; the least recently used one goes first when full.
 QUERY_CACHE_SIZE: int = 256
 
-# The static chat client, at the repo root next to src/. Served by the API so
-# the page and the API share one origin (no CORS) under a single `serve`.
-FRONTEND_DIR = Path(__file__).resolve().parents[4] / "frontend"
+# Where the static chat client runs by default (`make serve-frontend`). The
+# browser treats another port as another origin, so the API must allow it.
+DEFAULT_CORS_ORIGINS: tuple[str, ...] = (
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
+)
 
 
 def create_app(
     index_store: IndexStore,
     corpus: CorpusReader,
     load_generator: GeneratorLoader,
-    index_path: str
+    index_path: str,
+    cors_origins: Sequence[str] = DEFAULT_CORS_ORIGINS
 ) -> FastAPI:
     """Build the API with the given ports; used by bootstrap and the tests.
 
@@ -38,12 +42,23 @@ def create_app(
         corpus: Where the source files are read from.
         load_generator: Loads the model on the first answer.
         index_path: The index file to search.
+        cors_origins: Browser origins allowed to call the API, such as the
+            address of the frontend.
 
     Returns:
         The app, with every route under ``/api/v1``. It owns its caches: the
         model, the built index and the results of repeated queries.
     """
     app = FastAPI(title="RAG against the machine")
+    # Only the two verbs and the one header the frontend uses, and no
+    # credentials: the API has no cookies, so a broad policy buys nothing.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=list(cors_origins),
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type"],
+        allow_credentials=False,
+    )
     index_cache = IndexCache()
     load_once = cache(load_generator)
 
@@ -75,10 +90,4 @@ def create_app(
         answer=answer
     )
     app.include_router(api_v1_router)
-    # Mounted last and at the root, so it only catches what the API routes and
-    # /docs did not: the chat page at / and its assets. html=True serves
-    # index.html for /. Guarded so the API still starts without the folder.
-    if FRONTEND_DIR.is_dir():
-        chat = StaticFiles(directory=FRONTEND_DIR, html=True)
-        app.mount("/", chat, name="frontend")
     return app

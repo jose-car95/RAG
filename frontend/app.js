@@ -1,5 +1,6 @@
-// Chat client for the RAG API. Served by the API itself (same origin), so the
-// requests are plain relative fetches with no CORS to worry about.
+// Chat client for the RAG API. It is served on its own port, apart from the
+// API, so the API address comes from config.js (window.RAG_API_URL) and the
+// API must allow this page's origin (CORS).
 //
 // One turn runs the RAG pipeline in two visible steps: first POST /search to
 // show the retrieved sources quickly, then POST /answer for the grounded
@@ -7,7 +8,7 @@
 
 "use strict";
 
-const API = "/api/v1";
+const API = window.RAG_API_URL;
 
 const chat = document.getElementById("chat");
 const form = document.getElementById("composer");
@@ -70,11 +71,19 @@ function renderSources(msg, sources) {
 // POST a JSON body and return the parsed JSON, raising the API's own error
 // message (the 400 "detail") so the UI can show the same text as the CLI.
 async function postJson(path, body) {
-  const response = await fetch(API + path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
+  let response;
+  try {
+    response = await fetch(API + path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+  } catch (networkError) {
+    // fetch rejects (instead of returning a status) when nothing answers.
+    throw new Error(
+      "cannot reach the API at " + API + ". Is it running (make serve-api)?"
+    );
+  }
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.detail || ("request failed (" + response.status + ")"));
