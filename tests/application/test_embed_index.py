@@ -13,7 +13,10 @@ import pytest
 
 from src.adapters.outbound.sqlite_vectors import SqliteVectorStore
 from src.application.ports.embedder import Vectors
-from src.application.use_cases.embed_index import run_embed_index
+from src.application.use_cases.embed_index import (
+    EmbedReport,
+    run_embed_index,
+)
 from src.domain.semantic import text_hash
 from src.application.use_cases.index_corpus import run_index
 from tests.application.test_index_corpus import (
@@ -96,7 +99,7 @@ def chunk_hashes(index_path: Path) -> set[str]:
 
 
 def embed(index_path: Path, vectors_path: Path,
-          loader: FakeEmbedderLoader) -> tuple[int, int]:
+          loader: FakeEmbedderLoader) -> EmbedReport:
     """Run the use case with the real stores and a fake model.
 
     Args:
@@ -105,7 +108,7 @@ def embed(index_path: Path, vectors_path: Path,
         loader: The fake model loader.
 
     Returns:
-        New vectors and distinct chunk texts.
+        The report: new vectors, distinct chunk texts and orphans.
     """
     return run_embed_index(
         str(index_path), str(vectors_path), STORE, VECTORS, loader
@@ -117,10 +120,12 @@ def test_every_chunk_text_gets_a_vector(tmp_path: Path) -> None:
     _, index_path, vectors_path = build_index(tmp_path)
     loader = FakeEmbedderLoader()
 
-    new, total = embed(index_path, vectors_path, loader)
+    report = embed(index_path, vectors_path, loader)
 
     hashes = chunk_hashes(index_path)
-    assert (new, total) == (len(hashes), len(hashes))
+    assert (report.new_count, report.total_count, report.orphaned_count) == (
+        len(hashes), len(hashes), 0
+    )
     assert VECTORS.known_hashes(str(vectors_path)) == hashes
     assert loader.loads == 1
 
@@ -131,9 +136,9 @@ def test_known_texts_are_not_embedded_again(tmp_path: Path) -> None:
     embed(index_path, vectors_path, FakeEmbedderLoader())
     loader = FakeEmbedderLoader()
 
-    new, total = embed(index_path, vectors_path, loader)
+    report = embed(index_path, vectors_path, loader)
 
-    assert (new, total) == (0, len(chunk_hashes(index_path)))
+    assert report == EmbedReport(0, len(chunk_hashes(index_path)), 0)
     assert loader.loads == 0
 
 
@@ -146,10 +151,10 @@ def test_a_changed_file_embeds_only_its_new_texts(tmp_path: Path) -> None:
     run_index(str(corpus), 2000, str(index_path), CORPUS, STORE)
     loader = FakeEmbedderLoader()
 
-    new, _ = embed(index_path, vectors_path, loader)
+    report = embed(index_path, vectors_path, loader)
 
     added = chunk_hashes(index_path) - before
-    assert new == len(added)
+    assert report.new_count == len(added)
     assert {text_hash(text) for text in loader.embedder.texts} == added
 
 

@@ -61,7 +61,7 @@ def run_semantic_search(
     vector_store: VectorStore,
     load_embedder: EmbedderLoader
 ) -> list[tuple[MinimalSource, float]]:
-    """Search one query by meaning, with the vectors of ``index --embeddings``.
+    """Search one query by meaning, with the vectors of ``index --semantic``.
 
     Args:
         query: Question to search for.

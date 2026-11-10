@@ -116,6 +116,6 @@ def test_hybrid_search_without_vectors_asks_to_index(tmp_path: Path) -> None:
         )
 
     assert str(error.value) == (
-        f"embeddings not found: {vectors_path}; run index --embeddings first"
+        f"embeddings not found: {vectors_path}; run index --semantic first"
     )
     assert loader.loads == 0
